@@ -450,6 +450,29 @@
           <button class="ctrl-btn" id="btn-float-tb" onclick="toggleTitleBlockMinimize(event)" title="طي / فرد لافتة المخطط">📋</button>
         </div>
 
+        <!-- شريط التحكم السريع العائم لتوجيه زوايا الكابلات والخطوط 90° عند التحديد -->
+        <div id="section-floating-toolbar" class="section-floating-toolbar" style="display:none;">
+          <div class="sec-tool-title">
+            <span id="sec-tool-icon">🔌</span>
+            <span id="sec-tool-name">كابل محدد</span>
+          </div>
+          <div class="sec-tool-buttons">
+            <button type="button" class="btn-sec-tool btn-sec-flip90" onclick="quickToggleSelectedSectionCorner()" title="تبديل اتجاه زاوية الكابل 90° (أفقي ➔ رأسي ⇄ رأسي ➔ أفقي)">
+              <span>📐 قلب زاوية 90°</span>
+            </button>
+            <div class="sec-tool-divider"></div>
+            <span class="sec-tool-sub">توجيه 90°:</span>
+            <button type="button" class="btn-sec-tool" onclick="quickOrientSelectedSection('down')" title="توجيه الكابل 90° لأسفل">⬇️ أسفل</button>
+            <button type="button" class="btn-sec-tool" onclick="quickOrientSelectedSection('up')" title="توجيه الكابل 90° لأعلى">⬆️ أعلى</button>
+            <button type="button" class="btn-sec-tool" onclick="quickOrientSelectedSection('right')" title="توجيه الكابل 90° لليمين">➡️ يمين</button>
+            <button type="button" class="btn-sec-tool" onclick="quickOrientSelectedSection('left')" title="توجيه الكابل 90° لشمال">⬅️ شمال</button>
+            <div class="sec-tool-divider"></div>
+            <button type="button" class="btn-sec-tool" onclick="quickResetSelectedSectionDeflect()" title="إعادة المسار مستقيماً بدون انحراف">↺ مستقيم</button>
+            <button type="button" class="btn-sec-tool btn-sec-edit" onclick="quickEditSelectedSection()" title="فتح نافذة الخصائص وتعديل المقطع والطول">✏️ خصائص</button>
+            <button type="button" class="btn-sec-tool btn-sec-close" onclick="clearSelection()" title="إلغاء التحديد">✕</button>
+          </div>
+        </div>
+
         <!-- مؤشر وضع المحاكاة -->
         <div id="sim-banner" class="sim-banner hidden">
           <span>⚡ محاكاة السكاكين نشطة: انقر فوق أي سكينة لفتحها أو إغلاقها وتتبع مسار التغذية</span>

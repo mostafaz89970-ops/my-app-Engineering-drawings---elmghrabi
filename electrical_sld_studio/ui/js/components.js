@@ -997,105 +997,100 @@ const Components = {
 
     const absDx = Math.abs(dx);
     const absDy = Math.abs(dy);
-    const isOrthogonalCable = (isCable || fromNode.type === "kiosk" || toNode.type === "kiosk") && 
-                              (absDx > 15 && absDy > 15) && !sec.is_slanted;
+    const isOrthogonalCable = (isCable || fromNode.type === "kiosk" || toNode.type === "kiosk" || sec.corner_style === "hv" || sec.corner_style === "vh") && 
+                              (absDx > 12 && absDy > 12) && !sec.is_slanted;
 
     let pathD = "";
     let handleX = (x1 + x2) / 2;
     let handleY = (y1 + y2) / 2;
+    let cornerX = null;
+    let cornerY = null;
 
     if (defOffset === 0) {
       if (isOrthogonalCable) {
-        // أ) حالة التوصيل بين كشك وكشك آخر (Kiosk-to-Kiosk)
-        if (fromNode.type === "kiosk" && toNode.type === "kiosk") {
-          const toDir = toNode.direction || "right";
-          if (toDir === "up") {
-            // كشك علوي رأسي مثل مدرسة أم الساس: هبوط أسفل الكشك الأول ثم امتداد أفقي وصعود رأسي لقاعدة الكشك
-            const dropY = Math.max(y1 + 18, fromNode.y + 26);
-            pathD = `M ${x1} ${y1} L ${x1} ${dropY} L ${x2} ${dropY} L ${x2} ${y2}`;
-            handleX = (x1 + x2) / 2;
-            handleY = dropY;
-          } else if (toDir === "left") {
-            // كشك يتجه لليسار: مسار جانبي من اليمين
-            const x_bypass = Math.max(x1, x2) + 36;
-            pathD = `M ${x1} ${y1} L ${x_bypass} ${y1} L ${x_bypass} ${y2} L ${x2} ${y2}`;
-            handleX = (x_bypass + x2) / 2;
-            handleY = y2;
+        // تحديد التوجيه بناءً على sec.corner_style أو الحالات الذكية الافتراضية
+        let useHV = (sec.corner_style === "hv");
+        let useVH = (sec.corner_style === "vh");
+
+        if (!useHV && !useVH) {
+          // أ) حالة التوصيل بين كشك وكشك آخر (Kiosk-to-Kiosk)
+          if (fromNode.type === "kiosk" && toNode.type === "kiosk") {
+            const toDir = toNode.direction || "right";
+            if (toDir === "up") {
+              const dropY = Math.max(y1 + 18, fromNode.y + 26);
+              pathD = `M ${x1} ${y1} L ${x1} ${dropY} L ${x2} ${dropY} L ${x2} ${y2}`;
+              handleX = (x1 + x2) / 2;
+              handleY = dropY;
+              cornerX = x1;
+              cornerY = dropY;
+            } else if (toDir === "left") {
+              const x_bypass = Math.max(x1, x2) + 36;
+              pathD = `M ${x1} ${y1} L ${x_bypass} ${y1} L ${x_bypass} ${y2} L ${x2} ${y2}`;
+              handleX = (x_bypass + x2) / 2;
+              handleY = y2;
+              cornerX = x_bypass;
+              cornerY = y2;
+            } else {
+              const x_bypass = Math.min(x1, x2) - 36;
+              pathD = `M ${x1} ${y1} L ${x_bypass} ${y1} L ${x_bypass} ${y2} L ${x2} ${y2}`;
+              handleX = (x_bypass + x2) / 2;
+              handleY = y2;
+              cornerX = x_bypass;
+              cornerY = y2;
+            }
+          }
+          // ب) كابل داخل إلى كشك قادماً من سكينة أو مسار أو نود (Switch / Feeder to Kiosk)
+          else if (toNode.type === "kiosk") {
+            const toDir = toNode.direction || "right";
+            if (toDir === "up") {
+              useHV = true;
+            } else {
+              useVH = true;
+            }
+          }
+          // ج) كابل خارج من كشك إلى خط أو محول أو نقطة عادية
+          else if (fromNode.type === "kiosk") {
+            const fromDir = fromNode.direction || "right";
+            const outTerm = fromNode.outgoing_terminal || "bottom";
+            if (fromDir === "right" || !fromDir || fromDir === "left") {
+              if (outTerm === "top") {
+                useHV = true;
+              } else {
+                if (y2 < y1) {
+                  const dropY = Math.max(y1 + 18, fromNode.y + 26);
+                  pathD = `M ${x1} ${y1} L ${x1} ${dropY} L ${x2} ${dropY} L ${x2} ${y2}`;
+                  handleX = (x1 + x2) / 2;
+                  handleY = dropY;
+                  cornerX = x1;
+                  cornerY = dropY;
+                } else {
+                  useHV = true;
+                }
+              }
+            } else {
+              useVH = true;
+            }
           } else {
-            // كشك يتجه لليمين مثل أم الساس الوسط: مسار جانبي حر من اليسار يدخل أفقياً مباشرة إلى مدخل الكشك
-            // يتيح سحب الكشك لليمين بحرية تامة مع ترك المخرج السفلي فارغاً تماماً للنزول بالخط الآخر
-            const x_bypass = Math.min(x1, x2) - 36;
-            pathD = `M ${x1} ${y1} L ${x_bypass} ${y1} L ${x_bypass} ${y2} L ${x2} ${y2}`;
-            handleX = (x_bypass + x2) / 2;
-            handleY = y2;
+            // مسار كابل متعامد عام حسب الامتداد الأكبر
+            useHV = (absDx >= absDy);
+            useVH = !useHV;
           }
         }
-        // ب) كابل داخل إلى كشك قادماً من سكينة أو مسار أو نود (Switch / Feeder to Kiosk)
-        else if (toNode.type === "kiosk") {
-          const toDir = toNode.direction || "right";
-          if (toDir === "up") {
+
+        // بناء المسار المتعامد بزاوية 90 درجة مع تحديد إحداثيات الزاوية القائمة بدقة
+        if (!pathD) {
+          if (useHV) {
+            // أفقي ثم رأسي (الزاوية القائمة 90° عند x2, y1)
             pathD = `M ${x1} ${y1} L ${x2} ${y1} L ${x2} ${y2}`;
+            cornerX = x2;
+            cornerY = y1;
             handleX = (x1 + x2) / 2;
             handleY = y1;
           } else {
-            // كشك أفقي (يمين أو يسار): الكابل ينزل أو يصعد بمحاذاة المسار ثم يتجه أفقياً ومباشرة إلى الكشك
-            // هذا يتيح سحب الكشك لليمين وتوسيع المسافة بحرية، والنزول بالخط الآخر من السكينة/النود دون أي تقاطع
+            // رأسي ثم أفقي (الزاوية القائمة 90° عند x1, y2)
             pathD = `M ${x1} ${y1} L ${x1} ${y2} L ${x2} ${y2}`;
-            handleX = (x1 + x2) / 2;
-            handleY = y2;
-          }
-        }
-        // ج) كابل خارج من كشك إلى خط أو محول أو نقطة عادية
-        else if (fromNode.type === "kiosk") {
-          const fromDir = fromNode.direction || "right";
-          const outTerm = fromNode.outgoing_terminal || "bottom";
-          if (fromDir === "right" || !fromDir) {
-            if (outTerm === "top") {
-              pathD = `M ${x1} ${y1} L ${x2} ${y1} L ${x2} ${y2}`;
-              handleX = (x1 + x2) / 2;
-              handleY = y1;
-            } else {
-              if (y2 < y1) {
-                const dropY = Math.max(y1 + 18, fromNode.y + 26);
-                pathD = `M ${x1} ${y1} L ${x1} ${dropY} L ${x2} ${dropY} L ${x2} ${y2}`;
-                handleX = (x1 + x2) / 2;
-                handleY = dropY;
-              } else {
-                pathD = `M ${x1} ${y1} L ${x2} ${y1} L ${x2} ${y2}`;
-                handleX = (x1 + x2) / 2;
-                handleY = y1;
-              }
-            }
-          } else if (fromDir === "left") {
-            if (outTerm === "top") {
-              pathD = `M ${x1} ${y1} L ${x2} ${y1} L ${x2} ${y2}`;
-              handleX = (x1 + x2) / 2;
-              handleY = y1;
-            } else {
-              if (y2 < y1) {
-                const dropY = Math.max(y1 + 18, fromNode.y + 26);
-                pathD = `M ${x1} ${y1} L ${x1} ${dropY} L ${x2} ${dropY} L ${x2} ${y2}`;
-                handleX = (x1 + x2) / 2;
-                handleY = dropY;
-              } else {
-                pathD = `M ${x1} ${y1} L ${x2} ${y1} L ${x2} ${y2}`;
-                handleX = (x1 + x2) / 2;
-                handleY = y1;
-              }
-            }
-          } else {
-            pathD = `M ${x1} ${y1} L ${x1} ${y2} L ${x2} ${y2}`;
-            handleX = (x1 + x2) / 2;
-            handleY = y2;
-          }
-        } else {
-          // مسار كابل متعامد عام حسب الامتداد الأكبر
-          if (absDx >= absDy) {
-            pathD = `M ${x1} ${y1} L ${x2} ${y1} L ${x2} ${y2}`;
-            handleX = (x1 + x2) / 2;
-            handleY = y1;
-          } else {
-            pathD = `M ${x1} ${y1} L ${x1} ${y2} L ${x2} ${y2}`;
+            cornerX = x1;
+            cornerY = y2;
             handleX = x1;
             handleY = (y1 + y2) / 2;
           }
@@ -1313,6 +1308,15 @@ const Components = {
           <circle cx="0" cy="0" r="${isSelected ? 8.5 : 7}" class="sld-deflect-handle" fill="#0F172A" stroke="${defOffset !== 0 ? '#38BDF8' : strokeColor}" stroke-width="2" style="cursor:${isVertical ? 'ew-resize' : 'ns-resize'};" />
           <text x="0" y="3.5" text-anchor="middle" fill="${defOffset !== 0 ? '#38BDF8' : strokeColor}" font-size="9" font-weight="bold" pointer-events="none">${isVertical ? '↔' : '↕'}</text>
         </g>
+
+        ${(cornerX !== null && cornerY !== null && isOrthogonalCable) ? `
+        <!-- مقبض توجيه وتبديل زاوية الكابل القائمة 90° -->
+        <g class="sld-corner-handle-group" data-sec-id="${sec.id}" transform="translate(${cornerX}, ${cornerY})" onclick="event.stopPropagation(); toggleSection90DegreeCorner('${sec.id}')" style="cursor:pointer;" title="انقر لتبديل مسار الكابل 90° (أفقي ➔ رأسي ⇄ رأسي ➔ أفقي)">
+          <circle cx="0" cy="0" r="14" fill="transparent" />
+          <circle cx="0" cy="0" r="${isSelected ? 9 : 7.5}" class="sld-corner-handle-circle" fill="#0F172A" stroke="${isSelected ? '#00F0FF' : '#38BDF8'}" stroke-width="2" />
+          <text x="0" y="3.5" text-anchor="middle" fill="${isSelected ? '#00F0FF' : '#38BDF8'}" font-size="9" font-weight="bold" pointer-events="none">📐</text>
+        </g>
+        ` : ''}
 
         <!-- مقبض سحب وتوجيه الخط من الأمام في أي اتجاه -->
         <g class="sld-stretch-handle-group" data-sec-id="${sec.id}" data-node-id="${toNode ? toNode.id : ''}">

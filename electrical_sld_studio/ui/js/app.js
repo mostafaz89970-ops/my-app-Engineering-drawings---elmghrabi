@@ -409,6 +409,37 @@ function openEditElementModal(type, id) {
           💡 يمكنك أيضاً سحب الخط أو مقبض الانحراف (↕) مباشرة بالماوس في مساحة الرسم في أي وقت.
         </div>
       </div>
+
+      <!-- توجيه زاوية الكابل القائمة 90° في أي اتجاه -->
+      <div style="background:#1E293B; border:1px solid #0284C7; border-radius:6px; padding:10px; margin-top:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <label style="font-size:12px; font-weight:bold; color:#38BDF8; margin:0; display:flex; align-items:center; gap:6px;">
+            <span>📐</span> <span>توجيه مسار وزاوية الكابل 90°:</span>
+          </label>
+          <button type="button" class="btn btn-outline" style="padding:2px 8px; font-size:11px; border-color:#0284C7; color:#38BDF8;" onclick="toggleSection90DegreeCorner('${sec.id}')">
+            🔄 قلب الزاوية 90°
+          </button>
+        </div>
+
+        <div class="form-group" style="margin-bottom:8px;">
+          <label style="font-size:11px; color:#CBD5E1; display:block; margin-bottom:3px;">نمط الزاوية القائمة 90 درجة:</label>
+          <select id="edit-sec-corner-style" class="form-control" style="background:#0F172A; border:1px solid #475569; color:#F8FAFC; padding:6px 8px; border-radius:4px; width:100%; font-size:12px;">
+            <option value="auto" ${(!sec.corner_style || sec.corner_style === 'auto') ? 'selected' : ''}>🤖 تلقائي ذكي حسب وضع النودات والمحطة</option>
+            <option value="hv" ${sec.corner_style === 'hv' ? 'selected' : ''}>↔️ ➔ ↕️ أفقي ثم رأسي (Horizontal ➔ Vertical)</option>
+            <option value="vh" ${sec.corner_style === 'vh' ? 'selected' : ''}>↕️ ➔ ↔️ رأسي ثم أفقي (Vertical ➔ Horizontal)</option>
+          </select>
+        </div>
+
+        <div>
+          <label style="font-size:11px; color:#CBD5E1; display:block; margin-bottom:4px;">توجيه سريع للكابل بزاوية 90°:</label>
+          <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:6px;">
+            <button type="button" class="btn btn-outline" style="padding:4px 6px; font-size:11px; border-color:#475569; color:#E2E8F0;" onclick="orientSectionDirection('${sec.id}', 'down')">⬇️ أسفل</button>
+            <button type="button" class="btn btn-outline" style="padding:4px 6px; font-size:11px; border-color:#475569; color:#E2E8F0;" onclick="orientSectionDirection('${sec.id}', 'up')">⬆️ أعلى</button>
+            <button type="button" class="btn btn-outline" style="padding:4px 6px; font-size:11px; border-color:#475569; color:#E2E8F0;" onclick="orientSectionDirection('${sec.id}', 'right')">➡️ يمين</button>
+            <button type="button" class="btn btn-outline" style="padding:4px 6px; font-size:11px; border-color:#475569; color:#E2E8F0;" onclick="orientSectionDirection('${sec.id}', 'left')">⬅️ شمال</button>
+          </div>
+        </div>
+      </div>
     `;
   } else if (type === "node") {
     const node = (currentProject.nodes || []).find(n => n.id === id);
@@ -680,6 +711,16 @@ function saveElementEdits(event) {
     if (deflectInput) {
       const dVal = parseInt(deflectInput.value, 10);
       sec.deflection_offset = isNaN(dVal) ? 0 : dVal;
+    }
+
+    const cornerStyleInput = document.getElementById("edit-sec-corner-style");
+    if (cornerStyleInput) {
+      const cVal = cornerStyleInput.value;
+      if (cVal === "auto" || !cVal) {
+        delete sec.corner_style;
+      } else {
+        sec.corner_style = cVal;
+      }
     }
 
     if (selectedElement && selectedElement.id === id) {
@@ -4983,4 +5024,135 @@ window.triggerSLDFileImport = triggerSLDFileImport;
 window.handleSLDFileInput = handleSLDFileInput;
 window.saveProjectToStorage = saveProjectToStorage;
 window.getLocalProjectsCatalog = getLocalProjectsCatalog;
+
+// ─── توجيه وتبديل زوايا الكابلات القائمة 90 درجة ──────────────────────────────
+function toggleSection90DegreeCorner(secId) {
+  if (!currentProject || !currentProject.sections) return;
+  const sec = currentProject.sections.find(s => s.id === secId);
+  if (!sec) return;
+
+  const fromNode = currentProject.nodes.find(n => n.id === sec.from_node);
+  const toNode = currentProject.nodes.find(n => n.id === sec.to_node);
+  if (!fromNode || !toNode) return;
+
+  const dx = Math.abs(toNode.x - fromNode.x);
+  const dy = Math.abs(toNode.y - fromNode.y);
+
+  // إذا كان الخط متعامداً، تبديل بين hv و vh
+  let currentStyle = sec.corner_style;
+  if (!currentStyle || currentStyle === "auto") {
+    if (fromNode.type === "kiosk" && toNode.type === "kiosk") {
+      currentStyle = "vh";
+    } else if (toNode.type === "kiosk") {
+      currentStyle = (toNode.direction === "up") ? "hv" : "vh";
+    } else if (fromNode.type === "kiosk") {
+      currentStyle = "hv";
+    } else {
+      currentStyle = (dx >= dy) ? "hv" : "vh";
+    }
+  }
+
+  sec.corner_style = (currentStyle === "hv") ? "vh" : "hv";
+  sec.deflection_offset = 0; // مسار زاوية نظيف 90° بدون انحراف عشوائي
+  sec.is_slanted = false;
+
+  if (typeof saveHistoryState === "function") saveHistoryState();
+  if (typeof renderNetwork === "function") renderNetwork();
+  if (typeof updateSectionFloatingToolbar === "function") updateSectionFloatingToolbar();
+
+  const styleArabic = (sec.corner_style === "hv") ? "أفقي ➔ رأسي" : "رأسي ➔ أفقي";
+  showToast(`📐 تم تبديل مسار زاوية الكابل 90° (${styleArabic})`, "info");
+}
+
+function orientSectionDirection(secId, direction) {
+  if (!currentProject || !currentProject.sections) return;
+  const sec = currentProject.sections.find(s => s.id === secId);
+  if (!sec) return;
+
+  const fromNode = currentProject.nodes.find(n => n.id === sec.from_node);
+  const toNode = currentProject.nodes.find(n => n.id === sec.to_node);
+  if (!fromNode || !toNode) return;
+
+  const toNodeDegree = (currentProject.sections || []).filter(s => s.from_node === toNode.id || s.to_node === toNode.id).length;
+  const isMovableLeaf = (toNodeDegree <= 1) || (toNode.type === "transformer" || toNode.type === "switch" || toNode.type === "kiosk");
+  const minSpacing = 140;
+
+  if (direction === "down") {
+    sec.corner_style = "vh";
+    if (isMovableLeaf && toNode.y <= fromNode.y) {
+      toNode.y = fromNode.y + minSpacing;
+    }
+    if (toNode.type === "transformer" || toNode.type === "kiosk") toNode.direction = "down";
+  } else if (direction === "up") {
+    sec.corner_style = "vh";
+    if (isMovableLeaf && toNode.y >= fromNode.y) {
+      toNode.y = fromNode.y - minSpacing;
+    }
+    if (toNode.type === "transformer" || toNode.type === "kiosk") toNode.direction = "up";
+  } else if (direction === "right") {
+    sec.corner_style = "hv";
+    if (isMovableLeaf && toNode.x <= fromNode.x) {
+      toNode.x = fromNode.x + minSpacing;
+    }
+    if (toNode.type === "transformer" || toNode.type === "kiosk") toNode.direction = "right";
+  } else if (direction === "left") {
+    sec.corner_style = "hv";
+    if (isMovableLeaf && toNode.x >= fromNode.x) {
+      toNode.x = fromNode.x - minSpacing;
+    }
+    if (toNode.type === "transformer" || toNode.type === "kiosk") toNode.direction = "left";
+  }
+
+  sec.deflection_offset = 0;
+  sec.is_slanted = false;
+  sec.direction = direction;
+
+  if (typeof saveHistoryState === "function") saveHistoryState();
+  if (typeof renderNetwork === "function") renderNetwork();
+  if (typeof updateSectionFloatingToolbar === "function") updateSectionFloatingToolbar();
+
+  const dirNames = { down: "لأسفل ⬇️", up: "لأعلى ⬆️", right: "لليمين ➡️", left: "لليسار ⬅️" };
+  showToast(`📐 تم توجيه الكابل 90° (${dirNames[direction] || direction}) بنجاح`, "info");
+}
+
+function quickToggleSelectedSectionCorner() {
+  if (selectedElement && selectedElement.type === "section") {
+    toggleSection90DegreeCorner(selectedElement.id);
+  }
+}
+
+function quickOrientSelectedSection(direction) {
+  if (selectedElement && selectedElement.type === "section") {
+    orientSectionDirection(selectedElement.id, direction);
+  }
+}
+
+function quickResetSelectedSectionDeflect() {
+  if (selectedElement && selectedElement.type === "section" && currentProject) {
+    const sec = currentProject.sections.find(s => s.id === selectedElement.id);
+    if (sec) {
+      sec.deflection_offset = 0;
+      sec.is_slanted = false;
+      delete sec.corner_style;
+      if (typeof saveHistoryState === "function") saveHistoryState();
+      if (typeof renderNetwork === "function") renderNetwork();
+      if (typeof updateSectionFloatingToolbar === "function") updateSectionFloatingToolbar();
+      showToast("↺ تم إعادة مسار الخط / الكابل للوضع الطبيعي المستقيم", "info");
+    }
+  }
+}
+
+function quickEditSelectedSection() {
+  if (selectedElement && selectedElement.type === "section") {
+    openEditElementModal("section", selectedElement.id);
+  }
+}
+
+window.toggleSection90DegreeCorner = toggleSection90DegreeCorner;
+window.orientSectionDirection = orientSectionDirection;
+window.quickToggleSelectedSectionCorner = quickToggleSelectedSectionCorner;
+window.quickOrientSelectedSection = quickOrientSelectedSection;
+window.quickResetSelectedSectionDeflect = quickResetSelectedSectionDeflect;
+window.quickEditSelectedSection = quickEditSelectedSection;
+
 
