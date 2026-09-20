@@ -145,6 +145,17 @@ const DEFAULT_APP_SETTINGS = {
       password: "tech123",
       password_plain: "tech123",
       permissions: ["view", "export"]
+    },
+    {
+      id: "eng-Wlaa Ahmade",
+      name: "eng-Wlaa Ahmade",
+      role: "engineer",
+      sector: "المنيا شمال",
+      administration: "بني مزار شرق",
+      is_active: true,
+      password: "123456",
+      password_plain: "123456",
+      permissions: ["all", "btn_projects", "btn_save", "btn_print", "btn_excel", "btn_cable", "btn_overhead", "btn_line_between", "btn_quick_line", "btn_substation", "btn_switch", "btn_trans", "btn_cascade_trans", "btn_kiosk", "btn_kiosk_from_kiosk", "btn_rmu", "btn_avr", "btn_simulation", "btn_calculations", "btn_undo", "btn_delete"]
     }
   ]
 };

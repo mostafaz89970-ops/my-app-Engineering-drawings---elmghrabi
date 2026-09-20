@@ -575,10 +575,122 @@ def api_clear_log():
     return {"success": ok, "message": msg}
 
 
+# ==================== REAL-TIME MULTI-DEVICE SYNC HUB ====================
+
+SYNC_EVENTS = []
+MAX_SYNC_EVENTS = 300
+SYNC_LOCK = threading.Lock()
+_EVENT_COUNTER = 0
+
+
+def _get_server_sync_state():
+    cur_proj = None
+    saved_feeder = os.path.join(CURRENT_DIR, "saved_projects", "feeder_1789823077015.sld")
+    if os.path.exists(saved_feeder):
+        try:
+            with open(saved_feeder, "r", encoding="utf-8") as f:
+                cur_proj = json.load(f)
+        except Exception:
+            pass
+
+    if not cur_proj:
+        projs = list_projects()
+        if projs:
+            p_data = load_project(projs[0].get("id"))
+            if p_data:
+                cur_proj = p_data
+
+    users_list = get_users_list()
+    catalog = list_projects()
+    return {
+        "project": cur_proj,
+        "users": users_list,
+        "catalog": catalog,
+        "maintenance_mode": False
+    }
+
+
+@app.route('/api/sync/state', method=['GET', 'OPTIONS'])
+def api_sync_state():
+    enable_cors()
+    if request.method == 'OPTIONS':
+        return {}
+    state = _get_server_sync_state()
+    return {
+        "success": True,
+        "project": state["project"],
+        "users": state["users"],
+        "catalog": state["catalog"],
+        "maintenance_mode": state["maintenance_mode"],
+        "timestamp": int(time.time() * 1000)
+    }
+
+
+@app.route('/api/sync/publish', method=['POST', 'OPTIONS'])
+def api_sync_publish():
+    global _EVENT_COUNTER
+    enable_cors()
+    if request.method == 'OPTIONS':
+        return {}
+    data = request.json or {}
+    ev_type = data.get("type", "")
+    if not ev_type:
+        return {"success": False, "message": "Missing event type"}
+
+    with SYNC_LOCK:
+        _EVENT_COUNTER += 1
+        event_record = {
+            "id": _EVENT_COUNTER,
+            "type": ev_type,
+            "senderId": data.get("senderId", "unknown"),
+            "author": data.get("author", "Unknown"),
+            "timestamp": data.get("timestamp") or int(time.time() * 1000),
+            "reason": data.get("reason", ""),
+            "data": data.get("data", {})
+        }
+        SYNC_EVENTS.append(event_record)
+        if len(SYNC_EVENTS) > MAX_SYNC_EVENTS:
+            SYNC_EVENTS.pop(0)
+
+    # Persist drawing automatically
+    if ev_type in ('PROJECT_SAVED', 'DRAWING_UPDATE'):
+        proj = data.get("data", {}).get("project")
+        if proj and isinstance(proj, dict) and proj.get("nodes"):
+            try:
+                p_id = proj.get("id") or "feeder_1789823077015"
+                save_project(p_id, proj.get("name", "خط المعصرة"), proj)
+            except Exception:
+                pass
+
+    return {"success": True, "event_id": _EVENT_COUNTER}
+
+
+@app.route('/api/sync/poll', method=['GET', 'OPTIONS'])
+def api_sync_poll():
+    enable_cors()
+    if request.method == 'OPTIONS':
+        return {}
+    since_id = 0
+    try:
+        since_id = int(request.query.get('since', 0))
+    except Exception:
+        since_id = 0
+
+    with SYNC_LOCK:
+        new_events = [e for e in SYNC_EVENTS if e["id"] > since_id]
+
+    return {
+        "success": True,
+        "events": new_events,
+        "latest_id": _EVENT_COUNTER,
+        "timestamp": int(time.time() * 1000)
+    }
+
+
 # ==================== SERVER STARTUP ====================
 
 def start_server(port=7890):
-    run(app, host='127.0.0.1', port=port, quiet=True)
+    run(app, host='0.0.0.0', port=port, quiet=True)
 
 
 def open_app_window(url):
