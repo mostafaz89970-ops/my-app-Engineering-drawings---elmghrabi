@@ -3,9 +3,10 @@
  * Copyright (C) ENG-MOSTAFAELMGHRABY - All Rights Reserved
  */
 
-let currentUser = null;
-let sessionToken = null;
-let allUsersCache = [];
+var currentUser = null;
+var sessionToken = null;
+var allUsersCache = [];
+window.allUsersCache = allUsersCache;
 
 const COPYRIGHT_NOTICE = "جميع الحقوق محفوظة للمهندس مصطفى المغربي © ENG-MOSTAFAELMGHRABY";
 
@@ -125,37 +126,42 @@ function filterLoginUsers() {
   const errorDiv = document.getElementById("login-error");
   if (!userSelect) return;
 
+  const usersList = (window.allUsersCache && window.allUsersCache.length > 0) ? window.allUsersCache : allUsersCache;
   const currentSector = sectorSelect ? sectorSelect.value : "المنيا شمال";
   const currentAdmin = adminSelect ? adminSelect.value : "بني مزار شرق";
 
-  // فلترة صارمة: يظهر الموظفون المسجلون في هذا القطاع وهذه الإدارة حصراً ولا يظهرون في غيرها
-  let filtered = allUsersCache.filter(u => {
-    const userSector = u.sector || "المنيا شمال";
-    const userAdmin = u.administration || "بني مزار شرق";
-    return userSector === currentSector && userAdmin === currentAdmin;
-  });
+  let filtered = [];
+  if (currentAdmin === "all" || currentSector === "all") {
+    filtered = usersList;
+  } else {
+    filtered = usersList.filter(u => {
+      const userSector = u.sector || "المنيا شمال";
+      const userAdmin = u.administration || "بني مزار شرق";
+      return userSector === currentSector && userAdmin === currentAdmin;
+    });
+  }
+
+  // إذا لم يتم العثور على مستخدمين لهذا الفرع بالتحديد، اعرض كافة المستخدمين مع توضيح فرعهم
+  if (filtered.length === 0 && usersList.length > 0) {
+    filtered = usersList;
+  }
 
   if (filtered.length === 0) {
-    // في وضع الاستضافة أو عند عدم وجود مستخدم محدد للإدارة، إتاحة الدخول للمدير العام م/ مصطفى المغربي
     userSelect.innerHTML = `<option value="admin">المدير العام (م/ مصطفى المغربي) - ${currentAdmin}</option>`;
-    userSelect.disabled = false;
-    if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.title = "";
-    }
   } else {
-    userSelect.disabled = false;
-    if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.title = "";
-    }
     userSelect.innerHTML = filtered.map(u => {
       const statusLabel = u.is_active === false ? ' ⛔ (معطّل / محظور)' : '';
-      return `<option value="${u.id}">${u.name}${statusLabel}</option>`;
+      const branchNote = (u.administration && u.administration !== currentAdmin) ? ` [${u.administration}]` : '';
+      return `<option value="${u.id}">${u.name}${branchNote}${statusLabel}</option>`;
     }).join('');
     userSelect.value = filtered[0].id;
   }
 
+  userSelect.disabled = false;
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.title = "";
+  }
   if (errorDiv) errorDiv.style.display = "none";
 }
 
@@ -223,6 +229,7 @@ async function loadInitialUsers() {
   } else {
     allUsersCache = DEFAULT_FALLBACK_USERS;
   }
+  window.allUsersCache = allUsersCache;
 
   // 2. محاولة المزامنة مع الخادم إن كان يعمل
   try {
@@ -236,6 +243,7 @@ async function loadInitialUsers() {
         const serverIds = new Set(data.users.map(u => u.id));
         const localOnly = allUsersCache.filter(u => !serverIds.has(u.id));
         allUsersCache = [...data.users, ...localOnly];
+        window.allUsersCache = allUsersCache;
         try { localStorage.setItem("sld_users", JSON.stringify(allUsersCache)); } catch(_) {}
       }
     }
@@ -243,6 +251,7 @@ async function loadInitialUsers() {
     // وضع غير متصل / الاستضافة السحابية
   }
 
+  window.allUsersCache = allUsersCache;
   const sectorSelect = document.getElementById("login-sector-select");
   const currentSector = sectorSelect ? sectorSelect.value : "المنيا شمال";
   populateLoginAdminDropdown(currentSector, "بني مزار شرق");
@@ -253,9 +262,11 @@ async function loadInitialUsers() {
 function applySyncedUsers(newUsers) {
   if (!Array.isArray(newUsers) || newUsers.length === 0) return;
   allUsersCache = newUsers;
+  window.allUsersCache = newUsers;
   try { localStorage.setItem("sld_users", JSON.stringify(newUsers)); } catch(_) {}
   if (typeof appSettings !== 'undefined' && appSettings) {
     appSettings.users = newUsers;
+    try { localStorage.setItem("sld_settings", JSON.stringify(appSettings)); } catch(_) {}
   }
   const sectorSelect = document.getElementById("login-sector-select");
   const currentSector = sectorSelect ? sectorSelect.value : "المنيا شمال";

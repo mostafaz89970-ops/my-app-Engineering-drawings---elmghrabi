@@ -12,6 +12,7 @@ let startY = 0;
 let showGrid = true;
 let isSimulationActive = false;
 let selectedElement = null; // { type: 'node' | 'section', id: string, name: string }
+var currentProject = window.currentProject || null;
 
 let isDraggingNode = false;
 let dragNodeId = null;
@@ -504,25 +505,33 @@ function resetZoom() {
 }
 
 function fitToScreen() {
-  if (!currentProject || !currentProject.nodes || currentProject.nodes.length === 0) return;
+  const proj = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject || currentProject;
+  if (!proj || !proj.nodes || proj.nodes.length === 0) return;
   
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  currentProject.nodes.forEach(n => {
-    if (n.x < minX) minX = n.x;
-    if (n.x > maxX) maxX = n.x;
-    if (n.y < minY) minY = n.y;
-    if (n.y > maxY) maxY = n.y;
+  proj.nodes.forEach(n => {
+    if (typeof n.x === 'number') {
+      if (n.x < minX) minX = n.x;
+      if (n.x > maxX) maxX = n.x;
+    }
+    if (typeof n.y === 'number') {
+      if (n.y < minY) minY = n.y;
+      if (n.y > maxY) maxY = n.y;
+    }
   });
 
-  const width = Math.max(maxX - minX + 300, 400);
-  const height = Math.max(maxY - minY + 300, 400);
-  const viewport = document.getElementById("viewport");
-  const vpWidth = viewport ? viewport.clientWidth : 1200;
-  const vpHeight = viewport ? viewport.clientHeight : 800;
+  if (!isFinite(minX) || !isFinite(maxX) || !isFinite(minY) || !isFinite(maxY)) return;
 
-  canvasScale = Math.min((vpWidth - 80) / width, (vpHeight - 80) / height, 1.2);
-  panX = (vpWidth - width * canvasScale) / 2 - (minX - 150) * canvasScale;
-  panY = (vpHeight - height * canvasScale) / 2 - (minY - 100) * canvasScale;
+  const width = Math.max(maxX - minX + 350, 450);
+  const height = Math.max(maxY - minY + 350, 450);
+  const viewport = document.getElementById("viewport");
+  const vpWidth = (viewport && viewport.clientWidth > 100) ? viewport.clientWidth : (window.innerWidth || 1200);
+  const vpHeight = (viewport && viewport.clientHeight > 100) ? viewport.clientHeight : (window.innerHeight ? window.innerHeight - 150 : 800);
+
+  canvasScale = Math.min((vpWidth - 80) / width, (vpHeight - 80) / height, 1.15);
+  if (canvasScale < 0.25) canvasScale = 0.25;
+  panX = (vpWidth - width * canvasScale) / 2 - (minX - 175) * canvasScale;
+  panY = (vpHeight - height * canvasScale) / 2 - (minY - 175) * canvasScale;
   updateTransform();
 }
 
@@ -704,14 +713,17 @@ function updateSectionFloatingToolbar() {
 window.updateSectionFloatingToolbar = updateSectionFloatingToolbar;
 
 function renderNetwork() {
-  if (!currentProject) return;
+  const proj = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject || currentProject;
+  if (!proj) return;
+  currentProject = proj;
+  window.currentProject = proj;
 
   const sectionsLayer = document.getElementById("sections-layer");
   const nodesLayer = document.getElementById("nodes-layer");
   if (!sectionsLayer || !nodesLayer) return;
 
-  const nodes = currentProject.nodes || [];
-  const sections = currentProject.sections || [];
+  const nodes = proj.nodes || [];
+  const sections = proj.sections || [];
 
   // 1. حساب حالة السريان والتغذية
   const { energizedNodes, energizedSections } = SimulationEngine.computeConnectivity(nodes, sections);
@@ -892,3 +904,6 @@ window.initCanvas = initCanvas;
 window.openDeveloperModal = openDeveloperModal;
 window.closeDeveloperModal = closeDeveloperModal;
 window.toggleTitleBlockMinimize = toggleTitleBlockMinimize;
+window.renderNetwork = renderNetwork;
+window.fitToScreen = fitToScreen;
+window.resetZoom = resetZoom;

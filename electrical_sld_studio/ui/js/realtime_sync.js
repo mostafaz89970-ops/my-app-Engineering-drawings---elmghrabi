@@ -24,6 +24,8 @@
   var syncDebounceTimer = null;
   var reconnectTimer = null;
   var isInitialSyncDone = false;
+  var lastUserUpdateTimestamp = 0;
+  var lastDrawingUpdateTimestamp = 0;
 
   // دالة تشفير سريعة للمقارنة وتجنب التكرار
   function fastHash(str) {
@@ -106,24 +108,33 @@
     var author = payload.author || 'جهاز آخر';
     var type = payload.type;
     var data = payload.data || {};
+    var msgTime = payload.timestamp || 0;
 
     console.log('⚡ استلام حدث سحابي:', type, 'من:', author);
 
     if (type === 'DRAWING_UPDATE') {
       if (!data.project || !data.project.nodes) return;
+      if (msgTime && msgTime < lastDrawingUpdateTimestamp) return;
+      if (msgTime) lastDrawingUpdateTimestamp = msgTime;
+
       var projStr = JSON.stringify(data.project);
       var hash = fastHash(projStr);
       if (hash === lastBroadcastHash) return;
       lastBroadcastHash = hash;
 
       isApplyingRemote = true;
-      window.currentProject = data.project;
+      if (window.setCurrentProject) {
+        window.setCurrentProject(data.project);
+      } else {
+        window.currentProject = data.project;
+      }
       try {
         localStorage.setItem('sld_saved_feeder', projStr);
       } catch (e) {}
 
       if (window.updateFeederInputs) window.updateFeederInputs();
       if (window.renderNetwork) window.renderNetwork();
+      if (window.fitToScreen) window.fitToScreen();
 
       showSyncToast('🔄 تم استلام وتحديث الرسم لحظياً من: ' + author);
       updateBadgeUI('syncing', author);
@@ -135,6 +146,7 @@
 
     } else if (type === 'PROJECT_SAVED') {
       if (data.project && window.applySyncedProject) {
+        if (msgTime) lastDrawingUpdateTimestamp = msgTime;
         window.applySyncedProject(data.project, data.catalog);
         showSyncToast('💾 تم حفظ ومزامنة مشروع جديد [' + (data.project.name || '') + '] من: ' + author);
         updateBadgeUI('syncing', author);
@@ -150,7 +162,10 @@
       }
 
     } else if (type === 'USERS_UPDATE') {
-      if (Array.isArray(data.users) && window.applySyncedUsers) {
+      if (Array.isArray(data.users) && data.users.length > 0 && window.applySyncedUsers) {
+        if (msgTime && msgTime < lastUserUpdateTimestamp) return;
+        if (msgTime) lastUserUpdateTimestamp = msgTime;
+
         window.applySyncedUsers(data.users);
         showSyncToast('👥 تم تحديث بيانات ومستخدمي المنظومة لحظياً من: ' + author);
         updateBadgeUI('syncing', author);
@@ -179,10 +194,25 @@
 
   function respondToFullSyncRequest(targetDevId) {
     try {
-      var curProj = window.currentProject || null;
+      var curProj = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+      if (!curProj || !curProj.nodes || curProj.nodes.length === 0) {
+        try { curProj = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
+      }
+
       var catalog = [];
       try { catalog = JSON.parse(localStorage.getItem('sld_projects_catalog') || '[]'); } catch (_) {}
-      var users = window.allUsersCache || [];
+
+      var users = (window.allUsersCache && window.allUsersCache.length > 0) ? window.allUsersCache : null;
+      if (!users || users.length === 0) {
+        try { users = JSON.parse(localStorage.getItem('sld_users')); } catch (_) {}
+      }
+      if (!users || users.length === 0) {
+        try {
+          var s = JSON.parse(localStorage.getItem('sld_settings'));
+          if (s && s.users) users = s.users;
+        } catch (_) {}
+      }
+
       var isMaint = (localStorage.getItem('sld_maintenance_mode') === 'true');
 
       postCloudEvent('RESPONSE_FULL_SYNC', {
@@ -200,18 +230,23 @@
   function applyFullSyncDataset(data, author) {
     if (!data) return;
     try {
-      if (data.project && data.project.nodes) {
-        window.currentProject = data.project;
+      if (data.project && data.project.nodes && data.project.nodes.length > 0) {
+        if (window.setCurrentProject) {
+          window.setCurrentProject(data.project);
+        } else {
+          window.currentProject = data.project;
+        }
         localStorage.setItem('sld_saved_feeder', JSON.stringify(data.project));
         if (window.updateFeederInputs) window.updateFeederInputs();
         if (window.renderNetwork) window.renderNetwork();
+        if (window.fitToScreen) window.fitToScreen();
       }
 
-      if (Array.isArray(data.catalog) && window.applySyncedCatalog) {
+      if (Array.isArray(data.catalog) && data.catalog.length > 0 && window.applySyncedCatalog) {
         window.applySyncedCatalog(data.catalog);
       }
 
-      if (Array.isArray(data.users) && window.applySyncedUsers) {
+      if (Array.isArray(data.users) && data.users.length > 0 && window.applySyncedUsers) {
         window.applySyncedUsers(data.users);
       }
 
@@ -240,6 +275,9 @@
           if (parsed && parsed.type) {
             await handleIncomingCloudPayload(parsed);
           }
+        }
+        if (window.fitToScreen) {
+          setTimeout(window.fitToScreen, 200);
         }
       }
     } catch (e) {
@@ -295,8 +333,8 @@
   // ─── 8. وظائف البث المحلية الموجهة للأجهزة الأخرى ─────────────────────────────
   function broadcastLocalDrawing(reason) {
     if (isApplyingRemote) return;
-    var proj = window.currentProject || null;
-    if (!proj || !proj.nodes) return;
+    var proj = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+    if (!proj || !proj.nodes || proj.nodes.length === 0) return;
 
     clearTimeout(syncDebounceTimer);
     syncDebounceTimer = setTimeout(function () {
@@ -419,14 +457,29 @@
 
   function forceBroadcastProject() {
     lastBroadcastHash = null;
-    broadcastLocalDrawing('force_manual_sync');
+    var curProj = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+    if (!curProj || !curProj.nodes) {
+      try { curProj = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
+    }
     var catalog = [];
     try { catalog = JSON.parse(localStorage.getItem('sld_projects_catalog') || '[]'); } catch (_) {}
-    if (window.currentProject) {
-      broadcastProjectSaved(window.currentProject, catalog);
+    var users = (window.allUsersCache && window.allUsersCache.length > 0) ? window.allUsersCache : null;
+    if (!users || users.length === 0) {
+      try { users = JSON.parse(localStorage.getItem('sld_users')); } catch (_) {}
     }
-    if (window.allUsersCache) {
-      broadcastUsersUpdate(window.allUsersCache);
+    if (!users || users.length === 0) {
+      try {
+        var s = JSON.parse(localStorage.getItem('sld_settings'));
+        if (s && s.users) users = s.users;
+      } catch (_) {}
+    }
+
+    if (curProj && curProj.nodes) {
+      postCloudEvent('DRAWING_UPDATE', { project: curProj }, 'force_manual_sync');
+      broadcastProjectSaved(curProj, catalog);
+    }
+    if (users && users.length > 0) {
+      broadcastUsersUpdate(users);
     }
     closeSyncModal();
     if (window.showToast) window.showToast('📡 تم بث كافة البيانات (المخطط، المشاريع، المستخدمين) لجميع الأجهزة بنجاح!', 'success');
