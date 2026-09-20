@@ -9,32 +9,25 @@
 (function () {
   'use strict';
 
-  // الغرفة السحابية الافتراضية الموحدة لشركة مصر الوسطى
-  var DEFAULT_ROOM = 'mepco_elmghrabi_sld_live_v1';
+  var DEFAULT_ROOM = 'mepco_elmghrabi_sync_v5';
   var currentRoom = localStorage.getItem('sld_sync_room') || DEFAULT_ROOM;
 
-  // معرف الجهاز الحالي لتجنب إعادة تطبيق التعديل الصادر من نفس الجهاز
   var deviceId = sessionStorage.getItem('sld_device_id');
   if (!deviceId) {
     deviceId = 'dev_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
     sessionStorage.setItem('sld_device_id', deviceId);
   }
 
-  // خوادم الريلاي السحابية للمزامنة الفورية
-  var RELAY_PEERS = [
-    'https://gun-manhattan.herokuapp.com/gun',
-    'https://peer.wallie.io/gun',
-    'https://relay.peer.ooo/gun'
-  ];
-
-  var gunInstance = null;
+  var sseClient = null;
   var isApplyingRemote = false;
   var lastBroadcastHash = null;
   var syncDebounceTimer = null;
-  var lastRemoteTimestamp = 0;
+  var reconnectTimer = null;
+  var isInitialSyncDone = false;
 
   // دالة تشفير سريعة للمقارنة وتجنب التكرار
   function fastHash(str) {
+    if (!str) return 0;
     var hash = 0;
     for (var i = 0; i < str.length; i++) {
       hash = ((hash << 5) - hash) + str.charCodeAt(i);
@@ -43,143 +36,302 @@
     return hash;
   }
 
-  // تهيئة نظام المزامنة السحابية اللحظية
-  function initSync() {
-    if (typeof Gun === 'undefined') {
-      console.warn('GunDB library not found yet, retrying in 1s...');
-      setTimeout(initSync, 1000);
-      return;
-    }
-
+  // بث الأحداث السحابية الفورية
+  function postCloudEvent(type, data, reason) {
     try {
-      gunInstance = Gun({
-        peers: RELAY_PEERS,
-        localStorage: false
-      });
-      window.gunInstance = gunInstance;
-      console.log('⚡ تم تفعيل محرك المزامنة السحابية اللحظية [Room: ' + currentRoom + ']');
+      var author = (window.currentUser && window.currentUser.name) ?
+        window.currentUser.name : 'المهندس مصطفى المغربي';
 
-      listenToCloudRoom(currentRoom);
-      updateBadgeUI('connected');
+      var payload = {
+        type: type,
+        senderId: deviceId,
+        author: author,
+        timestamp: Date.now(),
+        reason: reason || '',
+        data: data
+      };
+
+      var targetUrl = 'https://ntfy.sh/' + encodeURIComponent(currentRoom);
+
+      fetch(targetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Title': 'SLD Sync: ' + type
+        },
+        body: JSON.stringify(payload)
+      }).then(function (res) {
+        if (res.ok) {
+          updateBadgeUI('broadcast');
+          setTimeout(function () { updateBadgeUI('connected'); }, 1200);
+        }
+      }).catch(function (err) {
+        console.warn('Sync post warning:', err);
+      });
     } catch (e) {
-      console.error('Failed to init Gun sync:', e);
-      updateBadgeUI('error');
+      console.warn('Error sending cloud event:', e);
     }
   }
 
-  // الاستماع للتحديثات الواردة من الأجهزة الأخرى
-  function listenToCloudRoom(roomName) {
-    if (!gunInstance) return;
+  // استخراج وتفسير رسائل السحابة (سواء نصية أو مرفق لملفات كبيرة)
+  async function parseCloudMessage(eventData) {
+    if (!eventData) return null;
+    try {
+      var ntfyMsg = (typeof eventData === 'string') ? JSON.parse(eventData) : eventData;
+      if (!ntfyMsg) return null;
 
-    var roomNode = gunInstance.get(roomName);
-    roomNode.get('active_network_payload').on(function (data) {
-      if (!data) return;
-
-      try {
-        var payload = typeof data === 'string' ? JSON.parse(data) : data;
-        if (!payload || !payload.project || !payload.project.nodes) return;
-
-        // تجاهل التحديث إذا كان قادماً من نفس هذا الجهاز
-        if (payload.senderId === deviceId) return;
-
-        // تجاهل التحديثات الأقدم من آخر تحديث محلي تم اعتماده
-        if (payload.timestamp && payload.timestamp <= lastRemoteTimestamp) return;
-        lastRemoteTimestamp = payload.timestamp || Date.now();
-
-        var projectStr = JSON.stringify(payload.project);
-        var hash = fastHash(projectStr);
-        if (hash === lastBroadcastHash) return;
-
-        console.log('⚡ استلام تحديث لحظي جديد من:', payload.author || 'جهاز آخر');
-
-        isApplyingRemote = true;
-
-        // تطبيق المخطط على بيئة العمل
-        if (typeof currentProject !== 'undefined') {
-          currentProject = payload.project;
-        }
-        window.currentProject = payload.project;
+      if (ntfyMsg.attachment && ntfyMsg.attachment.url) {
         try {
-          localStorage.setItem('sld_saved_feeder', projectStr);
-        } catch (e) {}
-
-        // إعادة رسم الشبكة وتحديث الواجهة
-        if (window.updateFeederInputs) window.updateFeederInputs();
-        if (window.renderNetwork) window.renderNetwork();
-
-        var authorName = payload.author || 'مهندس آخر';
-        showSyncToast('🔄 تم استلام وتحديث المخطط لحظياً من: ' + authorName);
-        updateBadgeUI('syncing', authorName);
-
-        setTimeout(function () {
-          isApplyingRemote = false;
-          updateBadgeUI('connected');
-        }, 800);
-
-      } catch (err) {
-        console.error('Error applying remote sync update:', err);
+          var res = await fetch(ntfyMsg.attachment.url);
+          if (res.ok) return await res.json();
+        } catch (_) {}
       }
-    });
 
-    // الاستماع لحالة وضع الصيانة اللحظية لجميع الأجهزة
-    roomNode.get('system_maintenance_mode').on(function (val) {
-      if (val === null || val === undefined) return;
-      var isActive = (val === true || val === 'true');
+      if (ntfyMsg.message) {
+        try {
+          return JSON.parse(ntfyMsg.message);
+        } catch (_) {
+          return ntfyMsg.message;
+        }
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  // معالجة وتطبيق الأحداث الواردة من الأجهزة الأخرى
+  async function handleIncomingCloudPayload(payload) {
+    if (!payload || !payload.type) return;
+    if (payload.senderId === deviceId) return;
+
+    var author = payload.author || 'جهاز آخر';
+    var type = payload.type;
+    var data = payload.data || {};
+
+    console.log('⚡ استلام حدث سحابي:', type, 'من:', author);
+
+    if (type === 'DRAWING_UPDATE') {
+      if (!data.project || !data.project.nodes) return;
+      var projStr = JSON.stringify(data.project);
+      var hash = fastHash(projStr);
+      if (hash === lastBroadcastHash) return;
+      lastBroadcastHash = hash;
+
+      isApplyingRemote = true;
+      window.currentProject = data.project;
+      try {
+        localStorage.setItem('sld_saved_feeder', projStr);
+      } catch (e) {}
+
+      if (window.updateFeederInputs) window.updateFeederInputs();
+      if (window.renderNetwork) window.renderNetwork();
+
+      showSyncToast('🔄 تم استلام وتحديث الرسم لحظياً من: ' + author);
+      updateBadgeUI('syncing', author);
+
+      setTimeout(function () {
+        isApplyingRemote = false;
+        updateBadgeUI('connected');
+      }, 800);
+
+    } else if (type === 'PROJECT_SAVED') {
+      if (data.project && window.applySyncedProject) {
+        window.applySyncedProject(data.project, data.catalog);
+        showSyncToast('💾 تم حفظ ومزامنة مشروع جديد [' + (data.project.name || '') + '] من: ' + author);
+        updateBadgeUI('syncing', author);
+        setTimeout(function () { updateBadgeUI('connected'); }, 800);
+      }
+
+    } else if (type === 'PROJECT_DELETED') {
+      if (data.catalog && window.applySyncedCatalog) {
+        window.applySyncedCatalog(data.catalog);
+        showSyncToast('🗑️ تم تحديث قائمة المشاريع بعد حذف مشروع من: ' + author);
+        updateBadgeUI('syncing', author);
+        setTimeout(function () { updateBadgeUI('connected'); }, 800);
+      }
+
+    } else if (type === 'USERS_UPDATE') {
+      if (Array.isArray(data.users) && window.applySyncedUsers) {
+        window.applySyncedUsers(data.users);
+        showSyncToast('👥 تم تحديث بيانات ومستخدمي المنظومة لحظياً من: ' + author);
+        updateBadgeUI('syncing', author);
+        setTimeout(function () { updateBadgeUI('connected'); }, 800);
+      }
+
+    } else if (type === 'MAINTENANCE_UPDATE') {
+      var isActive = (data.isActive === true || data.isActive === 'true');
       var localActive = (localStorage.getItem('sld_maintenance_mode') === 'true');
       if (isActive !== localActive) {
         localStorage.setItem('sld_maintenance_mode', isActive ? 'true' : 'false');
         if (window.checkMaintenanceState) window.checkMaintenanceState();
         if (window.updateMaintenanceBtnUI) window.updateMaintenanceBtnUI();
-        if (window.showToast) {
-          window.showToast(isActive ? '🚨 دخلت المنظومة في وضع الصيانة والتحديث الآن' : '✅ تم إنهاء وضع الصيانة وفتح المنظومة لجميع المستخدمين', isActive ? 'warning' : 'info');
-        }
+        showSyncToast(isActive ? '🚨 دخلت المنظومة في وضع الصيانة والتحديث الآن' : '✅ تم إنهاء وضع الصيانة وفتح المنظومة للجميع', isActive ? 'warning' : 'info');
       }
-    });
+
+    } else if (type === 'REQUEST_FULL_SYNC') {
+      respondToFullSyncRequest(payload.senderId);
+
+    } else if (type === 'RESPONSE_FULL_SYNC') {
+      if (data.targetSenderId === deviceId) {
+        applyFullSyncDataset(data, author);
+      }
+    }
   }
 
-  // بث التحديثات لجميع الأجهزة عند إجراء أي تعديل
-  function broadcastLocalChange(reason) {
-    if (isApplyingRemote) return;
-    if (!gunInstance) return;
+  function respondToFullSyncRequest(targetDevId) {
+    try {
+      var curProj = window.currentProject || null;
+      var catalog = [];
+      try { catalog = JSON.parse(localStorage.getItem('sld_projects_catalog') || '[]'); } catch (_) {}
+      var users = window.allUsersCache || [];
+      var isMaint = (localStorage.getItem('sld_maintenance_mode') === 'true');
 
-    var proj = window.currentProject || (typeof currentProject !== 'undefined' ? currentProject : null);
+      postCloudEvent('RESPONSE_FULL_SYNC', {
+        targetSenderId: targetDevId,
+        project: curProj,
+        catalog: catalog,
+        users: users,
+        maintenanceMode: isMaint
+      }, 'full_sync_reply');
+    } catch (e) {
+      console.warn('Error responding to full sync:', e);
+    }
+  }
+
+  function applyFullSyncDataset(data, author) {
+    if (!data) return;
+    try {
+      if (data.project && data.project.nodes) {
+        window.currentProject = data.project;
+        localStorage.setItem('sld_saved_feeder', JSON.stringify(data.project));
+        if (window.updateFeederInputs) window.updateFeederInputs();
+        if (window.renderNetwork) window.renderNetwork();
+      }
+
+      if (Array.isArray(data.catalog) && window.applySyncedCatalog) {
+        window.applySyncedCatalog(data.catalog);
+      }
+
+      if (Array.isArray(data.users) && window.applySyncedUsers) {
+        window.applySyncedUsers(data.users);
+      }
+
+      if (data.maintenanceMode !== undefined) {
+        localStorage.setItem('sld_maintenance_mode', data.maintenanceMode ? 'true' : 'false');
+        if (window.checkMaintenanceState) window.checkMaintenanceState();
+      }
+
+      showSyncToast('✅ تم استلام ومزامنة كافة المشاريع والمستخدمين والرسم لحظياً من: ' + author, 'success');
+      updateBadgeUI('connected');
+    } catch (e) {
+      console.warn('Error applying full sync dataset:', e);
+    }
+  }
+
+  async function pollStartupCloudState() {
+    try {
+      var pollUrl = 'https://ntfy.sh/' + encodeURIComponent(currentRoom) + '/json?poll=1&since=all';
+      var res = await fetch(pollUrl);
+      if (res.ok) {
+        var text = await res.text();
+        var lines = text.trim().split(String.fromCharCode(10));
+        for (var i = 0; i < lines.length; i++) {
+          if (!lines[i].trim()) continue;
+          var parsed = await parseCloudMessage(lines[i]);
+          if (parsed && parsed.type) {
+            await handleIncomingCloudPayload(parsed);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Startup poll warning:', e);
+    }
+
+    postCloudEvent('REQUEST_FULL_SYNC', { requestedAt: Date.now() }, 'initial_join');
+    isInitialSyncDone = true;
+  }
+
+  function connectCloudSSE() {
+    if (sseClient) {
+      try { sseClient.close(); } catch (_) {}
+      sseClient = null;
+    }
+
+    var sseUrl = 'https://ntfy.sh/' + encodeURIComponent(currentRoom) + '/sse';
+    console.log('⚡ فتح قناة المزامنة اللحظية السحابية:', sseUrl);
+
+    try {
+      sseClient = new EventSource(sseUrl);
+
+      sseClient.onopen = function () {
+        console.log('✅ تم الاتصال بقناة المزامنة السحابية اللحظية بنجاح [Room: ' + currentRoom + ']');
+        updateBadgeUI('connected');
+      };
+
+      sseClient.onmessage = async function (e) {
+        if (!e || !e.data) return;
+        var payload = await parseCloudMessage(e.data);
+        if (payload && payload.type) {
+          await handleIncomingCloudPayload(payload);
+        }
+      };
+
+      sseClient.onerror = function () {
+        updateBadgeUI('offline');
+        if (sseClient) {
+          try { sseClient.close(); } catch (_) {}
+          sseClient = null;
+        }
+        clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(connectCloudSSE, 4000);
+      };
+    } catch (err) {
+      console.error('Failed to connect SSE:', err);
+      updateBadgeUI('offline');
+      clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(connectCloudSSE, 5000);
+    }
+  }
+
+  // ─── 8. وظائف البث المحلية الموجهة للأجهزة الأخرى ─────────────────────────────
+  function broadcastLocalDrawing(reason) {
+    if (isApplyingRemote) return;
+    var proj = window.currentProject || null;
     if (!proj || !proj.nodes) return;
 
     clearTimeout(syncDebounceTimer);
     syncDebounceTimer = setTimeout(function () {
       try {
-        var projectStr = JSON.stringify(proj);
-        var hash = fastHash(projectStr);
+        var projStr = JSON.stringify(proj);
+        var hash = fastHash(projStr);
         if (hash === lastBroadcastHash) return;
         lastBroadcastHash = hash;
 
-        var userName = (window.currentUser && window.currentUser.name) ?
-          window.currentUser.name : 'المهندس مصطفى المغربي';
-
-        var payload = {
-          senderId: deviceId,
-          author: userName,
-          timestamp: Date.now(),
-          reason: reason || 'edit',
-          project: proj
-        };
-
-        var roomNode = gunInstance.get(currentRoom);
-        roomNode.get('active_network_payload').put(JSON.stringify(payload));
-        console.log('📡 تم بث التحديث السحابي لجميع الأجهزة [Reason: ' + (reason || 'edit') + ']');
-        updateBadgeUI('broadcast');
-
-        setTimeout(function () {
-          updateBadgeUI('connected');
-        }, 1200);
-
+        postCloudEvent('DRAWING_UPDATE', { project: proj }, reason || 'drawing_edit');
       } catch (e) {
-        console.error('Error broadcasting local change:', e);
+        console.warn('Error broadcasting drawing:', e);
       }
-    }, 400); // 400ms debounce
+    }, 350);
   }
 
-  // واجهة مستخدم شارة المزامنة
+  function broadcastProjectSaved(project, catalog) {
+    if (!project) return;
+    postCloudEvent('PROJECT_SAVED', { project: project, catalog: catalog }, 'project_saved');
+  }
+
+  function broadcastProjectDeleted(projectId, catalog) {
+    postCloudEvent('PROJECT_DELETED', { projectId: projectId, catalog: catalog }, 'project_deleted');
+  }
+
+  function broadcastUsersUpdate(users) {
+    if (!Array.isArray(users)) return;
+    postCloudEvent('USERS_UPDATE', { users: users }, 'users_updated');
+  }
+
+  function broadcastMaintenanceState(isActive) {
+    postCloudEvent('MAINTENANCE_UPDATE', { isActive: !!isActive }, 'maintenance_toggle');
+  }
+
+  // ─── 9. واجهة الشارة والتنبيهات ───────────────────────────────────────────────
   function updateBadgeUI(status, info) {
     var badge = document.getElementById('cloud-sync-badge');
     if (!badge) return;
@@ -195,18 +347,18 @@
       badge.innerHTML = '<span class="sync-dot purple"></span> <span>جاري البث للأجهزة... 📡</span>';
       badge.className = 'sync-status-badge badge-broadcast';
     } else {
-      badge.innerHTML = '<span class="sync-dot red"></span> <span>غير متصل بالسحابة</span>';
+      badge.innerHTML = '<span class="sync-dot red"></span> <span>جاري إعادة الاتصال بالسحابة...</span>';
       badge.className = 'sync-status-badge badge-offline';
     }
   }
 
-  function showSyncToast(msg) {
+  function showSyncToast(msg, type) {
     if (window.showToast) {
-      window.showToast(msg, 'info');
+      window.showToast(msg, type || 'info');
     }
   }
 
-  // نافذة إدارة المزامنة السحابية
+  // ─── 10. نافذة التحكم بالغرفة السحابية والإرسال القسري ──────────────────────────
   function openSyncModal() {
     var modal = document.getElementById('realtime-sync-modal');
     if (!modal) {
@@ -217,12 +369,12 @@
         '<div class="modal-dialog" style="max-width: 520px;">' +
           '<div class="modal-header">' +
             '<h3>⚡ المزامنة السحابية اللحظية بين كافة الأجهزة</h3>' +
-            '<button class="btn-close" onclick="window.closeSyncModal()">&times;</button>' +
+            '<button class="btn-close" onclick="window.closeSyncModal()">✕</button>' +
           '</div>' +
           '<div class="modal-body" style="padding: 18px;">' +
-            '<div style="background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 8px; padding: 12px; margin-bottom: 16px; color: #a7f3d0;">' +
+            '<div style="background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 8px; padding: 12px; margin-bottom: 16px; color: #a7f3d0; line-height: 1.6;">' +
               '<strong style="display:block;margin-bottom:4px;">🟢 النظام السحابي نشط ويعمل لحظياً:</strong>' +
-              'أي تعديل على المخطط (إضافة محول، سحب خط، تغيير سكينة، أو تعديل مسار) يسمع في نفس الثانية على كافة أجهزة الكمبيوتر والمحمول المفتوحة.' +
+              'أي تعديل على الرسم، أو حفظ مشروع جديد، أو إضافة مستخدم، أو تغيير كلمة مرور يسمع فوراً في نفس اللحظة على جميع الهواتف وأجهزة الكمبيوتر المتصلة.' +
             '</div>' +
             '<div class="form-group" style="margin-bottom: 14px;">' +
               '<label style="font-weight: bold; margin-bottom: 6px; display: block;">🔑 كود الغرفة السحابية المشتركة (Room ID):</label>' +
@@ -230,11 +382,11 @@
                 '<input type="text" id="sync-room-input" class="form-control" value="' + currentRoom + '" style="flex: 1; font-family: monospace; font-size: 14px;">' +
                 '<button class="btn btn-primary" onclick="window.changeSyncRoom()" style="white-space: nowrap;">حفظ وتغيير</button>' +
               '</div>' +
-              '<small style="color: #94a3b8; display: block; margin-top: 4px;">لفتح مغذي مستقل أو شبكة خاصة، اكتب اسماً للغرفة وشاركه مع زملائك.</small>' +
+              '<small style="color: #94a3b8; display: block; margin-top: 4px;">للعمل في غرفة خاصة أو مغذي مستقل، أدخل اسماً موحداً بين أجهزتك.</small>' +
             '</div>' +
             '<div style="display: flex; gap: 10px; margin-top: 20px;">' +
-              '<button class="btn btn-success" onclick="window.forceBroadcastProject()" style="flex: 1;">' +
-                '📡 إرسال قسري للمخطط لجميع الأجهزة الآن' +
+              '<button class="btn btn-success" onclick="window.forceBroadcastProject()" style="flex: 1; padding: 10px; font-weight: bold;">' +
+                '📡 إرسال قسري لكافة المشاريع والرسم والمستخدمين لجميع الأجهزة الآن' +
               '</button>' +
             '</div>' +
           '</div>' +
@@ -259,42 +411,56 @@
     var newRoom = input.value.trim();
     currentRoom = newRoom;
     localStorage.setItem('sld_sync_room', currentRoom);
-    listenToCloudRoom(currentRoom);
+    connectCloudSSE();
+    pollStartupCloudState();
     closeSyncModal();
     if (window.showToast) window.showToast('✅ تم الانتقال إلى الغرفة السحابية: ' + newRoom, 'success');
   }
 
   function forceBroadcastProject() {
     lastBroadcastHash = null;
-    broadcastLocalChange('force_manual_sync');
-    closeSyncModal();
-    if (window.showToast) window.showToast('📡 تم إرسال المخطط الحالي قسرياً لجميع الأجهزة المتصلة بنجاح!', 'success');
-  }
-
-  function broadcastMaintenanceState(isActive) {
-    if (!gunInstance) return;
-    try {
-      var roomNode = gunInstance.get(currentRoom);
-      roomNode.get('system_maintenance_mode').put(isActive ? 'true' : 'false');
-      console.log('📡 تم بث حالة وضع الصيانة لجميع الأجهزة سحابياً:', isActive);
-    } catch (e) {
-      console.warn('Error broadcasting maintenance state:', e);
+    broadcastLocalDrawing('force_manual_sync');
+    var catalog = [];
+    try { catalog = JSON.parse(localStorage.getItem('sld_projects_catalog') || '[]'); } catch (_) {}
+    if (window.currentProject) {
+      broadcastProjectSaved(window.currentProject, catalog);
     }
+    if (window.allUsersCache) {
+      broadcastUsersUpdate(window.allUsersCache);
+    }
+    closeSyncModal();
+    if (window.showToast) window.showToast('📡 تم بث كافة البيانات (المخطط، المشاريع، المستخدمين) لجميع الأجهزة بنجاح!', 'success');
   }
 
-  // تصدير الواجهات
-  window.broadcastProjectUpdate = broadcastLocalChange;
+  // ─── 11. تصدير الواجهات إلى window ───────────────────────────────────────────
+  window.broadcastProjectUpdate = broadcastLocalDrawing;
+  window.broadcastProjectSaved = broadcastProjectSaved;
+  window.broadcastProjectDeleted = broadcastProjectDeleted;
+  window.broadcastUsersUpdate = broadcastUsersUpdate;
   window.broadcastMaintenanceState = broadcastMaintenanceState;
   window.openSyncModal = openSyncModal;
   window.closeSyncModal = closeSyncModal;
   window.changeSyncRoom = changeSyncRoom;
   window.forceBroadcastProject = forceBroadcastProject;
 
-  // بدء التشغيل عند تحميل المستند
-  if (typeof document !== 'undefined') {
+  // ─── 12. تهيئة الاتصال والمزامنة عند تحميل الصفحة ─────────────────────────────
+  function startSyncEngine() {
+    connectCloudSSE();
+    pollStartupCloudState();
+
+    setInterval(function () {
+      if (!sseClient || sseClient.readyState === 2) {
+        connectCloudSSE();
+      }
+    }, 50000);
+  }
+
+  if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
-      setTimeout(initSync, 500);
+      setTimeout(startSyncEngine, 300);
     });
+  } else {
+    setTimeout(startSyncEngine, 300);
   }
 
 })();

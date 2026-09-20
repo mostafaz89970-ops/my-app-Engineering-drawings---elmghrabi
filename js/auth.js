@@ -249,6 +249,22 @@ async function loadInitialUsers() {
   filterLoginUsers();
 }
 
+// تطبيق ومزامنة المستخدمين سحابياً فور وصولهم من جهاز آخر
+function applySyncedUsers(newUsers) {
+  if (!Array.isArray(newUsers) || newUsers.length === 0) return;
+  allUsersCache = newUsers;
+  try { localStorage.setItem("sld_users", JSON.stringify(newUsers)); } catch(_) {}
+  if (typeof appSettings !== 'undefined' && appSettings) {
+    appSettings.users = newUsers;
+  }
+  const sectorSelect = document.getElementById("login-sector-select");
+  const currentSector = sectorSelect ? sectorSelect.value : "المنيا شمال";
+  populateLoginAdminDropdown(currentSector, "بني مزار شرق");
+  filterLoginUsers();
+  if (typeof renderUsersTab === "function") renderUsersTab();
+}
+window.applySyncedUsers = applySyncedUsers;
+
 async function handleLogin(e) {
   e.preventDefault();
   const userSelect = document.getElementById("user-select");

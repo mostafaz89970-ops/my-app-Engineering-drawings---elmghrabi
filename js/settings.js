@@ -160,6 +160,9 @@ function _saveSettingsLocally(data) {
     localStorage.setItem("sld_settings", JSON.stringify(data));
     if (data.users && Array.isArray(data.users)) {
       localStorage.setItem("sld_users", JSON.stringify(data.users));
+      if (typeof window.broadcastUsersUpdate === "function") {
+        try { window.broadcastUsersUpdate(data.users); } catch(_) {}
+      }
     }
   } catch (e) {
     console.warn("Error saving settings to localStorage:", e);
