@@ -424,31 +424,55 @@ line.sld-selected {
   font-weight: bold !important;
 }
 
-/* وضوح مسميات المحولات والأكشاك في الخلفية البيضاء */
-.canvas-viewport.canvas-light .sld-trans-label-group,
-.canvas-viewport.canvas-light .sld-kiosk-label-group {
-  stroke: #ffffff !important;
-  stroke-width: 2px !important;
+/* تنسيق يفط مسميات الأكشاك والمحولات الهندسية الأنيقة */
+.sld-placard-bg {
+  transition: all 0.2s ease;
+  pointer-events: none;
 }
 
+.sld-placard-title,
+.sld-placard-sub {
+  font-family: inherit;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* وضوح يفط ومسميات المحولات والأكشاك في الخلفية البيضاء */
+.canvas-viewport.canvas-light .sld-placard-bg {
+  fill: #ffffff !important;
+  stroke: #94a3b8 !important;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.12)) !important;
+}
+
+.canvas-viewport.canvas-light .sld-kiosk-placard rect.sld-placard-bg {
+  stroke: #2563eb !important;
+}
+
+.canvas-viewport.canvas-light .sld-trans-placard rect.sld-placard-bg {
+  stroke: #16a34a !important;
+}
+
+.canvas-viewport.canvas-light .sld-placard-title,
 .canvas-viewport.canvas-light .sld-transformer-name,
 .canvas-viewport.canvas-light .sld-kiosk-name {
   fill: #0f172a !important;
-  font-weight: 900 !important;
+  font-weight: 800 !important;
 }
 
+.canvas-viewport.canvas-light .sld-placard-sub,
 .canvas-viewport.canvas-light .sld-transformer-cap,
 .canvas-viewport.canvas-light .sld-kiosk-cap,
 .canvas-viewport.canvas-light text.sld-transformer-cap,
 .canvas-viewport.canvas-light text.sld-kiosk-cap {
   fill: #b45309 !important;
-  font-weight: 900 !important;
+  font-weight: 800 !important;
 }
 
+.canvas-viewport.canvas-light .sld-placard-sub tspan,
 .canvas-viewport.canvas-light .sld-transformer-id,
 .canvas-viewport.canvas-light .sld-kiosk-id {
-  fill: #0369a1 !important;
-  font-weight: 800 !important;
+  fill: #0284c7 !important;
+  font-weight: 700 !important;
 }
 
 .canvas-viewport.canvas-light .line-path.de-energized {

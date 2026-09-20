@@ -1193,8 +1193,11 @@ body {
     stroke: #000000 !important;
   }
 
-  /* نصوص ومسميات المحولات والأكشاك والسكاكين في الطباعة: أسود صريح واضح 100% بدون أي تلطيخ أو تمييس */
+  /* نصوص ومسميات المحولات والأكشاك والسكاكين واليفط في الطباعة: أسود صريح واضح 100% بدون أي تلطيخ أو تمييس */
   .sld-badge-text,
+  .sld-placard-title,
+  .sld-placard-sub,
+  .sld-placard-sub tspan,
   .sld-transformer-name,
   .sld-transformer-cap,
   .sld-transformer-id,
@@ -1207,6 +1210,13 @@ body {
     stroke-width: 0 !important;
     paint-order: normal !important;
     font-weight: 800 !important;
+  }
+
+  .sld-placard-bg {
+    fill: #ffffff !important;
+    stroke: #000000 !important;
+    stroke-width: 1px !important;
+    filter: none !important;
   }
 
   /* إزالة الـ stroke الداكن 3.5px الموروث في SVG الذي كان يطمس الحروف العربية للمحولات */

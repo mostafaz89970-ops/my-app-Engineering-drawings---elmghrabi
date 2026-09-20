@@ -332,104 +332,72 @@ const Components = {
       });
     }
 
-    // حساب الموضع الذكي للمسميات الثلاثة فوق بعضها بشكل منظم وأنيق مثل الأكشاك
-    let labelX = 0, labelY1 = 0, labelY2 = 0, labelY3 = 0, textAnchor = "middle";
+    // حساب موضع وأبعاد اليفطة الصغيرة الأنيقة للمحول (منع الطمس والتداخل نهائياً)
+    const name = node.name || "محول";
+    const capText = loadPct ? `${cap} KVA (${loadPct}%)` : `${cap} KVA`;
+    const charCount = Math.max(name.length, (capText + " (" + node.id + ")").length);
+    const boxW = Math.max(72, Math.min(126, charCount * 6.8 + 16));
+    const boxH = 30; // يفطة صغيرة وأنيقة جداً
+
+    let placardX = 0, placardY = 0;
+    const prefPos = node.label_position; // "right", "left", "above", "below"
 
     if (dir === "up") {
-      if (node.label_position === "above" || (!hasLineUp && (hasLineRight || node.label_position === "above"))) {
-        // أعلى المحول تماماً
-        labelX = 0;
-        labelY1 = -76;
-        labelY2 = -62;
-        labelY3 = -48;
-        textAnchor = "middle";
-      } else if (node.label_position === "left" || (hasLineRight && !hasLineLeft)) {
-        // يسار المحول
-        labelX = -24;
-        labelY1 = -42;
-        labelY2 = -28;
-        labelY3 = -14;
-        textAnchor = "end";
+      // دوائر المحول تمتد من Y=-16 إلى Y=-50 وأفقياً بين X=[-10, 10]
+      if (prefPos === "above") {
+        placardX = 0;
+        placardY = -50 - 9 - boxH / 2;
+      } else if (prefPos === "left" || (hasLineRight && !hasLineLeft && prefPos !== "right")) {
+        placardX = -10 - 10 - boxW / 2;
+        placardY = -33;
+      } else if (prefPos === "below") {
+        placardX = 0;
+        placardY = 8 + boxH / 2;
       } else {
-        // يمين المحول (الموضع الافتراضي الهندسي النظيف)
-        labelX = 24;
-        labelY1 = -42;
-        labelY2 = -28;
-        labelY3 = -14;
-        textAnchor = "start";
+        // يمين المحول (الموضع النموذجي المنعزل عن الدوائر بمسافة أمان)
+        placardX = 10 + 10 + boxW / 2;
+        placardY = -33;
       }
     } else if (dir === "down") {
-      if (node.label_position === "below" || (!hasLineDown && (hasLineRight || node.label_position === "below"))) {
-        // أسفل المحول تماماً
-        labelX = 0;
-        labelY1 = 60;
-        labelY2 = 74;
-        labelY3 = 88;
-        textAnchor = "middle";
-      } else if (node.label_position === "left" || (hasLineRight && !hasLineLeft)) {
-        // يسار المحول
-        labelX = -24;
-        labelY1 = 18;
-        labelY2 = 32;
-        labelY3 = 46;
-        textAnchor = "end";
+      // دوائر المحول تمتد من Y=16 إلى Y=50 وأفقياً بين X=[-10, 10]
+      if (prefPos === "below") {
+        placardX = 0;
+        placardY = 50 + 9 + boxH / 2;
+      } else if (prefPos === "left" || (hasLineRight && !hasLineLeft && prefPos !== "right")) {
+        placardX = -10 - 10 - boxW / 2;
+        placardY = 33;
+      } else if (prefPos === "above") {
+        placardX = 0;
+        placardY = -8 - boxH / 2;
       } else {
-        // يمين المحول
-        labelX = 24;
-        labelY1 = 18;
-        labelY2 = 32;
-        labelY3 = 46;
-        textAnchor = "start";
+        placardX = 10 + 10 + boxW / 2;
+        placardY = 33;
       }
     } else if (dir === "right") {
-      if (node.label_position === "below" || (hasLineUp && !hasLineDown)) {
-        // أسفل المحول
-        labelX = 33;
-        labelY1 = 24;
-        labelY2 = 38;
-        labelY3 = 52;
-        textAnchor = "middle";
-      } else if (node.label_position === "right" || (!hasLineRight && (hasLineUp && hasLineDown))) {
-        // يمين الدوائر
-        labelX = 58;
-        labelY1 = -14;
-        labelY2 = 0;
-        labelY3 = 14;
-        textAnchor = "start";
+      // دوائر المحول تمتد من X=16 إلى X=50 ورأسياً بين Y=[-10, 10]
+      if (prefPos === "right") {
+        placardX = 50 + 10 + boxW / 2;
+        placardY = 0;
+      } else if (prefPos === "below" || (hasLineUp && !hasLineDown && prefPos !== "above")) {
+        placardX = 33;
+        placardY = 10 + 9 + boxH / 2;
       } else {
-        // أعلى المحول (الموضع النموذجي للأفقي)
-        labelX = 33;
-        labelY1 = -44;
-        labelY2 = -30;
-        labelY3 = -16;
-        textAnchor = "middle";
+        placardX = 33;
+        placardY = -10 - 9 - boxH / 2;
       }
     } else { // left
-      if (node.label_position === "below" || (hasLineUp && !hasLineDown)) {
-        // أسفل المحول
-        labelX = -33;
-        labelY1 = 24;
-        labelY2 = 38;
-        labelY3 = 52;
-        textAnchor = "middle";
-      } else if (node.label_position === "left" || (!hasLineLeft && (hasLineUp && hasLineDown))) {
-        // يسار الدوائر
-        labelX = -58;
-        labelY1 = -14;
-        labelY2 = 0;
-        labelY3 = 14;
-        textAnchor = "end";
+      // دوائر المحول تمتد من X=-16 إلى X=-50 ورأسياً بين Y=[-10, 10]
+      if (prefPos === "left") {
+        placardX = -50 - 10 - boxW / 2;
+        placardY = 0;
+      } else if (prefPos === "below" || (hasLineUp && !hasLineDown && prefPos !== "above")) {
+        placardX = -33;
+        placardY = 10 + 9 + boxH / 2;
       } else {
-        // أعلى المحول (الموضع النموذجي)
-        labelX = -33;
-        labelY1 = -44;
-        labelY2 = -30;
-        labelY3 = -16;
-        textAnchor = "middle";
+        placardX = -33;
+        placardY = -10 - 9 - boxH / 2;
       }
     }
-
-    const capText = loadPct ? `${cap} KVA (${loadPct}%)` : `${cap} KVA`;
 
     return `
       <g class="sld-node-group ${selClass}" id="node-${node.id}" transform="translate(${x}, ${y})" onclick="handleNodeClick(event, '${node.id}')" ondblclick="handleNodeDblClick(event, '${node.id}')">
@@ -440,16 +408,14 @@ const Components = {
         <circle cx="${c1x}" cy="${c1y}" r="10" fill="url(#trans-grad)" stroke="${strokeColor}" stroke-width="2" />
         <circle cx="${c2x}" cy="${c2y}" r="10" fill="url(#trans-grad)" stroke="${strokeColor}" stroke-width="2" />
 
-        <!-- مسميات المحول الثلاثة مرتبة ومنظمة رأسياً فوق بعضها مثل الأكشاك -->
-        <g class="sld-trans-label-group" style="paint-order: stroke fill; stroke: #1A202C; stroke-width: 3.5px; stroke-linejoin: round;">
-          <!-- السطر 1: اسم المحول -->
-          <text x="${labelX}" y="${labelY1}" text-anchor="${textAnchor}" class="sld-badge-text sld-transformer-name" fill="#FFFFFF" font-size="11.5" font-weight="bold">${node.name || "محول"}</text>
-
-          <!-- السطر 2: القدرة ونسبة التحميل (لون ذهبي بارز وفائق الوضوح) -->
-          <text x="${labelX}" y="${labelY2}" text-anchor="${textAnchor}" class="sld-badge-text sld-transformer-cap" fill="#ECC94B" font-size="11.5" font-weight="bold">${capText}</text>
-
-          <!-- السطر 3: رقم النود -->
-          <text x="${labelX}" y="${labelY3}" text-anchor="${textAnchor}" class="sld-badge-text sld-transformer-id" fill="#90CDF4" font-size="10.5" font-weight="bold">${node.id}</text>
+        <!-- يفطة بيانات المحول: صغيرة وأنيقة ومنعزلة بمسافة أمان تامة عن الدوائر ومسارات الخطوط -->
+        <g class="sld-trans-placard sld-trans-label-group" transform="translate(${placardX}, ${placardY})">
+          <rect x="${-boxW / 2}" y="${-boxH / 2}" width="${boxW}" height="${boxH}" rx="4" class="sld-placard-bg" style="fill:rgba(15,23,42,0.92); stroke:#16A34A; stroke-width:1.2px; filter:drop-shadow(0 1.5px 3px rgba(0,0,0,0.45));" />
+          <line x1="${-boxW / 2 + 5}" y1="${-boxH / 2}" x2="${boxW / 2 - 5}" y2="${-boxH / 2}" stroke="#4ADE80" stroke-width="2.2" stroke-linecap="round" />
+          <text x="0" y="-3" text-anchor="middle" class="sld-placard-title sld-transformer-name" fill="#FFFFFF" font-size="10.5" font-weight="bold">${name}</text>
+          <text x="0" y="9" text-anchor="middle" class="sld-placard-sub sld-transformer-cap" fill="#ECC94B" font-size="9.5" font-weight="bold">
+            ${capText} <tspan fill="#90CDF4" font-weight="bold" font-size="8.5">(${node.id})</tspan>
+          </text>
         </g>
       </g>
     `;
@@ -575,67 +541,100 @@ const Components = {
       }
     }
 
-    // تحديد موضع المسميات والقدرة مطابقاً بدقة لنظام وضع الأكشاك بالصورة المرجعية:
-    // الاسم بأعلى الكشك دائماً، والقدرة بجوار رأس أو جانب المثلث بوضوح تام
-    let labelNameX = 0, labelNameY = -36, nameAnchor = "middle";
-    let labelCapX = 18, labelCapY = -10, capAnchor = "start";
-    let labelIdX = 18, labelIdY = 3, idAnchor = "start";
+    // حساب موضع وأبعاد اليفطة الصغيرة الأنيقة للكشك (إظهار KVA ومنع طمس أو تداخل النصوص نهائياً)
+    const name = node.name || "كشك";
+    const capText = `${cap} KVA`;
+    const charCount = Math.max(name.length, (capText + " (" + node.id + ")").length);
+    const boxW = Math.max(72, Math.min(124, charCount * 6.8 + 16));
+    const boxH = 30; // ارتفاع اليفطة أنيق وصغير جداً
 
-    if (dir === "up") {
-      labelNameX = 0;
-      labelNameY = -52;
-      nameAnchor = "middle";
-      labelCapX = 20;
-      labelCapY = -26;
-      capAnchor = "start";
-      labelIdX = 20;
-      labelIdY = -12;
-      idAnchor = "start";
-    } else if (dir === "right") {
-      labelNameX = 26;
-      labelNameY = -22;
-      nameAnchor = "middle";
-      labelCapX = 50;
-      labelCapY = 4;
-      capAnchor = "start";
-      labelIdX = 50;
-      labelIdY = 17;
-      idAnchor = "start";
-    } else if (dir === "down") {
-      labelNameX = 0;
-      labelNameY = 58;
-      nameAnchor = "middle";
-      labelCapX = 20;
-      labelCapY = 26;
-      capAnchor = "start";
-      labelIdX = 20;
-      labelIdY = 40;
-      idAnchor = "start";
-    } else { // left
-      labelNameX = -26;
-      labelNameY = -22;
-      nameAnchor = "middle";
-      labelCapX = -50;
-      labelCapY = 4;
-      capAnchor = "end";
-      labelIdX = -50;
-      labelIdY = 17;
-      idAnchor = "end";
+    // فحص اتجاهات الكابلات والخطوط المتصلة بالكشك لتفادي وضع اليفطة على مسار أي كابل متصل
+    let hasLineRight = false, hasLineLeft = false, hasLineUp = false, hasLineDown = false;
+    if (typeof currentProject !== "undefined" && currentProject && currentProject.sections) {
+      currentProject.sections.forEach(sec => {
+        let otherId = null;
+        if (sec.from_node === node.id) otherId = sec.to_node;
+        else if (sec.to_node === node.id) otherId = sec.from_node;
+
+        if (otherId) {
+          const other = currentProject.nodes.find(n => n.id === otherId);
+          if (other) {
+            const dx = other.x - node.x;
+            const dy = other.y - node.y;
+            if (Math.abs(dx) >= Math.abs(dy)) {
+              if (dx > 25) hasLineRight = true;
+              else if (dx < -25) hasLineLeft = true;
+            } else {
+              if (dy > 25) hasLineDown = true;
+              else if (dy < -25) hasLineUp = true;
+            }
+          }
+        }
+      });
     }
 
-    // دعم تخصيص الموضع اليدوي إذا اختار المستخدم جهة محددة
-    if (node.label_position === "right") {
-      labelNameX = 48; labelNameY = -8; nameAnchor = "start";
-      labelCapX = 48; labelCapY = 8; capAnchor = "start";
-      labelIdX = 48; labelIdY = 22; idAnchor = "start";
-    } else if (node.label_position === "below") {
-      labelNameX = 0; labelNameY = 36; nameAnchor = "middle";
-      labelCapX = 0; labelCapY = 50; capAnchor = "middle";
-      labelIdX = 0; labelIdY = 63; idAnchor = "middle";
-    } else if (node.label_position === "left") {
-      labelNameX = -48; labelNameY = -8; nameAnchor = "end";
-      labelCapX = -48; labelCapY = 8; capAnchor = "end";
-      labelIdX = -48; labelIdY = 22; idAnchor = "end";
+    let placardX = 0, placardY = 0;
+    const prefPos = node.label_position; // "right", "left", "above", "below"
+
+    if (dir === "up") {
+      // المثلث رأسه عند Y=-44 وقاعدته عند Y=-16 وأطرافه بين X=[-14, 14]
+      if (prefPos === "above" || (!hasLineUp && prefPos === "above")) {
+        placardX = 0;
+        placardY = -44 - 9 - boxH / 2; // يبتعد 9px عن رأس المثلث
+      } else if (prefPos === "left" || (hasLineRight && !hasLineLeft && prefPos !== "right")) {
+        // يسار الكشك
+        placardX = -14 - 10 - boxW / 2;
+        placardY = -30;
+      } else if (prefPos === "below") {
+        placardX = 0;
+        placardY = 8 + boxH / 2;
+      } else {
+        // يمين الكشك (الموضع الهندسي المعتمد والأنظف)
+        placardX = 14 + 10 + boxW / 2;
+        placardY = -30;
+      }
+    } else if (dir === "down") {
+      // المثلث رأسه عند Y=44 وقاعدته عند Y=16 وأطرافه بين X=[-14, 14]
+      if (prefPos === "below" || (!hasLineDown && prefPos === "below")) {
+        placardX = 0;
+        placardY = 44 + 9 + boxH / 2;
+      } else if (prefPos === "left" || (hasLineRight && !hasLineLeft && prefPos !== "right")) {
+        placardX = -14 - 10 - boxW / 2;
+        placardY = 30;
+      } else if (prefPos === "above") {
+        placardX = 0;
+        placardY = -8 - boxH / 2;
+      } else {
+        // يمين الكشك
+        placardX = 14 + 10 + boxW / 2;
+        placardY = 30;
+      }
+    } else if (dir === "right") {
+      // المثلث رأسه عند X=44 وقاعدته عند X=16 وأطرافه بين Y=[-14, 14]
+      if (prefPos === "right") {
+        placardX = 44 + 10 + boxW / 2;
+        placardY = 0;
+      } else if (prefPos === "below" || (hasLineUp && !hasLineDown && prefPos !== "above")) {
+        placardX = 30;
+        placardY = 14 + 9 + boxH / 2;
+      } else {
+        // أعلى الكشك
+        placardX = 30;
+        placardY = -14 - 9 - boxH / 2;
+      }
+    } else { // left
+      // المثلث رأسه عند X=-44 وقاعدته عند X=-16 وأطرافه بين Y=[-14, 14]
+      if (prefPos === "left") {
+        placardX = -44 - 10 - boxW / 2;
+        placardY = 0;
+      } else if (prefPos === "below" || (hasLineUp && !hasLineDown && prefPos !== "above")) {
+        placardX = -30;
+        placardY = 14 + 9 + boxH / 2;
+      } else {
+        // أعلى الكشك
+        placardX = -30;
+        placardY = -14 - 9 - boxH / 2;
+      }
     }
 
     return `
@@ -646,16 +645,14 @@ const Components = {
         <!-- جسم الكشك المثلثي المعتمد في المخطط (نظام وضع الاكشاك) -->
         ${triangleMarkup}
 
-        <!-- المسميات والقدرة بتنسيق أنيق وواضح مطابق للمخطط المرجعي -->
-        <g class="sld-kiosk-label-group" style="paint-order: stroke fill; stroke: #1A202C; stroke-width: 3.5px; stroke-linejoin: round;">
-          <!-- السطر 1: اسم الكشك (مثل: كشك الحلمية (أولاد غانم) أو ام الساس الوسط) -->
-          <text x="${labelNameX}" y="${labelNameY}" text-anchor="${nameAnchor}" class="sld-badge-text sld-kiosk-name" fill="#FFFFFF" font-size="12" font-weight="bold">${node.name || "كشك"}</text>
-
-          <!-- السطر 2: القدرة (مثل: 300 أو 200 بجوار رأس/جانب المثلث بلون ذهبي بارز) -->
-          <text x="${labelCapX}" y="${labelCapY}" text-anchor="${capAnchor}" class="sld-badge-text sld-kiosk-cap" fill="#ECC94B" font-size="12" font-weight="bold">${cap}</text>
-
-          <!-- السطر 3: رقم النود للمتابعة الهندسية الدقيقة -->
-          <text x="${labelIdX}" y="${labelIdY}" text-anchor="${idAnchor}" class="sld-badge-text sld-kiosk-id" fill="#90CDF4" font-size="9.5" font-weight="bold">${node.id}</text>
+        <!-- يفطة بيانات الكشك: صغيرة وأنيقة وتظهر KVA صراحة ومنعزلة بمسافة أمان تامة عن جسم الكشك ومسارات الكابلات -->
+        <g class="sld-kiosk-placard sld-kiosk-label-group" transform="translate(${placardX}, ${placardY})">
+          <rect x="${-boxW / 2}" y="${-boxH / 2}" width="${boxW}" height="${boxH}" rx="4" class="sld-placard-bg" style="fill:rgba(15,23,42,0.92); stroke:#1E88E5; stroke-width:1.2px; filter:drop-shadow(0 1.5px 3px rgba(0,0,0,0.45));" />
+          <line x1="${-boxW / 2 + 5}" y1="${-boxH / 2}" x2="${boxW / 2 - 5}" y2="${-boxH / 2}" stroke="#60A5FA" stroke-width="2.2" stroke-linecap="round" />
+          <text x="0" y="-3" text-anchor="middle" class="sld-placard-title sld-kiosk-name" fill="#FFFFFF" font-size="10.5" font-weight="bold">${name}</text>
+          <text x="0" y="9" text-anchor="middle" class="sld-placard-sub sld-kiosk-cap" fill="#ECC94B" font-size="9.5" font-weight="bold">
+            ${capText} <tspan fill="#90CDF4" font-weight="bold" font-size="8.5">(${node.id})</tspan>
+          </text>
         </g>
       </g>
     `;

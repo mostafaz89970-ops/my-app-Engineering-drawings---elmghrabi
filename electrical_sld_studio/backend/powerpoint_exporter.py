@@ -349,29 +349,45 @@ def draw_native_sld_shapes_to_slide(slide, nodes, sections, frame_left, frame_to
                 tri.line.width = Pt(2.4)
                 tri.rotation = rot_val
 
-                # بطاقة مسميات وبيانات الكشك
-                lx = tri_cx + Inches(0.28) if dir_val != "left" else tri_cx - Inches(1.35)
-                ly = tri_cy - Inches(0.30)
-                lw, lh = Inches(1.15), Inches(0.62)
-                tb = slide.shapes.add_textbox(lx, ly, lw, lh)
-                tf = tb.text_frame
+                # يفطة مسميات وبيانات الكشك المعتمدة: صغيرة وأنيقة ومنعزلة عن المثلث
+                lw, lh = Inches(1.18), Inches(0.44)
+                if dir_val == "left":
+                    lx = tri_cx - tw/2 - Inches(0.12) - lw
+                    ly = tri_cy - lh / 2
+                elif dir_val == "right":
+                    lx = tri_cx + tw/2 + Inches(0.12)
+                    ly = tri_cy - lh / 2
+                elif dir_val == "up":
+                    lx = tri_cx + tw/2 + Inches(0.10)
+                    ly = tri_cy - lh / 2
+                else: # down
+                    lx = tri_cx + tw/2 + Inches(0.10)
+                    ly = tri_cy - lh / 2
+
+                card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, lx, ly, lw, lh)
+                card.fill.solid()
+                card.fill.fore_color.rgb = RGBColor(255, 255, 255)
+                card.line.color.rgb = RGBColor(30, 136, 229)
+                card.line.width = Pt(1.0)
+                tf = card.text_frame
                 tf.word_wrap = True
-                tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+                tf.margin_left = tf.margin_right = Inches(0.03)
+                tf.margin_top = tf.margin_bottom = Inches(0.02)
+                tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+
                 p1 = tf.paragraphs[0]
                 p1.text = name
-                p1.font.size = Pt(8.5)
+                p1.font.size = Pt(8.0)
                 p1.font.bold = True
                 p1.font.color.rgb = RGBColor(15, 23, 42)
-                if cap:
-                    p2 = tf.add_paragraph()
-                    p2.text = f"{cap} KVA"
-                    p2.font.size = Pt(8.0)
-                    p2.font.bold = True
-                    p2.font.color.rgb = RGBColor(180, 83, 9)
-                p3 = tf.add_paragraph()
-                p3.text = nid
-                p3.font.size = Pt(7.0)
-                p3.font.color.rgb = RGBColor(100, 116, 139)
+                p1.alignment = PP_ALIGN.CENTER
+
+                p2 = tf.add_paragraph()
+                p2.text = f"{cap or 200} KVA ({nid})"
+                p2.font.size = Pt(7.5)
+                p2.font.bold = True
+                p2.font.color.rgb = RGBColor(180, 83, 9)
+                p2.alignment = PP_ALIGN.CENTER
 
             # المحول (Transformer) - دائرتان متداخلتان IEC
             elif ntype in ["transformer", "محول"]:
@@ -411,14 +427,45 @@ def draw_native_sld_shapes_to_slide(slide, nodes, sections, frame_left, frame_to
                 c2.fill.solid(); c2.fill.fore_color.rgb = RGBColor(255, 255, 255)
                 c2.line.color.rgb = RGBColor(22, 163, 74); c2.line.width = Pt(1.8)
 
-                lx = cx + Inches(0.35)
-                ly = cy - Inches(0.30)
-                tb = slide.shapes.add_textbox(lx, ly, Inches(1.15), Inches(0.62))
-                tf = tb.text_frame; tf.word_wrap = True; tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
-                p1 = tf.paragraphs[0]; p1.text = name; p1.font.size = Pt(8.5); p1.font.bold = True; p1.font.color.rgb = RGBColor(15, 23, 42)
-                if cap:
-                    p2 = tf.add_paragraph(); p2.text = f"{cap} KVA"; p2.font.size = Pt(8.0); p2.font.bold = True; p2.font.color.rgb = RGBColor(180, 83, 9)
-                p3 = tf.add_paragraph(); p3.text = nid; p3.font.size = Pt(7.0); p3.font.color.rgb = RGBColor(100, 116, 139)
+                # يفطة مسميات وبيانات المحول: صغيرة وأنيقة ومنعزلة عن الدوائر
+                lw, lh = Inches(1.18), Inches(0.44)
+                if dir_val == "left":
+                    lx = c_base_x - r - Inches(0.20) - lw
+                    ly = cy - lh / 2
+                elif dir_val == "right":
+                    lx = c_base_x + Inches(0.20) + r
+                    ly = cy - lh / 2
+                elif dir_val == "up":
+                    lx = cx + r/2 + Inches(0.10)
+                    ly = cy - stem_len - r/2 - lh / 2
+                else: # down
+                    lx = cx + r/2 + Inches(0.10)
+                    ly = cy + stem_len + r/2 - lh / 2
+
+                card_trans = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, lx, ly, lw, lh)
+                card_trans.fill.solid()
+                card_trans.fill.fore_color.rgb = RGBColor(255, 255, 255)
+                card_trans.line.color.rgb = RGBColor(22, 163, 74)
+                card_trans.line.width = Pt(1.0)
+                tf = card_trans.text_frame
+                tf.word_wrap = True
+                tf.margin_left = tf.margin_right = Inches(0.03)
+                tf.margin_top = tf.margin_bottom = Inches(0.02)
+                tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+
+                p1 = tf.paragraphs[0]
+                p1.text = name
+                p1.font.size = Pt(8.0)
+                p1.font.bold = True
+                p1.font.color.rgb = RGBColor(15, 23, 42)
+                p1.alignment = PP_ALIGN.CENTER
+
+                p2 = tf.add_paragraph()
+                p2.text = f"{cap or 100} KVA ({nid})"
+                p2.font.size = Pt(7.5)
+                p2.font.bold = True
+                p2.font.color.rgb = RGBColor(180, 83, 9)
+                p2.alignment = PP_ALIGN.CENTER
 
             # السكينة الهوائية (Switch)
             elif ntype in ["switch", "سكينة", "سكينه", "breaker"]:
