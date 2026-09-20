@@ -4533,6 +4533,7 @@ window.initSidebarState = initSidebarState;
 window.updateAppBranding = updateAppBranding;
 window.createNewProjectDirectly = createNewProjectDirectly;
 window.createNewProjectFromManager = createNewProjectFromManager;
+window.loadDemoVideoProject = loadDemoVideoProject;
 
 window.toggleDrawingDirection = toggleDrawingDirection;
 window.flipDrawingVerticalLayout = flipDrawingVerticalLayout;
