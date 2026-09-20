@@ -1,0 +1,2062 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>شركة مصر الوسطى لتوزيع الكهرباء | ENG-MOSTAFAELMGHRABY</title>
+  <link rel="stylesheet" href="/static/css/style.css?v=4.5">
+  <link rel="stylesheet" href="/static/css/canvas.css?v=4.5">
+  <link rel="stylesheet" href="/static/css/settings.css?v=4.5">
+</head>
+<body>
+
+  <!-- واجهة تسجيل الدخول المؤمنة -->
+  <div id="login-modal" class="auth-overlay active">
+    <div class="auth-card">
+      <div class="auth-header">
+        <div class="auth-icon">⚡</div>
+        <h2 id="login-app-title">شركة مصر الوسطى لتوزيع الكهرباء</h2>
+        <p class="auth-subtitle">ENG-MOSTAFAELMGHRABY | النظام الهندسي لمخططات التوزيع</p>
+      </div>
+
+      <form id="login-form" class="auth-form" onsubmit="handleLogin(event)">
+        <!-- حقل القطاع -->
+        <div class="form-group">
+          <label for="login-sector-select">🏢 القطاع (شركة مصر الوسطى)</label>
+          <div class="select-wrapper">
+            <select id="login-sector-select" class="form-control" onchange="onLoginSectorChange()">
+              <option value="المنيا شمال" selected>قطاع المنيا شمال</option>
+              <option value="المنيا جنوب">قطاع المنيا جنوب</option>
+              <option value="بني سويف">قطاع بني سويف</option>
+              <option value="الفيوم">قطاع الفيوم</option>
+              <option value="أسيوط">قطاع أسيوط</option>
+              <option value="الوادي الجديد">قطاع الوادي الجديد</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- حقل الإدارة الفرعية / العامة -->
+        <div class="form-group">
+          <label for="login-admin-select">🏛️ الإدارة الفرعية / العامة (المركز)</label>
+          <div class="select-wrapper">
+            <select id="login-admin-select" class="form-control" onchange="onLoginAdminChange()">
+              <option value="بني مزار شرق" selected>بني مزار شرق</option>
+              <option value="بني مزار غرب">بني مزار غرب</option>
+              <option value="مغاغة">مغاغة</option>
+              <option value="العدوة">العدوة</option>
+              <option value="مطاي">مطاي</option>
+              <option value="سمالوط شرق">سمالوط شرق</option>
+              <option value="سمالوط غرب">سمالوط غرب</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- حقل الموظف -->
+        <div class="form-group">
+          <label for="user-select">👤 اسم الموظف / المستخدم في هذه الإدارة</label>
+          <div class="select-wrapper">
+            <select id="user-select" class="form-control" required>
+              <option value="admin">المدير العام (Administrator)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="password-input">كلمة المرور</label>
+          <div class="password-wrapper">
+            <input type="password" id="password-input" class="form-control" placeholder="أدخل كلمة المرور..." required autocomplete="current-password">
+            <button type="button" class="btn-toggle-pw" onclick="togglePasswordVisibility()" title="إظهار / إخفاء">
+              <span id="eye-icon">👁️</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="login-error" class="auth-error-msg"></div>
+
+        <button type="submit" id="btn-submit-login" class="btn btn-primary btn-block">
+          <span>تسجيل الدخول الآمن</span>
+          <span class="arrow-icon">➔</span>
+        </button>
+      </form>
+
+      <div class="auth-footer">
+        <p class="copyright-text" style="cursor:pointer;" onclick="openDeveloperModal()" title="عرض نبذة عن المطور والمنظومة | ENG-MOSTAFA ELMGHRABY">
+          جميع الحقوق محفوظة للمهندس مصطفى المغربي © ENG-MOSTAFAELMGHRABY
+          <span style="display:block;margin-top:4px;color:#63b3ed;font-size:11.5px;text-decoration:underline;">👨‍💻 نبذة عن المهندس المطور والمنظومة الهندسية</span>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- بيئة التطبيق الرئيسية (Main App Shell) -->
+  <div id="app-shell" class="app-container hidden">
+
+    <!-- شريط الأدوات العلوي (Top Ribbon) -->
+    <!-- شريط الأدوات العلوي العصري والمتناسق (Modern Unified CAD Studio Ribbon) -->
+    <header class="app-header">
+      <!-- الصف العلوي: هوية النظام وبيانات المغذي وأدوات المشروع -->
+      <div class="header-top-row">
+        <div class="header-branding" style="cursor:pointer;" onclick="openDeveloperModal()" title="صفحة المطور والمهندس المصمم للنظام ENG-MOSTAFA ELMGHRABY (انقر لعرض النبذة)">
+          <div class="brand-icon">⚡</div>
+          <div class="title-group">
+            <h1 class="system-title" id="main-system-title">هندسة كهرباء بني مزار</h1>
+          </div>
+          <span class="brand-ver">ENG-MOSTAFAELMGHRABY</span>
+          <div class="header-sep"></div>
+          <span class="copyright-tag">م. مصطفى المغربي</span>
+        </div>
+
+        <!-- أدوات النظام والمشاريع -->
+        <div class="header-system-actions">
+          <button class="btn-sys" data-perm="btn_projects" onclick="createNewProjectDirectly()" title="بدء وفتح مشروع ومخطط جديد فارغ مباشرة">
+            <span>➕ مشروع جديد</span>
+          </button>
+          <button class="btn-sys" data-perm="btn_projects" onclick="openProjectsManager()" title="صفحة إدارة واستعراض وتعديل المشاريع والخطوط">
+            <span>📁 المشاريع</span>
+          </button>
+          <button class="btn-sys btn-sys-save" data-perm="btn_save" onclick="saveCurrentProject()" title="حفظ المخطط الحالي فوراً">
+            <span>💾 حفظ</span>
+          </button>
+          <button class="btn-sys" data-perm="btn_print" onclick="printFullSchematic()" title="طباعة المخطط والخرطوشة والتقرير">
+            <span>🖨️ طباعة</span>
+          </button>
+          <button class="btn-sys" data-perm="btn_excel" onclick="exportToExcel()" title="تصدير تقرير إكسيل هندسي">
+            <span>📥 Excel</span>
+          </button>
+          <button class="btn-sys btn-sys-primary" id="btn-download-project" data-perm="btn_excel" onclick="downloadProjectPPTX()" title="تحميل المشروع بالكامل كملف باور بوينت (.pptx) بنفس التنسيق والاحتواء التلقائي لفتحه في PowerPoint" style="background: linear-gradient(135deg, #1e3a8a, #2563eb); border-color: #3b82f6; font-weight: bold; box-shadow: 0 2px 8px rgba(37,99,235,0.35);">
+            <span>📥 تحميل المشروع</span>
+          </button>
+          <button class="btn-sys" id="btn-import-pptx" data-perm="btn_excel" onclick="openImportPowerPointDialog()" title="استيراد شبكة ومخطط من عرض باور بوينت (.pptx) وترتيب كل شيء تلقائياً بنظام هندسي">
+            <span>📥 استيراد PowerPoint</span>
+          </button>
+
+          <!-- زر تبديل لون خلفية الرسم إلى أبيض / داكن -->
+          <button id="btn-toggle-bg" class="btn-sys" onclick="toggleCanvasBackground()" title="تغيير لون خلفية مساحة الرسم إلى أبيض / داكن">
+            <span id="btn-toggle-bg-text">🎨 خلفية بيضاء</span>
+          </button>
+
+          <!-- زر صفحة المطور ENG-MOSTAFA ELMGHRABY -->
+          <button id="btn-dev-profile" class="btn-sys" onclick="openDeveloperModal()" title="صفحة المطور والمهندس المصمم للنظام ENG-MOSTAFA ELMGHRABY" style="background:rgba(43,108,176,0.25);border:1px solid #3182ce;color:#63b3ed;">
+            <span>👨‍💻 المطور</span>
+          </button>
+
+          <button id="btn-settings" class="btn-sys" data-perm="btn_settings" onclick="openSettingsPanel()" title="إعدادات النظام — إدارة المستخدمين والقوائم والنشاط" style="display:none;">
+            <span>⚙️ الإعدادات</span>
+          </button>
+          <div class="user-badge">
+            <span id="current-user-name" class="user-name">المدير العام</span>
+            <button type="button" class="btn-user-action" onclick="openSelfPasswordModal()" title="تغيير كلمة المرور الخاصة بي">🔑</button>
+            <button class="btn-logout" onclick="handleLogout()" title="تسجيل الخروج">🚪</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- الصف الثاني: شريط أدوات الخطوط والمحطات وبيانات المغذي -->
+      <div class="header-tools-ribbon">
+        <!-- شريط بيانات المغذي السريعة الموحد العصري -->
+        <div class="feeder-capsule">
+          <div class="capsule-item">
+            <span class="capsule-label">🔌 المغذي:</span>
+            <input type="text" id="feeder-name-input" value="مغذي التوزيع 1" class="capsule-input" oninput="updateFeederInfo(true)" onchange="updateFeederInfo(false)" title="اسم مغذي التوزيع">
+          </div>
+          <div class="capsule-divider"></div>
+          <div class="capsule-item">
+            <span class="capsule-label">🏭 المحطة:</span>
+            <input type="text" id="substation-name-input" value="محطة محولات غرب" class="capsule-input" oninput="updateFeederInfo(true)" onchange="updateFeederInfo(false)" title="اسم محطة المحولات المغذية">
+          </div>
+          <div class="capsule-divider"></div>
+          <div class="capsule-item">
+            <span class="capsule-label">⚡ الجهد:</span>
+            <select id="feeder-voltage-select" class="capsule-select" onchange="updateFeederInfo(false)" title="جهد تشغيل الشبكة">
+              <option value="11">11 ك.ف</option>
+              <option value="22">22 ك.ف</option>
+              <option value="33">33 ك.ف</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="cad-ribbon-sep"></div>
+        <!-- مجموعة 1: الخطوط والكابلات -->
+        <div class="cad-group">
+          <span class="cad-group-tag">الخطوط والكابلات</span>
+          <button class="cad-tool-btn cad-btn-cable" data-perm="btn_cable" onclick="openLineDialog('كابل')" title="رسم كابل أرضي بنمط متقطع (- - -)">
+            <span class="indicator-cable"></span>
+            <span>╍ كابل أرضي</span>
+          </button>
+          <button class="cad-tool-btn cad-btn-overhead" data-perm="btn_overhead" onclick="openLineDialog('هوائي')" title="رسم خط هوائي بنمط متصل (───)">
+            <span class="indicator-overhead"></span>
+            <span>➖ خط هوائي</span>
+          </button>
+          <button class="cad-tool-btn" data-perm="btn_line_between" onclick="openLineBetweenNodesModal()" title="أخذ خط أو تفريعة من خط مارر بين نقطتين ويتجه بالمسار المطلوب">
+            <span>⚡ خط من بين نقطتين</span>
+          </button>
+          <button class="cad-tool-btn" data-perm="btn_line_between" onclick="openLineBetweenNodesModal()" title="أخذ مناول أو تفريعة جديدة من خط مارر بين نقطتين">
+            <span>⚡ أخذ مناول</span>
+          </button>
+        </div>
+
+        <div class="cad-ribbon-sep"></div>
+
+        <!-- مجموعة 2: المحطات والسكاكين -->
+        <div class="cad-group">
+          <span class="cad-group-tag">المحطات والسكاكين</span>
+          <button class="cad-tool-btn" data-perm="btn_substation" onclick="openSubstationModal()" title="إضافة محطة محولات أو لوحة توزيع">
+            <span>🏭 محطة / لوحة</span>
+          </button>
+          <button class="cad-tool-btn" data-perm="btn_switch" onclick="quickAddSwitchPrompt()" title="إضافة سكينة هوائية مفصلية">
+            <span>⚡ سكينة</span>
+          </button>
+        </div>
+
+        <div class="cad-ribbon-sep"></div>
+
+        <!-- مجموعة اتجاه مسار الرسم (تحكم كامل: من أسفل لأعلى ⬆️ / من أعلى لأسفل ⬇️) -->
+        <div class="cad-group" id="cad-group-drawing-dir">
+          <span class="cad-group-tag">اتجاه الرسم</span>
+          <button id="btn-toggle-drawing-dir" class="cad-tool-btn cad-btn-dir" onclick="toggleDrawingDirection()" title="التبديل بين اتجاه تدفق الرسم: من أعلى لأسفل (⬇️) أو من أسفل لأعلى (⬆️)">
+            <span id="drawing-dir-icon">⬇️</span>
+            <span id="drawing-dir-label">من أعلى لأسفل</span>
+          </button>
+          <button id="btn-flip-vertical" class="cad-tool-btn" onclick="flipDrawingVerticalLayout()" title="عكس اتجاه الرسم والمخطط بالكامل رأساً على عقب (قلب المسار)">
+            <span>🔃 عكس المخطط</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- الصف الثالث: شريط المحولات والأكشاك والتحكم والمحاكاة (CAD Ribbon: Transformers, Kiosks & Controls) -->
+      <div class="header-tools-ribbon header-ribbon-row3">
+        <!-- مجموعة 3: المحولات -->
+        <div class="cad-group">
+          <span class="cad-group-tag">المحولات</span>
+          <button class="cad-tool-btn" data-perm="btn_trans" onclick="openTransformerDialog('transformer')" title="إضافة محول معلق مع القدرة والتحميل">
+            <span>⚙️ محول معلق</span>
+          </button>
+          <button class="cad-tool-btn" data-perm="btn_cascade_trans" onclick="openCascadeTransformerDialog()" title="إضافة تفريع محول من محول آخر">
+            <span>🔄 تفريع محول</span>
+          </button>
+        </div>
+
+        <div class="cad-ribbon-sep"></div>
+
+        <!-- مجموعة 4: الأكشاك -->
+        <div class="cad-group">
+          <span class="cad-group-tag">الأكشاك</span>
+          <button class="cad-tool-btn" data-perm="btn_kiosk" onclick="openTransformerDialog('kiosk')" title="إضافة كشك محولات بتنسيق المثلث الهندسي">
+            <span>🔺 كشك محولات</span>
+          </button>
+          <button class="cad-tool-btn" data-perm="btn_kiosk_from_kiosk" onclick="openKioskFromKioskDialog()" title="إضافة كشك من كشك آخر متتالي بكابل أرضي">
+            <span>🔺➔🔺 كشك من كشك</span>
+          </button>
+        </div>
+
+        <div class="cad-ribbon-sep"></div>
+
+        <!-- مجموعة 5: وحدات الربط والمنظمات -->
+        <div class="cad-group">
+          <span class="cad-group-tag">وحدات الربط</span>
+          <button class="cad-tool-btn" data-perm="btn_rmu" onclick="openRMUModal()" title="إضافة وحدة ربط حلقي RMU">
+            <span>🔄 وحدة RMU</span>
+          </button>
+          <button class="cad-tool-btn" data-perm="btn_avr" onclick="openAVRModal()" title="إضافة منظم جهد AVR مع تيار الحمل وسهم التوجيه">
+            <span>🔋 منظم AVR</span>
+          </button>
+        </div>
+
+        <div class="cad-ribbon-sep"></div>
+
+        <!-- مجموعة 6: التحليل والمحاكاة والتحكم -->
+        <div class="cad-group">
+          <span class="cad-group-tag">التحكم والمحاكاة</span>
+          <button id="btn-sim-mode" class="cad-tool-btn btn-outline" data-perm="btn_simulation" onclick="toggleSimulationMode()" title="تشغيل وضع محاكاة الفصل والتوصيل وتلوين الخطوط المكهربة">
+            <span id="sim-icon">⚡</span>
+            <span>محاكاة</span>
+          </button>
+          <button class="cad-tool-btn" data-perm="btn_calculations" onclick="openCalculationsModal()" title="عرض جدول الحسابات وهبوط الجهد">
+            <span>📊 الحسابات</span>
+          </button>
+          <button class="cad-tool-btn" data-perm="btn_undo" onclick="undoLastStep()" title="تراجع عن آخر خطوة (Ctrl+Z)">
+            <span>↩️ تراجع</span>
+          </button>
+          <button class="cad-tool-btn" id="btn-ribbon-edit" onclick="handleEditAction()" title="تعديل خصائص العنصر المحدد (طول، موصل، قدرة، مسميات...)">
+            <span>✏️ تعديل</span>
+          </button>
+          <button class="cad-tool-btn cad-btn-delete" data-perm="btn_delete" onclick="handleDeleteAction()" title="حذف العنصر المحدد أو مسح المخطط">
+            <span>🗑️ حذف</span>
+          </button>
+          <button class="cad-tool-btn" id="btn-ribbon-toggle-sidebar" onclick="toggleSidebarCollapse()" title="طي أو فرد القائمة الجانبية ومكتبة العناصر">
+            <span id="ribbon-sidebar-icon">◀</span>
+            <span id="ribbon-sidebar-text">طي القائمة</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- حاوية التنبيهات العائمة (Toast Container) -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- مساحة العمل الرئيسية (Sidebar + Infinite Canvas) -->
+    <div class="workspace-body">
+
+      <!-- الشريط الجانبي لمكتبة العناصر -->
+      <aside class="sidebar-palette" id="sidebar-palette">
+        <!-- ترويسة القائمة الجانبية مع زر طي وفرد القائمة -->
+        <div class="sidebar-header-bar">
+          <div class="sidebar-header-text">
+            <span class="sidebar-brand-title" id="sidebar-brand-title">هندسة كهرباء بني مزار</span>
+            <span class="sidebar-sub-badge">⚡ مكتبة العناصر الكهربائية</span>
+          </div>
+          <button type="button" class="btn-sidebar-collapse" id="btn-sidebar-collapse" onclick="toggleSidebarCollapse()" title="طي القائمة الجانبية">
+            <span>طي ◀</span>
+          </button>
+        </div>
+
+        <div class="palette-grid">
+          <div class="palette-item" data-perm="btn_substation" onclick="openSubstationModal()" title="محطة محولات أو لوحة توزيع مع تسمية مخصصة">
+            <div class="item-icon">🏭</div>
+            <span class="item-name">محطة / لوحة</span>
+          </div>
+
+          <div class="palette-item" data-perm="btn_switch" onclick="quickAddSwitch('vertical')" title="سكينة هوائية مفصلية رأسية">
+            <div class="item-icon">⚡</div>
+            <span class="item-name">سكينة رأسية</span>
+          </div>
+
+          <div class="palette-item" data-perm="btn_switch" onclick="quickAddSwitch('horizontal')" title="سكينة هوائية مفصلية أفقية">
+            <div class="item-icon">➖</div>
+            <span class="item-name">سكينة أفقية</span>
+          </div>
+
+          <div class="palette-item" data-perm="btn_trans" onclick="openTransformerDialog('transformer')" title="محول معلق مع القدرة والتحميل">
+            <div class="item-icon">⚙️</div>
+            <span class="item-name">محول معلق</span>
+          </div>
+
+          <div class="palette-item" data-perm="btn_kiosk" onclick="openTransformerDialog('kiosk')" title="كشك محولات مع القدرة والسكاكين">
+            <div class="item-icon">🔺</div>
+            <span class="item-name">كشك محولات</span>
+          </div>
+
+          <div class="palette-item" data-perm="btn_kiosk_from_kiosk" onclick="openKioskFromKioskDialog()" title="إضافة كشك متغذياً من كشك آخر مباشرة بكابل أرضي">
+            <div class="item-icon">🔺➔🔺</div>
+            <span class="item-name">كشك من كشك</span>
+          </div>
+
+          <div class="palette-item" data-perm="btn_rmu" onclick="openRMUModal()" title="لوحة ربط حلقي RMU مربعة بداخلها ×">
+            <div class="item-icon">🔄</div>
+            <span class="item-name">وحدة RMU</span>
+          </div>
+
+          <div class="palette-item" data-perm="btn_avr" onclick="openAVRModal()" title="منظم جهد AVR مع تيار الحمل المقنن">
+            <div class="item-icon">🔋</div>
+            <span class="item-name">منظم AVR</span>
+          </div>
+
+          <div class="palette-item" data-perm="btn_line_between" onclick="openLineBetweenNodesModal()" title="أخذ خط وتفريعة من خط مارر بين نقطتين وتوجيهه">
+            <div class="item-icon">⚡</div>
+            <span class="item-name">خط من بين نقطتين</span>
+          </div>
+
+          <div class="palette-item" data-perm="btn_cascade_trans" onclick="openCascadeTransformerDialog()" title="تفريع محول من محول آخر">
+            <div class="item-icon">🔄</div>
+            <span class="item-name">محول من محول</span>
+          </div>
+        </div>
+
+        <div class="palette-divider"></div>
+        <div class="palette-section-title">إدخال خط / كابل مباشر</div>
+
+        <div class="cable-add-form" data-perm="btn_quick_line">
+          <div class="form-row">
+            <label>نقطة الانطلاق (أخذ مناول):</label>
+            <select id="quick-from-node" class="form-control-sm"></select>
+          </div>
+          <div class="form-row">
+            <label>النوع (هوائي سليم / كابل متقطع):</label>
+            <select id="quick-line-type" class="form-control-sm" onchange="onSidebarTypeChange()">
+              <option value="هوائي">خط هوائي (سليم مكتمل ───)</option>
+              <option value="كابل">كابل أرضي (متقطع - - -)</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>المقطع:</label>
+            <select id="quick-line-size" class="form-control-sm">
+              <option value="70/12">70/12</option>
+              <option value="150/25">150/25</option>
+              <option value="سبيكة">سبيكة AAAC</option>
+              <option value="35/6">35/6</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>الطول (متر):</label>
+            <input type="number" id="quick-line-len" value="1500" step="50" class="form-control-sm">
+          </div>
+          <div class="form-row">
+            <label>الاتجاه:</label>
+            <select id="quick-line-dir" class="form-control-sm">
+              <option value="down">أسفل ⬇️ (المسار الرئيسي)</option>
+              <option value="right">يمين ➡️ (تفريعة)</option>
+              <option value="up">أعلى ⬆️</option>
+              <option value="left">شمال ⬅️</option>
+            </select>
+          </div>
+          <button class="btn btn-primary btn-block btn-sm" data-perm="btn_quick_line" onclick="addQuickSection()">
+            <span>➕ رسم الخط / الكابل فوراً</span>
+          </button>
+        </div>
+
+        <div style="margin-top:auto; padding-top:10px; border-top:1px solid var(--border-color); text-align:center;">
+          <span style="font-size:10px; color:#718096;">ENG-MOSTAFAELMGHRABY</span>
+        </div>
+      </aside>
+ 
+      <!-- زر فرد القائمة الجانبية العائم عند طيها -->
+      <button id="sidebar-expand-tab" class="sidebar-expand-tab hidden" onclick="toggleSidebarCollapse()" title="فرد القائمة الجانبية (مكتبة العناصر)">
+        <span class="expand-icon">◀</span>
+        <span class="expand-tab-text">مكتبة العناصر</span>
+      </button>
+
+      <!-- مساحة الكانفاس اللانهائية -->
+      <main class="canvas-viewport" id="viewport">
+        <!-- طبقة أدوات الزوم والتحكم العائمة -->
+        <div class="floating-canvas-controls">
+          <button class="ctrl-btn" onclick="zoomIn()" title="تكبير">+</button>
+          <button class="ctrl-btn" onclick="zoomOut()" title="تصغير">-</button>
+          <button class="ctrl-btn" id="btn-float-dir" onclick="toggleDrawingDirection()" title="تبديل اتجاه الرسم (من أسفل لأعلى ⬆️ / من أعلى لأسفل ⬇️)">⬇️</button>
+          <button class="ctrl-btn" id="btn-float-bg" onclick="toggleCanvasBackground()" title="تبديل لون خلفية الرسم (أبيض / داكن)">🎨</button>
+          <button class="ctrl-btn" id="btn-float-tb" onclick="toggleTitleBlockMinimize(event)" title="طي / فرد لافتة المخطط">📋</button>
+        </div>
+
+        <!-- مؤشر وضع المحاكاة -->
+        <div id="sim-banner" class="sim-banner hidden">
+          <span>⚡ محاكاة السكاكين نشطة: انقر فوق أي سكينة لفتحها أو إغلاقها وتتبع مسار التغذية</span>
+        </div>
+
+        <!-- لوحة SVG المتجهة اللانهائية -->
+        <svg id="sld-canvas" class="infinite-svg" width="6000" height="6000">
+          <defs>
+            <pattern id="grid-pattern" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255, 255, 255, 0.05)" stroke-width="1"/>
+            </pattern>
+            <pattern id="grid-pattern-light" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(0, 0, 0, 0.07)" stroke-width="1"/>
+            </pattern>
+            <linearGradient id="trans-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#48BB78"/>
+              <stop offset="100%" stop-color="#2F855A"/>
+            </linearGradient>
+            <linearGradient id="kiosk-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#ED8936"/>
+              <stop offset="100%" stop-color="#C05621"/>
+            </linearGradient>
+            <linearGradient id="sub-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#4299E1"/>
+              <stop offset="100%" stop-color="#2B6CB0"/>
+            </linearGradient>
+          </defs>
+
+          <!-- خلفية الشبكة -->
+          <rect id="bg-grid" width="100%" height="100%" fill="url(#grid-pattern)" />
+
+          <!-- مساحة الرسم المتحولة (Pan & Zoom) -->
+          <g id="canvas-stage" transform="translate(100, 50) scale(1)">
+            <g id="sections-layer"></g>
+            <g id="nodes-layer"></g>
+            <g id="labels-layer"></g>
+          </g>
+        </svg>
+        <!-- التلميح العائم لقياس وتعديل طول الخط عند السحب المباشر -->
+        <div id="drag-tooltip" class="drag-tooltip hidden"></div>
+
+        <!-- خرطوشة المخطط الهندسية (Official Title Block - أسفل مساحة الرسم) -->
+        <div class="official-title-block" id="official-title-block">
+          <div class="block-company-header" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleTitleBlockMinimize(event)" title="انقر لطي أو فرد اللافتة">
+            <span style="flex:1; text-align:right; font-weight:800;">شركة مصر الوسطى لتوزيع الكهرباء</span>
+            <button id="tb-toggle-btn" class="tb-toggle-btn" onclick="toggleTitleBlockMinimize(event)" title="طي أو فرد اللافتة">
+              <span id="tb-toggle-icon">▼</span>
+              <span id="tb-toggle-text">طي اللافتة</span>
+            </button>
+          </div>
+          <div id="tb-content-body">
+            <div class="block-row">
+              <span class="b-label">القطاع / الإدارة:</span>
+              <span class="b-val highlight-val" id="tb-sector-admin">قطاع المنيا شمال — بني مزار شرق</span>
+            </div>
+            <div class="block-row">
+              <span class="b-label">المشروع:</span>
+              <span class="b-val" id="tb-project-name">مخطط شبكة الجهد المتوسط (SLD)</span>
+            </div>
+            <div class="block-row">
+              <span class="b-label">المغذي / المحطة:</span>
+              <span class="b-val" id="tb-feeder-info">مغذي 1 - محطة غرب (11 ك.ف)</span>
+            </div>
+            <div class="block-row">
+              <span class="b-label">الاعتماد والتصميم:</span>
+              <span class="b-val highlight-val" id="tb-designer-name">المدير العام</span>
+            </div>
+            <div class="block-row copyright-row" style="cursor:pointer;pointer-events:auto;" onclick="openDeveloperModal()" title="عرض صفحة ونبذة المطور والمنظومة">
+              <span>جميع الحقوق محفوظة © ENG-MOSTAFAELMGHRABY <strong style="color:#38bdf8;">[نبذة المطور]</strong></span>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- شريط الحالة السفلي (Live Status Bar) -->
+    <footer class="app-statusbar">
+      <div class="status-col">
+        <span class="st-label">إجمالي أطوال المغذي:</span>
+        <span class="st-val" id="st-total-len">0 م</span>
+      </div>
+      <div class="status-col">
+        <span class="st-label">الهوائي (سليم):</span>
+        <span class="st-val" id="st-ohl-len">0 م</span>
+      </div>
+      <div class="status-col">
+        <span class="st-label">الكابل (متقطع):</span>
+        <span class="st-val" id="st-ugc-len">0 م</span>
+      </div>
+      <div class="status-col">
+        <span class="st-label">قدرة المحولات:</span>
+        <span class="st-val" id="st-total-cap">0 KVA</span>
+      </div>
+      <div class="status-col">
+        <span class="st-label">الحمل الفعلي:</span>
+        <span class="st-val" id="st-actual-load">0 KVA</span>
+      </div>
+      <div class="status-col">
+        <span class="st-label">تيار المغذي:</span>
+        <span class="st-val" id="st-feeder-amp">0 A</span>
+      </div>
+      <div class="status-col">
+        <span class="st-label">أقصى هبوط جهد:</span>
+        <span class="st-val" id="st-max-drop">0.00%</span>
+      </div>
+      <div class="status-col copyright-col">
+        <span>© ENG-MOSTAFAELMGHRABY</span>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- نافذة إضافة محطة محولات أو لوحة توزيع -->
+  <div id="substation-modal" class="modal-overlay hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>🏭 إضافة محطة محولات / لوحة توزيع</h3>
+        <button class="modal-close" onclick="closeSubstationModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>اسم المحطة / اللوحة:</label>
+          <input type="text" id="sub-name" class="form-control" value="محطة محولات غرب" placeholder="أدخل اسم المحطة أو اللوحة...">
+        </div>
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label>نوع التغذية والرمز:</label>
+            <select id="sub-type" class="form-control">
+              <option value="substation" selected>محطة محولات (3 دوائر مثلثة متداخلة)</option>
+              <option value="board">لوحة توزيع (إطار توزيع مزدوج)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>الجهد المقنن:</label>
+            <select id="sub-voltage" class="form-control">
+              <option value="11" selected>11 ك.ف</option>
+              <option value="22">22 ك.ف</option>
+              <option value="33">33 ك.ف</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>رقم العقدة (النود):</label>
+          <input type="text" id="sub-node-id" class="form-control" value="N1">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeSubstationModal()">إلغاء</button>
+        <button class="btn btn-primary" onclick="submitSubstationModal()">تأكيد وإضافة المحطة ➔</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نافذة أخذ خط / تفريعة من خط مارر بين نقطتين -->
+  <div id="line-between-nodes-modal" class="modal-overlay hidden">
+    <div class="modal-dialog" style="max-width: 540px;">
+      <div class="modal-header">
+        <h3 id="lbn-dialog-title" style="color:#68d391;">⚡ أخذ خط / تفريعة من خط مارر بين نقطتين</h3>
+        <button class="modal-close" onclick="closeLineBetweenNodesModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- تبديل الوضع: تفريعة من خط مارر مقابل توصيل بين نودين -->
+        <div class="sw-mode-selector" style="display:flex; gap:10px; margin-bottom:14px; background:var(--bg-tertiary); padding:5px; border-radius:8px; border:1px solid var(--border-color);">
+          <label style="flex:1; display:flex; align-items:center; justify-content:center; gap:6px; padding:8px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:bold; background:#2b6cb0; color:#fff;" id="lbn-mode-tap-label">
+            <input type="radio" name="lbn-mode" value="tap" checked onchange="onLbnModeChange()">
+            <span>⚡ أخذ تفريعة من خط مارر (المطلوب)</span>
+          </label>
+          <label style="flex:1; display:flex; align-items:center; justify-content:center; gap:6px; padding:8px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:bold; background:transparent; color:#a0aec0;" id="lbn-mode-direct-label">
+            <input type="radio" name="lbn-mode" value="direct" onchange="onLbnModeChange()">
+            <span>🔗 توصيل مباشر بين نقطتين</span>
+          </label>
+        </div>
+
+        <!-- قسم أخذ تفريعة من خط مارر (الوضع الأساسي والمطلوب) -->
+        <div id="lbn-tap-box">
+          <div class="form-group" style="background:rgba(43, 108, 176, 0.12); border:1px solid #2b6cb0; padding:10px 12px; border-radius:6px; margin-bottom:12px;">
+            <label style="color:#63b3ed; font-weight:bold; font-size:12.5px; margin-bottom:4px; display:block;">اختر الخط المارر بين نقطتين للأخذ منه:</label>
+            <select id="lbn-passing-section" class="form-control" onchange="onLbnPassingSectionChange()"></select>
+            <small id="lbn-passing-hint" style="color:#cbd5e0; font-size:11.5px; margin-top:5px; display:block; line-height:1.4;">
+              📍 سيتم تقسيم الخط المار وتحديد مسافة كل جهة حسب القيم المحددة أدناه.
+            </small>
+          </div>
+
+          <!-- تقنية تحديد المسافات والأطوال بين الجهتين بدقة هندسية -->
+          <div class="form-group" style="background:rgba(15, 23, 42, 0.65); border:1px solid #3b82f6; padding:12px 14px; border-radius:8px; margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <label style="color:#ecc94b; font-weight:bold; font-size:12.5px; margin:0;">
+                📐 تحديد المسافات بين الجهتين (تقسيم الخط المار):
+              </label>
+              <span style="font-size:11.5px; color:#cbd5e0;">
+                الإجمالي: <strong id="lbn-orig-total-length" style="color:#38bdf8; font-size:12.5px;">2000</strong> م
+              </span>
+            </div>
+
+            <!-- الحقلان المتزامنان للجهتين -->
+            <div class="form-grid-2" style="gap:10px; margin-bottom:8px;">
+              <div class="form-group" style="margin-bottom:0;">
+                <label id="lbn-seg-a-label" style="font-size:11.5px; color:#cbd5e0; margin-bottom:4px; display:block;">المسافة من البداية [N1] (م):</label>
+                <input type="number" id="lbn-seg-a-length" class="form-control" value="200" min="1" step="10" oninput="onLbnSegAChange()" style="font-weight:bold; color:#68d391; font-size:13px;">
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label id="lbn-seg-b-label" style="font-size:11.5px; color:#cbd5e0; margin-bottom:4px; display:block;">المسافة إلى النهاية [N2] (م):</label>
+                <input type="number" id="lbn-seg-b-length" class="form-control" value="1800" min="1" step="10" oninput="onLbnSegBChange()" style="font-weight:bold; color:#63b3ed; font-size:13px;">
+              </div>
+            </div>
+
+            <!-- شريط منزلق بصري -->
+            <div style="margin-top:8px; margin-bottom:6px;">
+              <div style="display:flex; justify-content:space-between; font-size:11px; color:#94a3b8; margin-bottom:2px;">
+                <span id="lbn-slider-a-hint">جهة البداية: 10% (200م)</span>
+                <span id="lbn-slider-b-hint">جهة النهاية: 90% (1800م)</span>
+              </div>
+              <input type="range" id="lbn-split-slider" min="1" max="99" value="10" oninput="onLbnSplitSliderChange(this.value)" style="width:100%; cursor:pointer; accent-color:#38bdf8;">
+            </div>
+
+            <!-- أزرار نسب وتوزيع سريعة -->
+            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+              <button type="button" class="btn btn-xs btn-outline" onclick="setLbnSplitRatio(0.5)" style="font-size:11px; padding:2px 8px;">➗ المنتصف (50% / 50%)</button>
+              <button type="button" class="btn btn-xs btn-outline" onclick="setLbnSplitRatio(0.1)" style="font-size:11px; padding:2px 8px;">⚡ 200م / 1800م (10% / 90%)</button>
+              <button type="button" class="btn btn-xs btn-outline" onclick="setLbnSplitRatio(0.25)" style="font-size:11px; padding:2px 8px;">25% / 75%</button>
+              <button type="button" class="btn btn-xs btn-outline" onclick="setLbnSplitRatio(0.75)" style="font-size:11px; padding:2px 8px;">75% / 25%</button>
+              <button type="button" class="btn btn-xs btn-outline" onclick="setLbnSplitRatio(0.9)" style="font-size:11px; padding:2px 8px;">1800م / 200م (90% / 10%)</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- قسم التوصيل المباشر بين نقطتين (يظهر فقط في وضع direct) -->
+        <div id="lbn-direct-box" class="form-grid-2 hidden">
+          <div class="form-group">
+            <label>من نود (نقطة البداية):</label>
+            <select id="lbn-from-node" class="form-control"></select>
+          </div>
+          <div class="form-group">
+            <label>إلى نود (نقطة النهاية):</label>
+            <select id="lbn-to-node" class="form-control"></select>
+          </div>
+        </div>
+
+        <!-- التوجيه: ويتجه نحو ما أوجه (في وضع أخذ تفريعة من خط مارر) -->
+        <div id="lbn-dir-box" class="form-group" style="margin-bottom:12px;">
+          <label style="font-weight:bold; color:#ecc94b; font-size:12.5px;">توجيه الخط الجديد المتفرع (يتجه نحو):</label>
+          <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; margin-top:4px;">
+            <label style="background:var(--bg-tertiary); padding:8px 6px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px; border:1px solid var(--border-color);" id="lbn-dir-right-lbl">
+              <input type="radio" name="lbn-branch-dir" value="right" checked> يمين ➡️
+            </label>
+            <label style="background:var(--bg-tertiary); padding:8px 6px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px; border:1px solid var(--border-color);" id="lbn-dir-left-lbl">
+              <input type="radio" name="lbn-branch-dir" value="left"> شمال ⬅️
+            </label>
+            <label style="background:var(--bg-tertiary); padding:8px 6px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px; border:1px solid var(--border-color);" id="lbn-dir-down-lbl">
+              <input type="radio" name="lbn-branch-dir" value="down"> أسفل ⬇️
+            </label>
+            <label style="background:var(--bg-tertiary); padding:8px 6px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px; border:1px solid var(--border-color);" id="lbn-dir-up-lbl">
+              <input type="radio" name="lbn-branch-dir" value="up"> أعلى ⬆️
+            </label>
+          </div>
+          <div style="margin-top:6px; background:rgba(49, 130, 206, 0.15); border:1px dashed #3182ce; padding:6px 10px; border-radius:4px; font-size:11px; color:#bee3f8; display:flex; align-items:center; gap:6px;">
+            <span>✨</span>
+            <span><b>ترتيب ذكي ومساحة عمل واسعة:</b> توضع مسميات الخط العمومي تلقائياً في الجهة العكسية للتفريعة لمنع أي تداخل ولتتسع مساحة الرسم للمعدات والمسميات الأخرى.</span>
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label>رقم النود الجديد لنهاية الخط:</label>
+            <input type="text" id="lbn-new-node-id" class="form-control" value="N3">
+          </div>
+          <div class="form-group">
+            <label>مسمى الخط / التفريعة (اختياري):</label>
+            <input type="text" id="lbn-name" class="form-control" placeholder="مثال: تفريعة المستشفى، مناول...">
+          </div>
+        </div>
+
+        <div class="form-grid-3">
+          <div class="form-group">
+            <label>نوع الخط:</label>
+            <select id="lbn-type" class="form-control" onchange="onLineBetweenTypeChange()">
+              <option value="هوائي" selected>خط هوائي (سليم مكتمل ───)</option>
+              <option value="كابل">كابل أرضي (متقطع - - -)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>المقطع:</label>
+            <select id="lbn-size" class="form-control">
+              <option value="70/12" selected>70/12 (تفريعات)</option>
+              <option value="150/25">150/25 (رئيسي)</option>
+              <option value="سبيكة">سبيكة AAAC</option>
+              <option value="35/6">35/6</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>طول التفريعة (متر):</label>
+            <input type="number" id="lbn-length" class="form-control" value="800" step="50" min="10" required>
+          </div>
+        </div>
+
+        <div style="background:var(--bg-tertiary); border:1px solid var(--border-color); border-radius:6px; padding:10px; margin-top:8px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin:0; font-size:12px; color:#f6e05e;">
+            <input type="checkbox" id="lbn-add-switch" style="width:16px; height:16px; cursor:pointer;">
+            <span>⚡ إضافة سكينة هوائية مفصلية تلقائياً في نهاية هذا الخط</span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeLineBetweenNodesModal()">إلغاء</button>
+        <button class="btn btn-primary" id="lbn-submit-btn" onclick="submitLineBetweenNodesModal()"><span>⚡ أخذ التفريعة من الخط المارر فوراً ➔</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نافذة مخصصة لإضافة وحدة الربط الحلقي RMU (بدون كابلات وتوصيل حسب الاتجاه فقط) -->
+  <div id="rmu-modal" class="modal-overlay hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 style="color:#63b3ed;">🔄 وحدة الربط الحلقي RMU</h3>
+        <button class="modal-close" onclick="closeRMUModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>النود المغذي (نقطة الربط الحلقي):</label>
+          <select id="rmu-source-node" class="form-control"></select>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label>اسم وحدة الـ RMU:</label>
+            <input type="text" id="rmu-name" class="form-control" value="لوحة RMU 1">
+          </div>
+          <div class="form-group">
+            <label>عدد سكاكين الخروج:</label>
+            <select id="rmu-switches" class="form-control">
+              <option value="2">2 سكاكين خروج</option>
+              <option value="3" selected>3 سكاكين خروج</option>
+              <option value="4">4 سكاكين خروج</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>اتجاه الربط الحلقي بالنسبة للنود المغذي:</label>
+          <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; margin-top:4px;">
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="rmu-dir" value="down" checked> أسفل ⬇️
+            </label>
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="rmu-dir" value="right"> يمين ➡️
+            </label>
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="rmu-dir" value="up"> أعلى ⬆️
+            </label>
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="rmu-dir" value="left"> شمال ⬅️
+            </label>
+          </div>
+        </div>
+
+        <div style="background:#1a202c; border:1px solid #2d3748; border-radius:6px; padding:10px; margin-top:12px; font-size:11.5px; color:#a0aec0;">
+          💡 <b>الربط الحلقي</b>: تتصل وحدة الـ RMU مباشرة بنظام الربط الحلقي ثنائي الأطراف حسب الاتجاه المختار بدون كابلات إضافية.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeRMUModal()">إلغاء</button>
+        <button class="btn btn-primary" onclick="submitRMUModal()">توصيل وحدة RMU فوراً ➔</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نافذة مخصصة لمنظم الجهد AVR (الحمل بالأمبير وسهم موجه ونقطتا توصيل بدون رقم نود) -->
+  <div id="avr-modal" class="modal-overlay hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 style="color:#ecc94b;">🔋 منظم الجهد AVR (الحمل بالأمبير والتوجيه)</h3>
+        <button class="modal-close" onclick="closeAVRModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>نود الأخذ (النود الذي يأخذ منه المنظم لمواصلة خط آخر):</label>
+          <select id="avr-source-node" class="form-control"></select>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label>اسم منظم الجهد:</label>
+            <input type="text" id="avr-name" class="form-control" value="منظم جهد AVR 1">
+          </div>
+          <div class="form-group">
+            <label>الحمل المقنن بالأمبير (A):</label>
+            <input type="number" id="avr-amp" class="form-control" value="200" step="10" min="10" max="2000">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>اتجاه سهم المنظم ومسار التوصيل لمواصلة الخط:</label>
+          <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; margin-top:4px;">
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="avr-dir" value="down" checked> أسفل ⬇️
+            </label>
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="avr-dir" value="right"> يمين ➡️
+            </label>
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="avr-dir" value="up"> أعلى ⬆️
+            </label>
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="avr-dir" value="left"> شمال ⬅️
+            </label>
+          </div>
+        </div>
+
+        <div style="background:#1a202c; border:1px solid #2d3748; border-radius:6px; padding:10px; margin-top:12px; font-size:11.5px; color:#ecc94b;">
+          ⚡ <b>نظام التوصيل</b>: يظهر المنظم على شكل دائرة بها سهم موجَّه ونقطتا توصيل من الجهتين (مثل نظام السكينة) وموضحاً عليه الحمل بالأمبير بدون رقم نود، ويمكن أخذ خطوط أخرى منه لمواصلة التغذية.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeAVRModal()">إلغاء</button>
+        <button class="btn btn-primary" onclick="submitAVRModal()">إضافة منظم AVR ➔</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- صفحة / نافذة إدارة المشاريع والخطوط المحفوظة -->
+  <div id="projects-manager-modal" class="modal-overlay hidden">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <h3>📁 إدارة المشاريع والمخططات والخطوط المحفوظة</h3>
+        <button class="modal-close" onclick="closeProjectsManager()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:10px;">
+          <p style="font-size:12px; color:#a0aec0; margin:0;">
+            استعراض المخططات المحفوظة للتعديل عليها أو عرض خط معين أو طباعته بالكامل:
+          </p>
+          <button class="btn btn-success" onclick="createNewProjectDirectly()">
+            <span>➕ فتح مشروع جديد مباشر</span>
+          </button>
+        </div>
+
+        <div id="projects-list-container">
+          <p style="text-align:center; padding:20px; color:#718096;">جاري تحميل المشاريع المحفوظة...</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span style="margin-left:auto; font-size:11px; color:#718096;">جميع الحقوق محفوظة للمهندس مصطفى المغربي © ENG-MOSTAFAELMGHRABY</span>
+        <button class="btn btn-secondary" onclick="closeProjectsManager()">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نافذة إدخال الخط / الكابل (Line Dialog) -->
+  <div id="line-dialog-modal" class="modal-overlay hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="line-dialog-title">➖ رسم خط هوائي</h3>
+        <button class="modal-close" onclick="closeLineDialog()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label>من نود (أخذ مناول من أي نقطة):</label>
+            <select id="dlg-from-node" class="form-control" onchange="onLineFromNodeChange()"></select>
+          </div>
+          <div class="form-group">
+            <label>إلى نود:</label>
+            <input type="text" id="dlg-to-node" class="form-control" value="N2">
+          </div>
+        </div>
+
+        <!-- خيار الربط المباشر قبل السكينة عند التفرع من نود سكينة -->
+        <div id="dlg-switch-tap-group" style="display:none; margin-top: 6px; margin-bottom: 12px; padding: 10px 14px; background: rgba(56, 178, 172, 0.1); border: 1px solid rgba(56, 178, 172, 0.4); border-radius: 6px;">
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-weight:bold; color:#E2E8F0; margin-bottom:4px;">
+            <input type="checkbox" id="dlg-switch-tap-direct" checked style="width:18px; height:18px; accent-color:#38B2AC; cursor:pointer;">
+            <span>⚡ ربط مباشر قبل السكينة (على الخط الرئيسي المغذي)</span>
+          </label>
+          <div style="font-size:11.5px; color:#A0AEC0; line-height:1.6; margin-right:28px;">
+            • <b>مفعل (☑️):</b> أخذ تفريعة مباشرة من الخط الرئيسي المغذي للسكينة دون أن تتأثر بفتح/فصل السكينة للخط الآخر.<br>
+            • <b>مغلق (⬜):</b> توصيل بعد السكينة بحيث يتحكم سيف السكينة في فصل وتوصيل هذا الخط.
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label>الطول (متر):</label>
+            <input type="number" id="dlg-length" class="form-control" value="1500" step="50" required>
+          </div>
+          <div class="form-group">
+            <label>المقطع:</label>
+            <select id="dlg-size" class="form-control"></select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>الاتجاه:</label>
+          <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; margin-top:6px;">
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="dlg-dir" value="down" onchange="onLineFromNodeChange()" checked> أسفل ⬇️
+            </label>
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="dlg-dir" value="right" onchange="onLineFromNodeChange()"> يمين ➡️
+            </label>
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="dlg-dir" value="up" onchange="onLineFromNodeChange()"> أعلى ⬆️
+            </label>
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="dlg-dir" value="left" onchange="onLineFromNodeChange()"> شمال ⬅️
+            </label>
+          </div>
+        </div>
+
+        <div id="dlg-line-preview-note" style="margin-top:12px; font-size:11px; padding:8px 12px; border-radius:4px; background:#1a202c; color:#a0aec0;">
+          💡 سيتم رسم هذا الخط باللون المعتمد ونمط الخط المخصص (سليم مكتمل للهوائي ومتقطع للكابل).
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeLineDialog()">إلغاء</button>
+        <button class="btn btn-primary" onclick="submitLineDialog()">موافق ➔</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نافذة إضافة المحول أو الكشك المتطور مع خط/كابل التغذية وتحديد نود الأخذ -->
+  <div id="trans-dialog-modal" class="modal-overlay hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="trans-dialog-title">⚙️ إضافة محول معلق</h3>
+        <button class="modal-close" onclick="closeTransDialog()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid-2">
+          <div class="form-group" id="dlg-trans-source-group">
+            <label id="dlg-trans-source-label">نقطة الأخذ / النود المغذي:</label>
+            <select id="dlg-trans-source" class="form-control" onchange="onTransSourceChange()"></select>
+          </div>
+          <div class="form-group" id="dlg-trans-new-node-group">
+            <label>رقم النود الجديد:</label>
+            <input type="text" id="dlg-trans-node" class="form-control" value="N4">
+          </div>
+        </div>
+
+        <!-- خيار التثبيت على نفس النود المختار دون تحديد نود آخر -->
+        <div class="form-group" id="dlg-trans-same-node-box" style="margin-top: 4px; margin-bottom: 8px; padding: 10px 14px; background: rgba(56, 178, 172, 0.1); border: 1px solid rgba(56, 178, 172, 0.4); border-radius: 6px;">
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-weight:bold; color:#E2E8F0; margin-bottom:4px;">
+            <input type="checkbox" id="dlg-trans-same-node" onchange="onTransSameNodeChange()" style="width:18px; height:18px; accent-color:#38B2AC; cursor:pointer;">
+            <span id="dlg-trans-same-node-label">📌 تثبيت على نفس النود دون تحديد نود آخر</span>
+          </label>
+          <div style="font-size:11.5px; color:#A0AEC0; line-height:1.6; margin-right:28px;" id="dlg-trans-same-node-desc">
+            • <b>مفعل (☑️):</b> تثبيت المحول/الكشك على نفس النود المختار دون إنشاء نود جديد ولا كابل إضافي.<br>
+            • <b>مغلق (⬜):</b> إنشاء نود جديد ومد خط/كابل تغذية إليه من نود الأخذ.
+          </div>
+        </div>
+
+        <!-- خيار الربط المباشر قبل السكينة عند أخذ محول/كشك من نود سكينة -->
+        <div id="dlg-trans-switch-tap-group" style="display:none; margin-top: 4px; margin-bottom: 12px; padding: 10px 14px; background: rgba(56, 178, 172, 0.1); border: 1px solid rgba(56, 178, 172, 0.4); border-radius: 6px;">
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-weight:bold; color:#E2E8F0; margin-bottom:4px;">
+            <input type="checkbox" id="dlg-trans-switch-tap-direct" checked style="width:18px; height:18px; accent-color:#38B2AC; cursor:pointer;">
+            <span>⚡ ربط مباشر قبل السكينة (على الخط الرئيسي المغذي)</span>
+          </label>
+          <div style="font-size:11.5px; color:#A0AEC0; line-height:1.6; margin-right:28px;">
+            • <b>مفعل (☑️):</b> لا يتأثر هذا المحول/الكشك بفصل السكينة ويظل مكهرباً من الخط المغذي الرئيسي.<br>
+            • <b>مغلق (⬜):</b> يتأثر بفصل السكينة.
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label>اسم المحول / المسمى:</label>
+            <input type="text" id="dlg-trans-name" class="form-control" value="محول اتصالات مصر">
+          </div>
+          <div class="form-group">
+            <label>القدرة (KVA):</label>
+            <select id="dlg-trans-cap" class="form-control">
+              <option value="25">25 KVA</option>
+              <option value="50" selected>50 KVA</option>
+              <option value="63">63 KVA</option>
+              <option value="100">100 KVA</option>
+              <option value="160">160 KVA</option>
+              <option value="200">200 KVA</option>
+              <option value="300">300 KVA</option>
+              <option value="500">500 KVA</option>
+              <option value="1000">1000 KVA</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label>نسبة التحميل (%):</label>
+            <input type="number" id="dlg-trans-load" class="form-control" value="75" min="10" max="150">
+          </div>
+          <div class="form-group" id="dlg-switches-group" style="display:none;">
+            <label>عدد السكاكين:</label>
+            <input type="number" id="dlg-trans-switches" class="form-control" value="2" min="1" max="4">
+          </div>
+        </div>
+
+        <!-- خيار الكشك الحلقي أو محول فقط -->
+        <div class="form-group" id="dlg-kiosk-feedthrough-group" style="display:none; margin-top: 8px; margin-bottom: 12px; padding: 10px 14px; background: rgba(66, 153, 225, 0.08); border: 1px solid rgba(66, 153, 225, 0.3); border-radius: 6px;">
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-weight:bold; color:#E2E8F0; margin-bottom:4px;">
+            <input type="checkbox" id="dlg-kiosk-feedthrough" style="width:18px; height:18px; accent-color:#3182CE; cursor:pointer;">
+            <span>🔄 كشك حلقي (هاخد من كشك لكشك آخر)</span>
+          </label>
+          <div style="font-size:11.5px; color:#A0AEC0; line-height:1.6; margin-right:28px; margin-bottom:8px;">
+            • <b>مفعل (☑️):</b> أخذ من كشك لكشك آخر ويظهر على قاعدة الكشك قوس وطرفا دخول وخروج.<br>
+            • <b>مغلق (⬜):</b> محول فقط ويظهر على قاعدة الكشك خط اتصال واحد ونقطة دليل بالمسار.
+          </div>
+          <div style="margin-right:28px;">
+            <label style="font-size:11.5px; color:#93C5FD; display:block; margin-bottom:3px; font-weight:bold;">نقطة خروج الكابل للكشك الآخر:</label>
+            <select id="dlg-kiosk-outgoing-term" class="form-control" style="background:#0F172A; border:1px solid #475569; color:#F8FAFC; padding:5px 8px; border-radius:4px; width:100%; font-size:11.5px;">
+              <option value="bottom" selected>⬇️ خروج من أسفل القاعدة (الافتراضي عند الصعود لمنع تقاطع الكابلات)</option>
+              <option value="top">⬆️ خروج من أعلى القاعدة (يخرج مثل حرف L ومكمل لأعلى)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label id="dlg-trans-dir-label">اتجاه تفريع المحول بالنسبة لنود الأخذ:</label>
+          <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; margin-top:4px;">
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="dlg-trans-dir" value="left" onchange="onTransSameNodeChange()" checked> شمال ⬅️
+            </label>
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="dlg-trans-dir" value="right" onchange="onTransSameNodeChange()"> يمين ➡️
+            </label>
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="dlg-trans-dir" value="down" onchange="onTransSameNodeChange()"> أسفل ⬇️
+            </label>
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="dlg-trans-dir" value="up" onchange="onTransSameNodeChange()"> أعلى ⬆️
+            </label>
+          </div>
+        </div>
+
+        <!-- بيانات كابل أو خط التغذية الواصل للمحول -->
+        <div id="dlg-trans-line-group" style="background:var(--bg-tertiary); padding:12px; border-radius:6px; margin-top:8px; border:1px solid var(--border-color);">
+          <div style="font-size:12px; font-weight:bold; color:#68d391; margin-bottom:8px;">⚡ خط / كابل التغذية الواصل للمحول:</div>
+          <div class="form-grid-3">
+            <div class="form-group">
+              <label>النوع:</label>
+              <select id="dlg-trans-line-type" class="form-control" onchange="onTransLineTypeChange()">
+                <option value="كابل" selected>كابل أرضي (متقطع)</option>
+                <option value="هوائي">خط هوائي (سليم)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>المقطع:</label>
+              <select id="dlg-trans-line-size" class="form-control">
+                <option value="3*150" selected>3*150 مم²</option>
+                <option value="3*240">3*240 مم²</option>
+                <option value="3*70">3*70 مم²</option>
+                <option value="150/25">150/25</option>
+                <option value="70/12">70/12</option>
+                <option value="35/6">35/6</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>الطول (متر):</label>
+              <input type="number" id="dlg-trans-line-len" class="form-control" value="200" min="0" step="20">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeTransDialog()">إلغاء</button>
+        <button class="btn btn-primary" id="dlg-trans-submit-btn" onclick="submitTransDialog()">إضافة المحول فوراً ➔</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نافذة مخصصة لإضافة وضبط السكينة الهوائية المفصلية بخيارات ديناميكية ذكية -->
+  <div id="switch-modal" class="modal-overlay hidden">
+    <div class="modal-dialog" style="max-width: 530px;">
+      <div class="modal-header">
+        <h3 style="color:#48bb78; font-size:16px;">⚡ إضافة وضبط السكينة الهوائية</h3>
+        <button class="modal-close" onclick="closeSwitchModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:16px 20px;">
+
+        <!-- 1. اختيار النود المطلوب العمل عليه -->
+        <div class="form-group" style="margin-bottom:12px;">
+          <label style="color:#63b3ed; font-weight:bold; font-size:12.5px; display:flex; justify-content:space-between; align-items:center;">
+            <span>📍 اختر النود المستهدف:</span>
+            <span id="sw-node-branches-summary" style="font-size:11px; font-weight:normal; color:#a0aec0;"></span>
+          </label>
+          <select id="sw-main-node" class="form-control" onchange="onSwitchMainNodeChange()"></select>
+        </div>
+
+        <!-- 2. خيارات الموضع الديناميكية بناءً على النود المختار -->
+        <div class="form-group" style="margin-bottom:14px;">
+          <label style="font-weight:bold; font-size:12px; color:#e2e8f0; margin-bottom:6px;">
+            🎯 تحديد موضع السكينة:
+          </label>
+          <div id="sw-dynamic-options" style="display:flex; flex-direction:column; gap:8px;">
+            <!-- خيارات ديناميكية تتحدث تلقائياً حسب طبيعة النود المختار -->
+          </div>
+        </div>
+
+        <!-- 3. الحقول الديناميكية (تظهر فقط ما يحتاجه الخيار المختار) -->
+
+        <!-- أ) حقول السكينة المفردة (تثبيت على نفس النود أو سكينة فرع واحدة) -->
+        <div id="sw-fields-single" style="background:var(--bg-tertiary); border:1px solid var(--border-color); border-radius:8px; padding:12px; margin-bottom:10px;">
+          <div class="form-grid-2">
+            <div class="form-group" id="sw-single-nodeid-group">
+              <label>رقم النود الجديد:</label>
+              <input type="text" id="sw-single-node-id" class="form-control" value="N3">
+            </div>
+            <div class="form-group" id="sw-single-name-group">
+              <label>اسم السكينة:</label>
+              <input type="text" id="sw-single-name" class="form-control" value="سكينة خط">
+            </div>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-group" style="margin-bottom:0;">
+              <label>اتجاه ومسار السكينة:</label>
+              <select id="sw-single-dir" class="form-control">
+                <option value="auto">تلقائي حسب مسار الخط</option>
+                <option value="left">⬅️ شمال / يسار (أفقي)</option>
+                <option value="right">➡️ يمين (أفقي)</option>
+                <option value="down">⬇️ أسفل (رأسي)</option>
+                <option value="up">⬆️ أعلى (رأسي)</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label>الحالة المبدئية:</label>
+              <select id="sw-single-state" class="form-control">
+                <option value="closed" selected>مغلقة (توصيل 🟢)</option>
+                <option value="open">مفتوحة (عزل وفصل 🔴)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- ب) حقول السكينتين المستقلتين (تظهر فقط عند اختيار سكينتين) -->
+        <div id="sw-fields-dual" class="hidden" style="margin-bottom:10px;">
+          <!-- كارت سكينة اليمين -->
+          <div style="background:#1a202c; border:1px solid #2b6cb0; border-radius:8px; padding:10px 12px; margin-bottom:8px;">
+            <div style="font-size:12px; font-weight:bold; color:#63b3ed; margin-bottom:6px;">➡️ سكينة تفريعة اليمين:</div>
+            <div class="form-grid-3">
+              <div class="form-group" style="margin-bottom:0;">
+                <label>رقم النود:</label>
+                <input type="text" id="sw-dual-right-node" class="form-control" value="N3">
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label>اسم السكينة:</label>
+                <input type="text" id="sw-dual-right-name" class="form-control" value="سكينة تفريعة يمين">
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label>الحالة:</label>
+                <select id="sw-dual-right-state" class="form-control">
+                  <option value="closed" selected>مغلقة 🟢</option>
+                  <option value="open">مفتوحة 🔴</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- كارت سكينة الأسفل -->
+          <div style="background:#1a202c; border:1px solid #38a169; border-radius:8px; padding:10px 12px;">
+            <div style="font-size:12px; font-weight:bold; color:#68d391; margin-bottom:6px;">⬇️ سكينة تفريعة الأسفل:</div>
+            <div class="form-grid-3">
+              <div class="form-group" style="margin-bottom:0;">
+                <label>رقم النود:</label>
+                <input type="text" id="sw-dual-down-node" class="form-control" value="N4">
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label>اسم السكينة:</label>
+                <input type="text" id="sw-dual-down-name" class="form-control" value="سكينة خط أسفل">
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label>الحالة:</label>
+                <select id="sw-dual-down-state" class="form-control">
+                  <option value="closed" selected>مغلقة 🟢</option>
+                  <option value="open">مفتوحة 🔴</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ج) حقول الخط الجديد (تظهر فقط عند اختيار مد خط جديد مع سكينة) -->
+        <div id="sw-fields-new-line" class="hidden" style="background:rgba(236, 201, 75, 0.08); border:1px solid rgba(236, 201, 75, 0.3); border-radius:8px; padding:12px; margin-bottom:10px;">
+          <div class="form-group" style="margin-bottom:8px;">
+            <label style="font-weight:bold; font-size:11.5px; color:#ecc94b;">اتجاه الخط الجديد بالنسبة للنود:</label>
+            <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:6px; margin-top:4px;">
+              <label style="background:var(--bg-tertiary); padding:6px; border-radius:4px; text-align:center; cursor:pointer; font-size:11.5px;">
+                <input type="radio" name="sw-line-dir" value="down" checked> أسفل ⬇️
+              </label>
+              <label style="background:var(--bg-tertiary); padding:6px; border-radius:4px; text-align:center; cursor:pointer; font-size:11.5px;">
+                <input type="radio" name="sw-line-dir" value="right"> يمين ➡️
+              </label>
+              <label style="background:var(--bg-tertiary); padding:6px; border-radius:4px; text-align:center; cursor:pointer; font-size:11.5px;">
+                <input type="radio" name="sw-line-dir" value="left"> شمال ⬅️
+              </label>
+              <label style="background:var(--bg-tertiary); padding:6px; border-radius:4px; text-align:center; cursor:pointer; font-size:11.5px;">
+                <input type="radio" name="sw-line-dir" value="up"> أعلى ⬆️
+              </label>
+            </div>
+          </div>
+          <div class="form-grid-3">
+            <div class="form-group" style="margin-bottom:0;">
+              <label>نوع الخط:</label>
+              <select id="sw-new-line-type" class="form-control" onchange="onSwitchNewLineTypeChange()">
+                <option value="هوائي" selected>خط هوائي</option>
+                <option value="كابل">كابل أرضي</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label>المقطع:</label>
+              <select id="sw-new-line-size" class="form-control">
+                <option value="150/25" selected>150/25</option>
+                <option value="70/12">70/12</option>
+                <option value="35/6">35/6</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label>الطول (متر):</label>
+              <input type="number" id="sw-new-line-len" class="form-control" value="500" step="50">
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeSwitchModal()">إلغاء</button>
+        <button class="btn btn-primary" id="sw-submit-btn" onclick="submitSwitchModal()"><span>⚡ تطبيق وضبط السكينة فوراً ➔</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- مدخل ملف الباور بوينت المخفي -->
+  <input type="file" id="pptx-file-input" accept=".pptx" style="display:none;" onchange="handlePowerPointFileInput(event)">
+
+  <!-- نافذة استيراد وترتيب عروض الباور بوينت تلقائياً (Import PowerPoint Modal) -->
+  <div id="import-powerpoint-modal" class="modal-overlay hidden">
+    <div class="modal-dialog" style="max-width: 620px;">
+      <div class="modal-header">
+        <h3 style="color:#63b3ed; display:flex; align-items:center; gap:8px;">
+          <span>📥 استيراد من باور بوينت والترتيب التلقائي النظامي</span>
+        </h3>
+        <button class="modal-close" onclick="closeImportPowerPointDialog()">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- منطقة السحب والإفلات -->
+        <div id="pptx-dropzone" style="border: 2px dashed #4299e1; border-radius: 8px; padding: 25px 15px; text-align: center; background: rgba(66, 153, 225, 0.05); cursor: pointer; transition: all 0.2s ease;" onclick="document.getElementById('pptx-file-input').click()" ondragover="handlePptxDragOver(event)" ondragleave="handlePptxDragLeave(event)" ondrop="handlePptxDrop(event)">
+          <div style="font-size: 36px; margin-bottom: 8px;">📊</div>
+          <div style="font-size: 15px; font-weight: bold; color: #e2e8f0; margin-bottom: 4px;">اسحب وأفلت ملف الباور بوينت (.pptx) هنا</div>
+          <div style="font-size: 12px; color: #a0aec0;">أو انقر هنا لاختيار الملف من جهازك</div>
+          <div id="pptx-file-name" style="margin-top: 10px; font-size: 13px; font-weight: bold; color: #68d391; display: none;"></div>
+        </div>
+
+        <!-- مؤشر التحميل -->
+        <div id="pptx-loading-indicator" style="display: none; text-align: center; padding: 15px; color: #63b3ed; font-weight: bold;">
+          ⏳ جارٍ قراءة ملف الباور بوينت واستخراج العناصر والترتيب الهندسي...
+        </div>
+
+        <!-- قسم المعاينة والملخص (يظهر عند اختيار وقراءة الملف) -->
+        <div id="pptx-preview-section" style="display: none; margin-top: 18px;">
+          <div style="background: #1a202c; border: 1px solid #2d3748; border-radius: 6px; padding: 14px; margin-bottom: 14px;">
+            <div style="font-size: 13px; font-weight: bold; color: #ecc94b; margin-bottom: 8px;">⚡ البيانات المستخرجة من العرض التقديمي:</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; color: #cbd5e0;">
+              <div>• المغذي: <strong id="pptx-sum-feeder" style="color:#fff;">-</strong></div>
+              <div>• المحطة: <strong id="pptx-sum-sub" style="color:#fff;">-</strong></div>
+              <div>• الجهد: <strong id="pptx-sum-volt" style="color:#fff;">-</strong></div>
+              <div>• إجمالي الأطوال: <strong id="pptx-sum-len" style="color:#68d391;">-</strong></div>
+            </div>
+            <div style="display: flex; gap: 12px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #2d3748; font-size: 12px;">
+              <span style="background: rgba(72,187,120,0.15); border: 1px solid #48bb78; color: #68d391; padding: 3px 8px; border-radius: 4px;">
+                ⚙️ محولات: <strong id="pptx-sum-trans">0</strong>
+              </span>
+              <span style="background: rgba(237,137,54,0.15); border: 1px solid #ed8936; color: #fbd38d; padding: 3px 8px; border-radius: 4px;">
+                🔺 أكشاك: <strong id="pptx-sum-kiosks">0</strong>
+              </span>
+              <span style="background: rgba(66,153,225,0.15); border: 1px solid #4299e1; color: #90cdf4; padding: 3px 8px; border-radius: 4px;">
+                ⚡ سكاكين: <strong id="pptx-sum-switches">0</strong>
+              </span>
+            </div>
+          </div>
+
+          <!-- خيارات الترتيب التلقائي -->
+          <div style="background: #2d3748; border-radius: 6px; padding: 12px; margin-bottom: 12px;">
+            <div style="font-size: 12px; font-weight: bold; color: #e2e8f0; margin-bottom: 8px;">📐 نظام الترتيب الهندسي التلقائي:</div>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #cbd5e0; cursor: pointer; margin-bottom: 6px;">
+              <input type="radio" name="pptx-layout-mode" id="rad-pptx-auto" value="autolayout" checked style="accent-color: #3182ce;">
+              <span><strong>ترتيب رأسي نظامي متناسق</strong> (المحطة بأعلى، المسار الجذعي بالمنتصف، وتوزيع الأكشاك والمحولات يميناً ويساراً)</span>
+            </label>
+            <label id="pptx-native-layout-label" style="display: none; align-items: center; gap: 8px; font-size: 13px; color: #cbd5e0; cursor: pointer;">
+              <input type="radio" name="pptx-layout-mode" id="rad-pptx-native" value="native" style="accent-color: #3182ce;">
+              <span><strong>الاحتفاظ بالإحداثيات الأصلية</strong> (مطابقة 100% للرسم المحفوظ سابقاً)</span>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeImportPowerPointDialog()">إلغاء</button>
+        <button class="btn btn-primary" id="btn-apply-pptx-import" onclick="applyPowerPointImport()" disabled>
+          <span>🚀 تطبيق وترتيب المخطط في الكانفاس ➔</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- لافتة منبثقة معتمدة عند تحميل المشروع وإمكانية التحرير بكلمة المرور -->
+  <div id="pptx-download-success-modal" class="modal-overlay hidden" style="z-index: 99999;">
+    <div class="modal-dialog" style="max-width: 540px; border: 2px solid #3b82f6; box-shadow: 0 10px 30px rgba(0,0,0,0.6); border-radius: 12px; overflow: hidden; background: #0f172a; color: #f8fafc;">
+      <div class="modal-header" style="background: linear-gradient(135deg, #1e3a8a, #1e40af); padding: 16px 20px; border-bottom: 2px solid #3b82f6; display: flex; align-items: center; justify-content: space-between;">
+        <h3 style="color: #ffffff; margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; font-weight: bold;">
+          <span>🏢 شركة مصر الوسطى لتوزيع الكهرباء</span>
+        </h3>
+        <button class="modal-close" onclick="closePowerPointDownloadModal()" style="color:#ffffff; background:transparent; border:none; font-size:20px; cursor:pointer;">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 20px; text-align: right; direction: rtl;">
+        <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
+          <div style="font-size: 14px; font-weight: bold; color: #60a5fa; margin-bottom: 4px;">
+            📥 تم تحميل ملف المشروع (PowerPoint) بنجاح!
+          </div>
+          <div style="font-size: 12.5px; color: #cbd5e1;">
+            الملف محمي بكلمة مرور رسمية لضمان حقوق الاعتماد ومنع التعديل غير المصرح به على أي جهاز أو واتساب.
+          </div>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 13px; font-weight: bold; color: #fbbf24; margin-bottom: 6px;">
+            للفتح والتعديل ادخل كلمة المرور:
+          </label>
+          <div style="font-size: 12px; color: #94a3b8; margin-bottom: 4px; font-family: monospace; font-weight: bold; letter-spacing: 0.5px;">
+            ENG-MOSTAFAELMGHRBI
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="text" id="pptx-modal-pwd-field" value="1234500" readonly style="flex: 1; background: #1e293b; border: 2px solid #3b82f6; color: #38bdf8; font-size: 18px; font-weight: bold; padding: 8px 12px; border-radius: 6px; text-align: center; letter-spacing: 2px;">
+            <button class="btn btn-primary" onclick="copyPowerPointPassword()" style="padding: 8px 16px; font-weight: bold; white-space: nowrap; background: #2563eb; border-color: #3b82f6;">
+              📋 نسخ
+            </button>
+          </div>
+        </div>
+
+        <div style="background: #1e293b; border-radius: 8px; padding: 12px 14px; font-size: 12px; color: #94a3b8; line-height: 1.6;">
+          <strong style="color: #e2e8f0; display: block; margin-bottom: 4px;">💡 خطوات فتح إمكانية التعديل داخل PowerPoint:</strong>
+          1. افتح الملف المحمل على جهازك أو عند إرساله عبر واتساب.<br>
+          2. إذا ظهر شريط "طريقة عرض محمية" بالأعلى، اضغط على <strong>[ تمكين التحرير / Enable Editing ]</strong>.<br>
+          3. ستظهر لك نافذة إدخال كلمة المرور المعتمدة باسم <span style="color:#60a5fa; font-weight:bold;">ENG-MOSTAFAELMGHRBI</span>.<br>
+          4. اكتب كلمة المرور <span style="color:#38bdf8; font-weight:bold;">1234500</span> واضغط موافق لتفتح صلاحية التعديل بالكامل.
+        </div>
+      </div>
+      <div class="modal-footer" style="padding: 12px 20px; background: #0b1120; border-top: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 11px; color: #64748b;">جميع الحقوق محفوظة © ENG-MOSTAFAELMGHRBI</span>
+        <button class="btn btn-success" onclick="closePowerPointDownloadModal()" style="padding: 6px 18px; font-weight: bold;">
+          حسناً، تم الفهم ✓
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نافذة إضافة كشك من كشك آخر (تغذية متتالية) -->
+  <div id="kiosk-from-kiosk-modal" class="modal-overlay hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 style="color:#fbd38d;">🔺 إضافة كشك من كشك آخر (تغذية متتالية)</h3>
+        <button class="modal-close" onclick="closeKioskFromKioskDialog()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>الكشك المغذي (المصدر الذي سيخرج منه الكابل):</label>
+          <select id="kfk-source-node" class="form-control"></select>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label>اسم الكشك الجديد:</label>
+            <input type="text" id="kfk-name" class="form-control" value="كشك جديد">
+          </div>
+          <div class="form-group">
+            <label>القدرة (KVA):</label>
+            <select id="kfk-cap" class="form-control">
+              <option value="100">100 KVA</option>
+              <option value="160">160 KVA</option>
+              <option value="200">200 KVA</option>
+              <option value="300" selected>300 KVA</option>
+              <option value="500">500 KVA</option>
+              <option value="1000">1000 KVA</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label>نسبة التحميل (%):</label>
+            <input type="number" id="kfk-load" class="form-control" value="65" min="10" max="150">
+          </div>
+          <div class="form-group">
+            <label>عدد السكاكين:</label>
+            <input type="number" id="kfk-switches" class="form-control" value="2" min="1" max="4">
+          </div>
+        </div>
+
+        <!-- خيار الكشك الحلقي أو محول فقط للكشك الجديد -->
+        <div class="form-group" id="kfk-feedthrough-group" style="margin-top: 8px; margin-bottom: 12px; padding: 10px 14px; background: rgba(66, 153, 225, 0.08); border: 1px solid rgba(66, 153, 225, 0.3); border-radius: 6px;">
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-weight:bold; color:#E2E8F0; margin-bottom:4px;">
+            <input type="checkbox" id="kfk-feedthrough" style="width:18px; height:18px; accent-color:#3182CE; cursor:pointer;">
+            <span>🔄 كشك حلقي (سيتم أخذ كشك آخر بعده)</span>
+          </label>
+          <div style="font-size:11.5px; color:#A0AEC0; line-height:1.6; margin-right:28px; margin-bottom:8px;">
+            • <b>مفعل (☑️):</b> إظهار قوس وطرفي دخول وخروج على قاعدة الكشك الجديد.<br>
+            • <b>مغلق (⬜):</b> محول فقط (خط واحد مستقيم مع نقطة دليل).
+          </div>
+          <div style="margin-right:28px;">
+            <label style="font-size:11.5px; color:#93C5FD; display:block; margin-bottom:3px; font-weight:bold;">نقطة خروج الكابل من الكشك المغذي:</label>
+            <select id="kfk-outgoing-term" class="form-control" style="background:#0F172A; border:1px solid #475569; color:#F8FAFC; padding:5px 8px; border-radius:4px; width:100%; font-size:11.5px;">
+              <option value="bottom" selected>⬇️ خروج من أسفل القاعدة (الافتراضي لمنع تقاطع الكابل الداخل)</option>
+              <option value="top">⬆️ خروج من أعلى القاعدة (يخرج كحرف L مكمل لأعلى)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="background:#1a202c; border:1px solid #2d3748; border-radius:6px; padding:12px; margin-top:10px;">
+          <div style="font-size:12px; font-weight:bold; color:#63b3ed; margin-bottom:8px;">🔌 بيانات الكابل الأرضي الرابط بين الكشكين:</div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label>طول الكابل (متر):</label>
+              <input type="number" id="kfk-cable-len" class="form-control" value="350" step="25">
+            </div>
+            <div class="form-group">
+              <label>مقطع الكابل (متقطع):</label>
+              <select id="kfk-cable-size" class="form-control">
+                <option value="3*70">3*70 مم²</option>
+                <option value="3*150">3*150 مم²</option>
+                <option value="3*240" selected>3*240 مم²</option>
+                <option value="3*300">3*300 مم²</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:0;">
+            <label>اتجاه الكشك الجديد بالنسبة للكشك المصدر:</label>
+            <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; margin-top:4px;">
+              <label style="background:#171b22; padding:6px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+                <input type="radio" name="kfk-dir" value="right" checked> يمين ➡️
+              </label>
+              <label style="background:#171b22; padding:6px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+                <input type="radio" name="kfk-dir" value="down"> أسفل ⬇️
+              </label>
+              <label style="background:#171b22; padding:6px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+                <input type="radio" name="kfk-dir" value="up"> أعلى ⬆️
+              </label>
+              <label style="background:#171b22; padding:6px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+                <input type="radio" name="kfk-dir" value="left"> شمال ⬅️
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeKioskFromKioskDialog()">إلغاء</button>
+        <button class="btn btn-primary" onclick="submitKioskFromKioskDialog()">إضافة الكشك والكابل فوراً ➔</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نافذة تفريع محول من محول آخر مع تحديد نود الأخذ ونود جديد ومنع التكرار -->
+  <div id="cascade-transformer-modal" class="modal-overlay hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 style="color:#9ae6b4;">🔄 إضافة محول من محول آخر (تغذية متتالية)</h3>
+        <button class="modal-close" onclick="closeCascadeTransformerDialog()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>نود المحول المغذي (نقطة الأخذ / المصدر):</label>
+          <select id="cas-source-node" class="form-control" onchange="onCascadeSourceChange()"></select>
+          <small class="hint-text" id="cas-source-hint" style="color:#90cdf4; margin-top:4px; display:block; font-size:11.5px;"></small>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label>رقم النود الجديد للمحول:</label>
+            <input type="text" id="cas-new-node-id" class="form-control" placeholder="مثال: N5" oninput="validateCascadeNodeId()">
+            <small id="cas-node-error" style="color:#fc8181; font-size:11px; display:none; margin-top:2px;">⚠️ رقم النود مستخدم بالفعل بالمخطط!</small>
+          </div>
+          <div class="form-group">
+            <label>اسم المحول الجديد:</label>
+            <input type="text" id="cas-name" class="form-control" value="محول جديد">
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label>القدرة (KVA):</label>
+            <select id="cas-cap" class="form-control">
+              <option value="25">25 KVA</option>
+              <option value="50">50 KVA</option>
+              <option value="63">63 KVA</option>
+              <option value="100" selected>100 KVA</option>
+              <option value="160">160 KVA</option>
+              <option value="200">200 KVA</option>
+              <option value="300">300 KVA</option>
+              <option value="500">500 KVA</option>
+              <option value="1000">1000 KVA</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>نسبة التحميل (%):</label>
+            <input type="number" id="cas-load" class="form-control" value="78" min="10" max="150">
+          </div>
+        </div>
+
+        <div style="background:#1a202c; border:1px solid #2d3748; border-radius:6px; padding:12px; margin-top:10px;">
+          <div style="font-size:12px; font-weight:bold; color:#68d391; margin-bottom:8px;">⚡ بيانات الخط / الكابل الرابط بين المحولين:</div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label>نوع المسار:</label>
+              <select id="cas-line-type" class="form-control" onchange="onCascadeLineTypeChange()">
+                <option value="هوائي" selected>خط هوائي (سليم مكتمل ───)</option>
+                <option value="كابل">كابل أرضي (متقطع - - -)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>المقطع:</label>
+              <select id="cas-line-size" class="form-control">
+                <option value="70/12" selected>70/12</option>
+                <option value="150/25">150/25</option>
+                <option value="سبيكة">سبيكة AAAC</option>
+                <option value="35/6">35/6</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label>طول الخط (متر):</label>
+              <input type="number" id="cas-line-len" class="form-control" value="800" step="50">
+            </div>
+            <div class="form-group">
+              <label>اتجاه التفريع بالنسبة للمحول المصدر:</label>
+              <select id="cas-dir" class="form-control">
+                <option value="right" selected>يمين ➡️ (تفريعة أفقية)</option>
+                <option value="down">أسفل ⬇️ (مسار رئيسي)</option>
+                <option value="up">أعلى ⬆️</option>
+                <option value="left">شمال ⬅️</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeCascadeTransformerDialog()">إلغاء</button>
+        <button class="btn btn-primary" onclick="submitCascadeTransformerDialog()">إضافة المحول والخط فوراً ➔</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نافذة الحسابات الكهربائية وهبوط الجهد -->
+  <div id="calc-modal" class="modal-overlay hidden">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <h3>📊 التحليل الكهربائي وهبوط الجهد (Voltage Drop & Loads)</h3>
+        <button class="modal-close" onclick="closeCalculationsModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="calc-content"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-success" onclick="exportToExcel()">تصدير هذا التقرير للإكسيل 📗</button>
+        <button class="btn btn-primary" onclick="downloadProjectPPTX()" style="background:#2563eb;border-color:#3b82f6;" title="تحميل المشروع بالكامل كعرض باور بوينت (.pptx)">📥 تحميل المشروع (PowerPoint)</button>
+        <button class="btn btn-secondary" onclick="closeCalculationsModal()">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نافذة تعديل خصائص أي جزء في المخطط (Edit Element Modal) -->
+  <div id="edit-element-modal" class="modal-overlay hidden">
+    <div class="modal-dialog" style="max-width: 500px; border: 1px solid #3B82F6; box-shadow: 0 16px 36px rgba(0,0,0,0.85); background:#1A202C;">
+      <div class="modal-header" style="background:#111827; border-bottom:1px solid #2D3748; padding: 14px 18px; display:flex; justify-content:space-between; align-items:center;">
+        <h3 id="edit-element-title" style="color:#60A5FA; display:flex; align-items:center; gap:8px; margin:0; font-size:16px;">
+          <span>✏️</span> <span>تعديل خصائص العنصر</span>
+        </h3>
+        <button class="modal-close" onclick="closeEditElementModal()">✕</button>
+      </div>
+      <form id="edit-element-form" onsubmit="saveElementEdits(event)">
+        <div class="modal-body" style="padding: 18px; color: #E2E8F0; max-height: 72vh; overflow-y: auto;">
+          <!-- شارة ملخص العنصر المحدد -->
+          <div id="edit-element-summary" style="background:#232D3F; border-radius:8px; padding:10px 14px; margin-bottom:16px; border:1px solid #374151; font-size:12.5px;">
+          </div>
+
+          <!-- الحقول الديناميكية التي تُعبأ حسب نوع العنصر -->
+          <div id="edit-element-fields" style="display:flex; flex-direction:column; gap:12px;">
+          </div>
+        </div>
+
+        <div class="modal-footer" style="background:#111827; border-top:1px solid #2D3748; display:flex; justify-content:space-between; align-items:center; padding: 12px 18px;">
+          <button type="button" class="btn btn-outline" style="border-color:#EF4444; color:#F87171; font-size:12px; display:flex; align-items:center; gap:5px;" onclick="switchFromEditToDelete()">
+            <span>🗑️ خيارات الحذف...</span>
+          </button>
+          <div style="display:flex; gap:8px;">
+            <button type="button" class="btn btn-secondary" onclick="closeEditElementModal()">إلغاء</button>
+            <button type="submit" class="btn btn-primary" style="font-weight:bold; display:flex; align-items:center; gap:6px;">
+              <span>💾</span> <span>حفظ التعديلات</span>
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- نافذة الحذف الذكي وضبط النود تلقائياً -->
+  <div id="smart-delete-modal" class="modal-overlay hidden">
+    <div class="modal-dialog" style="max-width: 480px; border: 1px solid #4A5568; box-shadow: 0 12px 32px rgba(0,0,0,0.85);">
+      <div class="modal-header" style="background:#1A202C; border-bottom:1px solid #2D3748; padding: 14px 18px;">
+        <h3 id="smart-delete-title" style="color:#63B3ED; display:flex; align-items:center; gap:8px; margin:0; font-size:16px;">
+          <span>🗑️</span> <span>حذف وضبط النود تلقائياً</span>
+        </h3>
+        <button class="modal-close" onclick="closeSmartDeleteModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 20px 18px; color: #E2E8F0;">
+        
+        <!-- بطاقة تفاصيل العنصر المحدد -->
+        <div id="smart-delete-elem-info" style="background:#2D3748; border-radius:8px; padding:12px 16px; margin-bottom:14px; border:1px solid #4A5568;">
+        </div>
+
+        <!-- صندوق خطة الضبط التلقائي للنودات والخطوط -->
+        <div id="smart-delete-plan-box" style="background:rgba(43, 108, 176, 0.15); border:1px solid #3182CE; border-radius:8px; padding:14px; margin-bottom:18px;">
+          <div style="font-weight:bold; color:#63B3ED; margin-bottom:6px; display:flex; align-items:center; gap:6px; font-size:13.5px;">
+            <span>⚡</span> <span>الضبط التلقائي المقترح للشبكة:</span>
+          </div>
+          <div id="smart-delete-plan-text" style="font-size:13px; color:#E2E8F0; line-height:1.6;">
+          </div>
+        </div>
+
+        <!-- أزرار الإجراءات -->
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <button id="btn-smart-delete-autoadjust" class="btn btn-success" style="padding: 12px; font-weight:bold; font-size:14px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="confirmSmartDelete('auto_adjust')">
+            <span id="btn-smart-delete-autoadjust-text">⚡ حذف مع ضبط وتوصيل النودات تلقائياً</span>
+          </button>
+          
+          <button id="btn-smart-delete-simple" class="btn btn-outline" style="border-color:#E53E3E; color:#FC8181; padding: 10px; font-size:13px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="confirmSmartDelete('simple')">
+            <span>🗑️ حذف العنصر فقط (بدون ضبط أو توصيل)</span>
+          </button>
+
+          <button type="button" id="btn-smart-delete-to-edit" class="btn btn-outline" style="border-color:#3182CE; color:#63B3ED; padding: 10px; font-size:13px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="switchFromDeleteToEdit()">
+            <span>✏️ تعديل بيانات هذا العنصر بدلاً من الحذف</span>
+          </button>
+        </div>
+
+      </div>
+      <div class="modal-footer" style="background:#1A202C; border-top:1px solid #2D3748; justify-content: space-between; padding: 12px 18px;">
+        <span style="font-size:11.5px; color:#A0AEC0;">💡 اضغط Enter لتأكيد الحذف والضبط، أو Esc للإلغاء</span>
+        <button class="btn btn-secondary" onclick="closeSmartDeleteModal()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نافذة خيارات الحذف والتراجع -->
+  <div id="delete-options-modal" class="modal-overlay hidden">
+    <div class="modal-dialog" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 style="color:#fc8181;">🗑️ خيارات الحذف</h3>
+        <button class="modal-close" onclick="closeDeleteOptionsModal()">✕</button>
+      </div>
+      <div class="modal-body" style="text-align: center; padding: 24px 16px;">
+        <p style="font-size: 14px; color:#e2e8f0; margin-bottom: 20px;">
+          يرجى اختيار الإجراء المطلوب تنفيذه:
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <button class="btn btn-outline" style="border-color:#d97706; color:#f59e0b; padding:12px;" onclick="undoLastStep(); closeDeleteOptionsModal();">
+            <span>↩️ تراجع / حذف آخر خطوة تم رسمها</span>
+          </button>
+          <button class="btn btn-delete" style="padding:12px;" onclick="closeDeleteOptionsModal(); clearEntireSchematic();">
+            <span>🗑️ مسح وحذف المخطط بالكامل والبدء من جديد</span>
+          </button>
+        </div>
+        <p style="font-size:11px; color:#718096; margin-top:16px;">
+          💡 نصيحة: يمكنك أيضاً النقر مباشرة على أي محول أو سكينة أو خط في الرسم لتحديده وحذفه بمفرده.
+        </p>
+      </div>
+      <div class="modal-footer" style="justify-content: center;">
+        <button class="btn btn-secondary" onclick="closeDeleteOptionsModal()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== لوحة الإعدادات الشاملة ==================== -->
+  <div id="settings-panel" class="modal-overlay hidden settings-overlay">
+    <div class="modal-dialog settings-dialog">
+      <div class="modal-header settings-header">
+        <h2>⚙️ إعدادات النظام الشاملة</h2>
+        <button class="modal-close" onclick="closeSettingsPanel()">✕</button>
+      </div>
+
+      <!-- التبويبات -->
+      <div class="settings-tabs">
+        <button class="settings-tab-btn active" data-tab="dropdowns" onclick="switchSettingsTab('dropdowns')">
+          📋 إعدادات القوائم
+        </button>
+        <button class="settings-tab-btn" data-tab="users" onclick="switchSettingsTab('users')">
+          👥 إدارة المستخدمين
+        </button>
+        <button class="settings-tab-btn" data-tab="sectors" onclick="switchSettingsTab('sectors')">
+          🏢 القطاعات والإدارات
+        </button>
+        <button class="settings-tab-btn" data-tab="activity" onclick="switchSettingsTab('activity')">
+          📊 سجل النشاط
+        </button>
+      </div>
+
+      <div class="settings-body">
+
+        <!-- ════════ تبويب 1: القوائم المنسدلة ════════ -->
+        <div class="settings-tab-pane" data-tab-pane="dropdowns">
+          <div class="settings-section-header">
+            <span>📋 تخصيص القوائم المنسدلة في التطبيق</span>
+            <button class="btn btn-primary btn-sm" onclick="saveDropdownSettings()">💾 حفظ التغييرات</button>
+          </div>
+          <!-- بطاقة تعديل اسم المنظومة / الجهة -->
+          <div class="dd-group" style="margin-bottom:16px; border:1px solid #3182ce; background:rgba(49,130,206,0.06);">
+            <div class="dd-group-header" style="background:rgba(49,130,206,0.2);">
+              <span class="dd-group-title" style="color:#63b3ed; font-size:13.5px;">🏢 اسم المنظومة / الجهة (أعلى البرنامج والقائمة الجانبية)</span>
+              <button class="btn btn-primary btn-sm" onclick="saveSystemInfoSetting()">💾 حفظ الاسم فوراً</button>
+            </div>
+            <div style="padding:14px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+              <label style="font-size:12.5px; color:#cbd5e0; font-weight:bold;">الاسم المعروض حالياً:</label>
+              <input type="text" id="setting-system-app-name" class="form-control" style="flex:1; min-width:260px; padding:8px 12px; font-size:13.5px; font-weight:bold; color:#ecc94b; background:#0d1117; border:1px solid #2d3748; border-radius:6px;" value="هندسة كهرباء بني مزار" placeholder="مثال: هندسة كهرباء بني مزار">
+            </div>
+          </div>
+
+          <div id="settings-dropdowns-container" class="dd-groups-container"></div>
+        </div>
+
+        <!-- ════════ تبويب 2: إدارة المستخدمين ════════ -->
+        <div class="settings-tab-pane hidden" data-tab-pane="users">
+          <div class="settings-section-header">
+            <span>👥 إدارة حسابات المستخدمين وصلاحياتهم</span>
+            <button class="btn btn-primary btn-sm" onclick="openAddUserForm()">➕ إضافة مستخدم جديد</button>
+          </div>
+
+          <!-- نموذج الإضافة/التعديل -->
+          <div id="user-form-panel" class="user-form-panel hidden">
+            <div class="user-form-header">
+              <span id="user-form-title">➕ إضافة مستخدم جديد</span>
+              <button class="btn-icon" onclick="closeUserForm()">✕</button>
+            </div>
+            <div class="form-grid-2">
+              <div class="form-group" id="user-form-id-group">
+                <label>معرّف المستخدم (Username):</label>
+                <input type="text" id="user-form-id" class="form-control" placeholder="مثال: eng_mostafa">
+              </div>
+              <div class="form-group">
+                <label>الاسم الكامل / الصفة الوظيفية:</label>
+                <input type="text" id="user-form-name" class="form-control" placeholder="الاسم الوظيفي الكامل">
+              </div>
+              <div class="form-group">
+                <label for="user-form-sector">🏢 القطاع:</label>
+                <select id="user-form-sector" class="form-control" onchange="onUserFormSectorChange()" oninput="onUserFormSectorChange()">
+                  <option value="المنيا شمال" selected>المنيا شمال</option>
+                  <option value="المنيا جنوب">المنيا جنوب</option>
+                  <option value="بني سويف">بني سويف</option>
+                  <option value="الفيوم">الفيوم</option>
+                  <option value="أسيوط">أسيوط</option>
+                  <option value="الوادي الجديد">الوادي الجديد</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="user-form-admin">🏛️ الإدارة الفرعية / العامة (المركز):</label>
+                <select id="user-form-admin" class="form-control">
+                  <option value="بني مزار شرق" selected>بني مزار شرق</option>
+                  <option value="بني مزار غرب">بني مزار غرب</option>
+                  <option value="مغاغة">مغاغة</option>
+                  <option value="العدوة">العدوة</option>
+                  <option value="مطاي">مطاي</option>
+                  <option value="سمالوط شرق">سمالوط شرق</option>
+                  <option value="سمالوط غرب">سمالوط غرب</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>الدور الوظيفي:</label>
+                <select id="user-form-role" class="form-control">
+                  <option value="admin">مدير النظام</option>
+                  <option value="engineer">مهندس</option>
+                  <option value="operator">مشغّل</option>
+                  <option value="tech">فني</option>
+                  <option value="viewer">مشاهد</option>
+                </select>
+              </div>
+              <div class="form-group" id="user-form-password-group">
+                <label>كلمة المرور:</label>
+                <input type="text" id="user-form-password" class="form-control" placeholder="4 أحرف على الأقل">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>الصلاحيات والأزرار المصرحة:</label>
+              <div id="user-form-perms" class="perms-grid"></div>
+            </div>
+            <div class="user-form-actions">
+              <button class="btn btn-secondary" onclick="closeUserForm()">إلغاء</button>
+              <button class="btn btn-primary" onclick="submitUserForm()">💾 حفظ المستخدم</button>
+            </div>
+          </div>
+
+          <!-- جدول المستخدمين -->
+          <div class="users-table-wrap">
+            <table class="settings-table">
+              <thead>
+                <tr>
+                  <th>المعرّف</th>
+                  <th>الاسم الكامل</th>
+                  <th>القطاع</th>
+                  <th>الإدارة الفرعية / العامة</th>
+                  <th>كلمة المرور</th>
+                  <th>الدور</th>
+                  <th>الحالة</th>
+                  <th>الأزرار المصرحة</th>
+                  <th>إجراءات</th>
+                </tr>
+              </thead>
+              <tbody id="users-table-body">
+                <tr><td colspan="9" class="empty-msg">جاري التحميل...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ════════ تبويب 3: سجل النشاط ════════ -->
+        <div class="settings-tab-pane hidden" data-tab-pane="activity">
+          <div class="settings-section-header">
+            <span>📊 سجل نشاط المستخدمين <span id="activity-stats" style="font-size:12px;color:#a0aec0;"></span></span>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-sm btn-outline" onclick="exportActivityLogCSV()">📥 تصدير CSV</button>
+              <button class="btn btn-sm btn-danger"  onclick="clearActivityLog()">🗑️ مسح السجل</button>
+            </div>
+          </div>
+
+          <!-- فلاتر -->
+          <div class="log-filters">
+            <div class="filter-item">
+              <label>المستخدم:</label>
+              <input type="text" id="log-filter-user" class="form-control-sm" placeholder="معرّف المستخدم">
+            </div>
+            <div class="filter-item">
+              <label>الإجراء:</label>
+              <select id="log-filter-action" class="form-control-sm">
+                <option value="">— الكل —</option>
+              </select>
+            </div>
+            <div class="filter-item">
+              <label>من تاريخ:</label>
+              <input type="date" id="log-filter-from" class="form-control-sm">
+            </div>
+            <div class="filter-item">
+              <label>إلى تاريخ:</label>
+              <input type="date" id="log-filter-to" class="form-control-sm">
+            </div>
+            <button class="btn btn-sm btn-primary" onclick="loadActivityLog()">🔍 بحث</button>
+          </div>
+
+          <!-- جدول السجل -->
+          <div class="log-table-wrap">
+            <table class="settings-table log-table">
+              <thead>
+                <tr>
+                  <th>التاريخ / الوقت</th>
+                  <th>المستخدم</th>
+                  <th>الإجراء</th>
+                  <th>التفاصيل</th>
+                </tr>
+              </thead>
+              <tbody id="activity-log-body">
+                <tr><td colspan="4" class="empty-msg">جاري التحميل...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ════════ تبويب 4: القطاعات والإدارات ════════ -->
+        <div class="settings-tab-pane hidden" data-tab-pane="sectors">
+          <div class="settings-section-header">
+            <span>🏢 إدارة وتخصيص القطاعات والإدارات / الهندسات</span>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-outline btn-sm" onclick="addNewSectorPrompt()">➕ إضافة قطاع جديد</button>
+              <button class="btn btn-primary btn-sm" onclick="saveSectorsSettings()">💾 حفظ القطاعات والإدارات</button>
+            </div>
+          </div>
+          <div style="padding:10px 14px; background:rgba(49,130,206,0.08); border:1px solid #2b6cb0; border-radius:6px; margin-bottom:14px; font-size:12.5px; color:#bee3f8;">
+            💡 يمكنك من هنا إضافة أو تعديل أو حذف أي قطاع أو إدارة فرعية / مركز تابع له. التغييرات التي تحفظها هنا ستنعكس فوراً في شاشة تسجيل الدخول ونموذج إضافة المستخدمين وشريط المنظومة والمكتبة.
+          </div>
+          <div id="settings-sectors-container" class="sectors-grid-container" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:14px;"></div>
+        </div>
+
+      </div><!-- /settings-body -->
+    </div>
+  </div>
+  <!-- ==================== نهاية لوحة الإعدادات ==================== -->
+
+  <!-- ==================== نافذة تغيير كلمة المرور الذاتية للمستخدم الحالي ==================== -->
+  <div id="self-password-modal" class="settings-overlay hidden" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);z-index:3500;display:flex;align-items:center;justify-content:center;">
+    <div class="settings-dialog" style="max-width:440px;margin:auto;box-shadow:0 15px 50px rgba(0,0,0,0.8);border:1px solid #3182ce;">
+      <div class="settings-header" style="background:linear-gradient(135deg,#2b6cb0,#1a365d);padding:14px 18px;">
+        <h2 style="font-size:16px;margin:0;color:#fff;display:flex;align-items:center;gap:8px;">
+          <span>🔑</span> تغيير كلمة المرور الخاصة بي
+        </h2>
+        <button class="btn-close-settings" onclick="closeSelfPasswordModal()" style="background:none;border:none;color:#cbd5e0;font-size:18px;cursor:pointer;">✕</button>
+      </div>
+      <div style="padding:20px;display:flex;flex-direction:column;gap:14px;background:#1a202c;">
+        <div style="font-size:13px;color:#a0aec0;background:rgba(255,255,255,0.03);padding:8px 12px;border-radius:6px;border:1px solid #2d3748;">
+          👤 الحساب المسجل: <strong id="self-pw-user-name" style="color:#63b3ed;"></strong> (<span id="self-pw-user-id" style="color:#e2e8f0;font-family:monospace;"></span>)
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-size:13px;color:#cbd5e0;margin-bottom:6px;display:block;">كلمة المرور الحالية:</label>
+          <input type="password" id="self-pw-current" class="form-control" placeholder="أدخل كلمة المرور الحالية..." autocomplete="current-password" style="width:100%;box-sizing:border-box;">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-size:13px;color:#cbd5e0;margin-bottom:6px;display:block;">كلمة المرور الجديدة:</label>
+          <input type="password" id="self-pw-new" class="form-control" placeholder="4 أحرف أو أرقام على الأقل..." autocomplete="new-password" style="width:100%;box-sizing:border-box;">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-size:13px;color:#cbd5e0;margin-bottom:6px;display:block;">تأكيد كلمة المرور الجديدة:</label>
+          <input type="password" id="self-pw-confirm" class="form-control" placeholder="أعد إدخال كلمة المرور للتأكيد..." autocomplete="new-password" style="width:100%;box-sizing:border-box;">
+        </div>
+        <div id="self-pw-msg" style="font-size:12.5px;min-height:18px;"></div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:6px;">
+          <button type="button" class="btn btn-secondary" onclick="closeSelfPasswordModal()">إلغاء</button>
+          <button type="button" class="btn btn-primary" onclick="submitSelfPasswordChange()">💾 حفظ كلمة المرور</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== نافذة صفحة المطور والنظام الهندسية ==================== -->
+  <div id="developer-modal" class="settings-overlay hidden" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:4000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);">
+    <div class="dev-modal-dialog">
+      <!-- الهيدر التعريفي الفخم -->
+      <div class="dev-hero-header">
+        <button class="dev-close-btn" onclick="closeDeveloperModal()" title="إغلاق">✕</button>
+        <div class="dev-hero-avatar">⚡</div>
+        <div class="dev-hero-info">
+          <span class="dev-badge-title">مطور ومصمم المنظومة الهندسية الذكية</span>
+          <h2>المهندس / مصطفى المغربي</h2>
+          <p class="dev-hero-sub">ENG. MOSTAFA ELMGHRABY | مهندس قوى وتوزيع شبكات الجهد المتوسط والمنخفض</p>
+        </div>
+      </div>
+
+      <!-- محتوى النبذة وبيانات التواصل -->
+      <div class="dev-modal-content">
+
+        <!-- شريط الاتصال السريع المباشر والواتساب -->
+        <div class="dev-contact-strip">
+          <div class="dev-contact-item">
+            <span style="font-size:22px;">📱</span>
+            <div>
+              <div style="font-size:11px;color:#94a3b8;">رقم الهاتف / الموبايل المباشر:</div>
+              <strong style="color:#38bdf8;font-size:16px;letter-spacing:1px;font-family:monospace;">01124158545</strong>
+            </div>
+          </div>
+          <div class="dev-contact-item">
+            <span style="font-size:22px;">🏢</span>
+            <div>
+              <div style="font-size:11px;color:#94a3b8;">جهة العمل التابع لها:</div>
+              <strong style="color:#e2e8f0;font-size:12.5px;">شركة مصر الوسطى لتوزيع الكهرباء</strong>
+            </div>
+          </div>
+          <div class="dev-contact-actions">
+            <a href="tel:01124158545" class="btn-dev-call" title="اتصال هاتفي مباشر">
+              <span>📞 اتصال: 01124158545</span>
+            </a>
+            <a href="https://wa.me/201124158545" target="_blank" class="btn-dev-whatsapp" title="محادثة واتساب فورية">
+              <span>💬 تواصل واتساب</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- بطاقة نبذة عن المهندس المطور -->
+        <div class="dev-card-section">
+          <div class="dev-card-title">
+            <span>👨‍💻</span> نبذة عن المهندس المطور (About Eng. Mostafa Elmghraby)
+          </div>
+          <p style="margin:0;text-align:justify;color:#e2e8f0;font-size:13.5px;line-height:1.8;">
+            مهندس كهرباء قوى متخصص في شبكات التوزيع الكهربائية للجهد المتوسط والمنخفض (11 و 22 ك.ف) بشركة مصر الوسطى لتوزيع الكهرباء. يمتلك رصيداً غنياً من الخبرات الميدانية والهندسية في تخطيط مسارات المغذيات الهوائية والكابلات الأرضية، ومحطات المحولات، وأكشاك التوزيع، ووحدات الربط الحلقي (RMU)، ودراسات اتزان الأحمال ومناورات السكاكين والتغذية التبادلية.
+            حرص من خلال هذا العمل على دمج الخبرة الفنية الميدانية العميقة لواقع شبكات التوزيع مع أحدث تقنيات البرمجة والأنظمة الرقمية الذكية، لتقديم أداة هندسية متطورة تسهم في رقمنة الشبكات وتيسير أعمال مهندسي التشغيل والتخطيط والمشروعات بدقة واحترافية غير مسبوقة.
+          </p>
+        </div>
+
+        <!-- بطاقة نبذة عن النظام الهندسي الذكي -->
+        <div class="dev-card-section">
+          <div class="dev-card-title">
+            <span>⚡</span> نبذة عن المنظومة الهندسية الذكية (Smart Grid SLD Studio)
+          </div>
+          <p style="margin:0 0 10px 0;text-align:justify;color:#e2e8f0;font-size:13px;">
+            تم ابتكار وتصميم وبرمجة هذه المنظومة لتكون المرجع الرقمي والهندسي الشامل لمهندسي شبكات التوزيع الكهربائية لرسم ومحاكاة وتحليل شبكات الجهد المتوسط:
+          </p>
+          <div class="dev-features-grid">
+            <div class="dev-feature-item">
+              <strong>📐 رسم هندسي متجهي دقيق (CAD Engine)</strong>
+              <span>بيئة رسم لا نهائية بزوايا مستقيمة 90 درجة مع تمييز الكابلات الأرضية (- - -) والخطوط الهوائية (───) ومقاييس الأطوال المترية.</span>
+            </div>
+            <div class="dev-feature-item">
+              <strong>⚡ محاكاة السريان والمناورات (Live Simulation)</strong>
+              <span>محرك محاكاة فوري لتتبع حالة السكاكين والفصل والتوصيل وتلوين الأجزاء الحية (Energized) والمفصولة في الوقت الفعلي.</span>
+            </div>
+            <div class="dev-feature-item">
+              <strong>📊 حسابات الأحمال وهبوط الجهد الفورية</strong>
+              <span>حساب تراكمي دقيق للأطوال، ومجموع قدرات المحولات، والتيار الفعلي، ونسب هبوط الجهد التراكمي وفقاً للكود الكهربائي المصري.</span>
+            </div>
+            <div class="dev-feature-item">
+              <strong>🏢 إدارة قطاعات وهندسات مصر الوسطى</strong>
+              <span>شجرة هيكلية لجميع قطاعات شركة مصر الوسطى (المنيا شمال/جنوب، بني سويف، الفيوم، أسيوط، الوادي الجديد) مع صلاحيات محكمة.</span>
+            </div>
+            <div class="dev-feature-item">
+              <strong>🎨 بيئة عرض متكيفة (داكنة / بيضاء)</strong>
+              <span>إمكانية التبديل بنقرة زر بين وضع الرسم الهندسي الداكن والخلفية البيضاء النقية المخصصة للمراجعة والطباعة.</span>
+            </div>
+            <div class="dev-feature-item">
+              <strong>📥 تقارير إكسيل وخرطوشة طباعة معتمدة</strong>
+              <span>توليد تقارير Excel تفصيلية كاملة بضغطة واحدة وطباعة الخرطوشة الهندسية الرسمية ببيانات المغذي والمهندس المصمم.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- بطاقة الحقوق والدعم -->
+        <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.3);border-radius:8px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+          <div style="font-size:12px;color:#93c5fd;">
+            💡 المنظومة مصممة بالكامل بواسطة المهندس مصطفى المغربي لدعم وتطوير منظومة العمل الكهربائي بشركة مصر الوسطى لتوزيع الكهرباء.
+          </div>
+          <div style="font-size:11.5px;color:#cbd5e1;font-weight:bold;">
+            جميع الحقوق محفوظة © ENG-MOSTAFAELMGHRABY
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/auth.js?v=5.0"></script>
+  <script src="/static/js/components.js?v=5.0"></script>
+  <script src="/static/js/simulation.js?v=5.0"></script>
+  <script src="/static/js/canvas.js?v=5.0"></script>
+  <script src="/static/js/app.js?v=5.0"></script>
+  <script src="/static/js/settings.js?v=5.0"></script>
+</body>
+</html>
+
