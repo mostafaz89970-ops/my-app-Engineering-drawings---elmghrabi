@@ -154,15 +154,18 @@ function handleNodeDrag(e) {
         newY = (relDy >= 0) ? Math.max(fromTerm.y + 35, currTargetY) : Math.min(fromTerm.y - 35, currTargetY);
         newDir = (relDy >= 0) ? "down" : "up";
       } else {
-        // سحب مائل حر تماماً لرسم رقم سبعة (٧) أو أي تفريعة مائلة بزاوية هندسية
-        isSlanted = true;
+        // سحب بزاوية: للخطوط الهوائية يسمح بالسحب المائل الحر (شكل ٧)، وللكابلات تظل الزاوية 90 درجة قائمة
+        const isIncomingCable = incomingSection && (incomingSection.type === "كابل" || (incomingSection.size && incomingSection.size.includes("*")) || dragNode.type === "kiosk" || incomingSection.corner_style);
+        if (!isIncomingCable) {
+          isSlanted = true;
+        }
         newX = currTargetX;
         newY = currTargetY;
 
-        // التقاط ذكي لزاوية 45 درجة متناظرة لرسم رقم سبعة (٧) بنظافة وأناقة فائقة
+        // التقاط ذكي لزاوية 45 درجة متناظرة لرسم رقم سبعة (٧) للخطوط الهوائية
         const absRelDx = Math.abs(relDx);
         const absRelDy = Math.abs(relDy);
-        if (Math.abs(absRelDx - absRelDy) < 14 && absRelDx > 25) {
+        if (!isIncomingCable && Math.abs(absRelDx - absRelDy) < 14 && absRelDx > 25) {
           const avgDist = (absRelDx + absRelDy) / 2;
           newX = fromTerm.x + (relDx >= 0 ? avgDist : -avgDist);
           newY = fromTerm.y + (relDy >= 0 ? avgDist : -avgDist);
@@ -175,7 +178,10 @@ function handleNodeDrag(e) {
       finalDy = newY - initDragPos.y;
 
       // تحديث اتجاه الخط والعنصر ليتطابق مع اتجاه السحب الجديد
-      if (incomingSection) incomingSection.direction = newDir;
+      if (incomingSection) {
+        incomingSection.direction = newDir;
+        incomingSection.is_slanted = isSlanted;
+      }
       if (dragNode.type === "switch") {
         dragNode.dir = newDir;
         dragNode.direction = (newDir === "left" || newDir === "right") ? "horizontal" : "vertical";
@@ -657,13 +663,45 @@ function handleSectionDblClick(e, secId) {
 function selectElement(type, id, label) {
   selectedElement = { type, id, label };
   renderNetwork();
+  updateSectionFloatingToolbar();
 }
 
 // إلغاء التحديد
 function clearSelection() {
   selectedElement = null;
   renderNetwork();
+  updateSectionFloatingToolbar();
 }
+
+// تحديث شريط التحكم السريع العائم لتوجيه زوايا الكابلات 90°
+function updateSectionFloatingToolbar() {
+  const toolbar = document.getElementById("section-floating-toolbar");
+  if (!toolbar) return;
+
+  if (!selectedElement || selectedElement.type !== "section" || !currentProject) {
+    toolbar.style.display = "none";
+    return;
+  }
+
+  const sec = (currentProject.sections || []).find(s => s.id === selectedElement.id);
+  if (!sec) {
+    toolbar.style.display = "none";
+    return;
+  }
+
+  const nameEl = document.getElementById("sec-tool-name");
+  const iconEl = document.getElementById("sec-tool-icon");
+  const isCable = (sec.type === "كابل" || (sec.size && sec.size.includes("*")));
+
+  if (iconEl) iconEl.textContent = isCable ? "🔌" : "⚡";
+  if (nameEl) {
+    const titleText = `${sec.type || 'خط'} ${sec.size || ''} (${sec.length || 0}م)`;
+    nameEl.textContent = titleText;
+  }
+
+  toolbar.style.display = "flex";
+}
+window.updateSectionFloatingToolbar = updateSectionFloatingToolbar;
 
 function renderNetwork() {
   if (!currentProject) return;
