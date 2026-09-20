@@ -166,7 +166,7 @@ const DEFAULT_FALLBACK_USERS = [
     role: "admin",
     sector: "المنيا شمال",
     administration: "بني مزار شرق",
-    password_plain: "1234500",
+    password_plain: "123450",
     is_active: true,
     permissions: ["all", "edit_network", "export", "settings", "manage_users"]
   },
