@@ -33,17 +33,30 @@ function closeSettingsPanel() {
 async function loadSettings() {
   try {
     const res = await fetch('/api/settings');
-    const data = await res.json();
-    if (data.success) {
-      appSettings = data;
-      if (data.system_info && data.system_info.app_name && window.updateAppBranding) {
-        window.updateAppBranding(data.system_info.app_name);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        appSettings = data;
+        try { localStorage.setItem("sld_settings", JSON.stringify(data)); } catch(_) {}
+        if (data.system_info && data.system_info.app_name && window.updateAppBranding) {
+          window.updateAppBranding(data.system_info.app_name);
+        }
+        populateDropdownsFromSettings(data.dropdowns);
+        return data;
       }
-      populateDropdownsFromSettings(data.dropdowns);
-      return data;
     }
   } catch (e) {
-    console.error('Error loading settings:', e);
+    console.warn('Backend settings offline, falling back to local cache:', e);
+  }
+  const saved = localStorage.getItem("sld_settings");
+  if (saved) {
+    try {
+      appSettings = JSON.parse(saved);
+      if (appSettings && appSettings.dropdowns) {
+        populateDropdownsFromSettings(appSettings.dropdowns);
+      }
+      return appSettings;
+    } catch (_) {}
   }
   return null;
 }
