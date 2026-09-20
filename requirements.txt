@@ -1,0 +1,5 @@
+bottle>=0.12.25
+python-pptx>=0.6.21
+openpyxl>=3.1.2
+pillow>=10.0.0
+ezdxf>=1.1.0

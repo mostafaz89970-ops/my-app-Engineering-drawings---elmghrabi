@@ -1,20 +1,67 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# استوديو تصميم الرسومات الهندسية والدوائر الكهربائية الأحادية (Electrical SLD Studio)
+### شركة مصر الوسطى لتوزيع الكهرباء (Middle Egypt Electricity Distribution Company)
+**إعداد وتطوير: المهندس / مصطفى المغربي (ENG-MOSTAFAELMGHRBI)**
 
-# Run and deploy your AI Studio app
+---
 
-This contains everything you need to run your app locally.
+## ⚡ نبذة عن المشروع (Project Overview)
+منظومة هندسية متكاملة لرسم ومحاكاة وتحليل شبكات الجهد المتوسط والمنخفض والمخططات الأحادية (Single-Line Diagrams - SLD) مع تصدير ذكي للعروض التقديمية (PowerPoint)، وتقارير Excel، ومخططات AutoCAD DXF، وحصر الكميات الفنية (BOM).
 
-View your app in AI Studio: https://ai.studio/apps/drive/1j9dYwAYtojvNTM7VKDN4g4euNiAJCREU
+---
 
-## Run Locally
+## ✨ المميزات الرئيسية (Key Features)
 
-**Prerequisites:**  Node.js
+1. **محرر رسومي تفاعلي متقدم (Interactive SLD Canvas)**:
+   - رسم وتوصيل المحولات (Transformers)، القواطع (Circuit Breakers)، السكاكين (Disconnectors)، المولدات، والمغذيات بالسحب والإفلات.
+   - دعم التكبير، التصغير، والتحريك السلس (Pan & Zoom) وشبكة المحاذاة المغناطيسية (Snap to Grid).
 
+2. **تصدير PowerPoint احترافي فائق الدقة (Smart PowerPoint Export)**:
+   - **تطابق هندسي 1:1**: رسم الرموز الهندسية والخطوط المتقطعة ونقاط التوصيل كعناصر متجهة (Vector Shapes) قابلة للفك والتعديل الحر داخل Microsoft PowerPoint.
+   - **الاحتواء التلقائي الذكي (Auto-Fit & Containment)**: ضبط أبعاد وهوامش الرسم تلقائياً ليتناسب مع أبعاد الشريحة (16:9 Widescreen) دون أي تداخل أو خروج عن حدود الصفحة.
+   - **نظام الحماية بكلمة مرور**: حماية العرض التقديمي بكلمة مرور مشفرة عند التعديل، مع ظهور لافتة رسمية منبثقة تحمل اسم شركة مصر الوسطى لتوزيع الكهرباء والمهندس مصطفى المغربي.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+3. **حسابات هندسية آلية (Automated Engineering Analytics)**:
+   - حساب الأحمال الكهربائية الكلية (Total Load Calculation - kVA & A).
+   - توزيع الأحمال ومراقبة نسب التحميل على المحولات والقواطع.
+   - تدقيق اتساق الشبكة واكتشاف الأخطاء والتكرارات آلياً.
+
+4. **إدارة المشاريع والصلاحيات (Project & Access Management)**:
+   - حفظ واسترجاع المشاريع بصيغة .sld.
+   - إدارة المستخدمين وتعدد الصلاحيات (Admin, Engineer, Viewer).
+   - سجل نشاط كامل (Activity Log) لجميع العمليات.
+
+---
+
+## 🚀 متطلبات وتشغيل المشروع (Installation & Quick Start)
+
+### المتطلبات (Prerequisites)
+- تثبيت [Python 3.10+](https://www.python.org/downloads/)
+- أي متصفح حديث (Chrome, Edge, Firefox)
+
+### التثبيت والتشغيل السريع (One-Click Launch)
+1. **تثبيت المكتبات المطلوبة**:
+   `ash
+   pip install -r requirements.txt
+   `
+2. **التشغيل المباشر**:
+   - قم بالضغط المزدوج على ملف:
+     `
+     تشغيل_استوديو_الرسومات_الهندسية.bat
+     `
+   - أو عبر سطر الأوامر:
+     `ash
+     python electrical_sld_studio/app.py
+     `
+3. افتح المتصفح على الرابط:
+   `
+   http://localhost:7890
+   `
+
+---
+
+## 🔒 معلومات الحماية والتعديل الافتراضية
+- **رقم المنفذ الافتراضي**: 7890
+- **كلمة مرور تعديل ملفات الباوربوينت المصدرة**: 1234500
+
+---
+**حقوق الطبع والتطوير محفوظة © المهندس مصطفى المغربي (ENG-MOSTAFAELMGHRBI) - شركة مصر الوسطى لتوزيع الكهرباء**

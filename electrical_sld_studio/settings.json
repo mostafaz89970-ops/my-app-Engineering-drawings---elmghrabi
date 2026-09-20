@@ -1,0 +1,324 @@
+{
+  "system_info": {
+    "app_name": "هندسة كهرباء بني مزار",
+    "sub_title": "النظام الهندسي الذكي لمخططات شبكات التوزيع"
+  },
+  "sectors": {
+    "المنيا شمال": [
+      "بني مزار شرق",
+      "بني مزار غرب",
+      "مغاغة",
+      "العدوة",
+      "مطاي",
+      "سمالوط شرق",
+      "سمالوط غرب"
+    ],
+    "المنيا جنوب": [
+      "المنيا شرق",
+      "المنيا غرب",
+      "أبو قرقاص",
+      "ملوي",
+      "ديرمواس"
+    ],
+    "بني سويف": [
+      "مدينة بني سويف",
+      "مركز بني سويف",
+      "ناصر",
+      "ببا",
+      "الفشن",
+      "إهناسيا",
+      "الواسطى",
+      "سمسطا"
+    ],
+    "الفيوم": [
+      "شرق الفيوم",
+      "غرب الفيوم",
+      "مركز الفيوم",
+      "إطسا",
+      "طامية",
+      "سنورس",
+      "يوسف الصديق",
+      "إبشواي"
+    ],
+    "أسيوط": [
+      "شرق أسيوط",
+      "غرب أسيوط",
+      "مركز أسيوط",
+      "ديروط",
+      "القوصية",
+      "منفلوط",
+      "أبنوب",
+      "الفتح",
+      "صدفا",
+      "الغنايم",
+      "البداري",
+      "ساحل سليم"
+    ],
+    "الوادي الجديد": [
+      "الخارجة",
+      "الداخلة",
+      "الفرافرة",
+      "باريس",
+      "بلاط"
+    ]
+  },
+  "dropdowns": {
+    "overhead_sizes": [
+      {
+        "value": "70/12",
+        "label": "70/12"
+      },
+      {
+        "value": "150/25",
+        "label": "150/25"
+      },
+      {
+        "value": "سبيكة",
+        "label": "سبيكة 240 "
+      },
+      {
+        "value": "35/6",
+        "label": "35/6"
+      }
+    ],
+    "cable_sizes": [
+      {
+        "value": "3*150",
+        "label": "3*150 مم²"
+      },
+      {
+        "value": "3*240",
+        "label": "3*240 مم²"
+      },
+      {
+        "value": "3*70",
+        "label": "3*70 مم²"
+      },
+      {
+        "value": "150/25",
+        "label": "150/25"
+      },
+      {
+        "value": "70/12",
+        "label": "70/12"
+      },
+      {
+        "value": "35/6",
+        "label": "35/6"
+      }
+    ],
+    "transformer_capacities": [
+      {
+        "value": "25",
+        "label": "25 KVA"
+      },
+      {
+        "value": "50",
+        "label": "50 KVA"
+      },
+      {
+        "value": "63",
+        "label": "63 KVA"
+      },
+      {
+        "value": "100",
+        "label": "100 KVA"
+      },
+      {
+        "value": "160",
+        "label": "160 KVA"
+      },
+      {
+        "value": "200",
+        "label": "200 KVA"
+      },
+      {
+        "value": "300",
+        "label": "300 KVA"
+      },
+      {
+        "value": "500",
+        "label": "500 KVA"
+      },
+      {
+        "value": "1000",
+        "label": "1000 KVA"
+      },
+      {
+        "value": "1250",
+        "label": "1250 KVA"
+      },
+      {
+        "value": "1600",
+        "label": "1600 KVA"
+      }
+    ],
+    "voltage_levels": [
+      {
+        "value": "11",
+        "label": "11 ك.ف"
+      },
+      {
+        "value": "22",
+        "label": "22 ك.ف"
+      },
+      {
+        "value": "33",
+        "label": "33 ك.ف"
+      },
+      {
+        "value": "66",
+        "label": "66 ك.ف"
+      }
+    ],
+    "substation_types": [
+      {
+        "value": "substation",
+        "label": "محطة محولات (3 دوائر مثلثة متداخلة)"
+      },
+      {
+        "value": "board",
+        "label": "لوحة توزيع (إطار توزيع مزدوج)"
+      }
+    ],
+    "rmu_switch_counts": [
+      {
+        "value": "2",
+        "label": "2 سكينة"
+      },
+      {
+        "value": "3",
+        "label": "3 سكاكين"
+      },
+      {
+        "value": "4",
+        "label": "4 سكاكين"
+      }
+    ]
+  },
+  "users": {
+    "admin": {
+      "id": "admin",
+      "name": "المدير العام (Administrator)",
+      "role": "admin",
+      "sector": "المنيا شمال",
+      "administration": "بني مزار شرق",
+      "password_plain": "123450",
+      "password_hash": "eb76e2254ff1cb43115299491e1906fbf39921b384b983cf529ebe674d9915c1",
+      "permissions": [
+        "all",
+        "edit_network",
+        "export",
+        "settings",
+        "manage_users"
+      ]
+    },
+    "planning_eng": {
+      "id": "planning_eng",
+      "name": "مهندس تخطيط وشبكات",
+      "role": "engineer",
+      "sector": "المنيا شمال",
+      "administration": "بني مزار غرب",
+      "password_plain": "123456",
+      "password_hash": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+      "permissions": [
+        "btn_projects",
+        "btn_save",
+        "btn_print",
+        "btn_excel",
+        "btn_cable",
+        "btn_overhead",
+        "btn_line_between",
+        "btn_quick_line",
+        "btn_substation",
+        "btn_switch",
+        "btn_trans",
+        "btn_cascade_trans",
+        "btn_kiosk",
+        "btn_kiosk_from_kiosk",
+        "btn_rmu",
+        "btn_avr",
+        "btn_undo"
+      ]
+    },
+    "operation_eng": {
+      "id": "operation_eng",
+      "name": "مهندس تشغيل ومناورات",
+      "role": "operator",
+      "sector": "المنيا شمال",
+      "administration": "مغاغة",
+      "password_plain": "123456",
+      "password_hash": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+      "permissions": [
+        "btn_projects",
+        "btn_save",
+        "btn_print",
+        "btn_excel",
+        "btn_settings",
+        "btn_cable",
+        "btn_overhead",
+        "btn_line_between",
+        "btn_quick_line"
+      ]
+    },
+    "technician": {
+      "id": "technician",
+      "name": "فني شبكات وتوزيع",
+      "role": "tech",
+      "sector": "المنيا شمال",
+      "administration": "العدوة",
+      "password_plain": "123456",
+      "password_hash": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+      "permissions": [
+        "btn_projects",
+        "btn_save",
+        "btn_print",
+        "btn_excel",
+        "btn_cable",
+        "btn_overhead",
+        "btn_line_between",
+        "btn_quick_line",
+        "btn_substation",
+        "btn_switch",
+        "btn_trans",
+        "btn_cascade_trans",
+        "btn_kiosk",
+        "btn_kiosk_from_kiosk",
+        "btn_rmu",
+        "btn_avr"
+      ],
+      "is_active": true
+    },
+    "eng-Wlaa Ahmade": {
+      "id": "eng-Wlaa Ahmade",
+      "name": "eng-Wlaa Ahmade",
+      "role": "engineer",
+      "sector": "المنيا شمال",
+      "administration": "بني مزار شرق",
+      "password_plain": "123456",
+      "password_hash": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+      "permissions": [
+        "btn_projects",
+        "btn_save",
+        "btn_print",
+        "btn_excel",
+        "btn_cable",
+        "btn_overhead",
+        "btn_line_between",
+        "btn_quick_line",
+        "btn_substation",
+        "btn_switch",
+        "btn_trans",
+        "btn_cascade_trans",
+        "btn_kiosk",
+        "btn_kiosk_from_kiosk",
+        "btn_rmu",
+        "btn_avr",
+        "btn_simulation",
+        "btn_calculations",
+        "btn_undo",
+        "btn_delete"
+      ]
+    }
+  }
+}

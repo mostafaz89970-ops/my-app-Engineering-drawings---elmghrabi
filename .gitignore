@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Temporary and test export files
+*.pptx
+*.xlsx
+test_*.pptx
+downloaded_test.pptx
+final_protected_test.pptx
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# Clinic files (separate project)
+clinic.ico
+clinic_app/
+النسخة_المحمولة_للفلاشة/
+تشغيل_العيادة_مباشر.bat
