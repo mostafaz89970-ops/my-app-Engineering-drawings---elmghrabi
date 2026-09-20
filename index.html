@@ -147,8 +147,21 @@
           </div>
         </div>
 
-        <!-- قسم المستخدم والإعدادات (ثابت ومحمي دائماً لمنع أي اختفاء عند تكبير الشاشة) -->
+        <!-- قسم المستخدم والإعدادات واتجاه الرسم (ثابت ومحمي دائماً لمنع أي اختفاء عند تكبير الشاشة) -->
         <div class="header-user-section">
+          <!-- زري اتجاه مسار الرسم لتوفير المساحة في شريط الأدوات السفلي -->
+          <div class="header-dir-group" id="cad-group-drawing-dir" style="display:flex;align-items:center;gap:4px;">
+            <button id="btn-toggle-drawing-dir" class="btn-sys cad-btn-dir" onclick="toggleDrawingDirection()" title="التبديل بين اتجاه تدفق الرسم: من أعلى لأسفل (⬇️) أو من أسفل لأعلى (⬆️)">
+              <span id="drawing-dir-icon">⬇️</span>
+              <span id="drawing-dir-label">من أعلى لأسفل</span>
+            </button>
+            <button id="btn-flip-vertical" class="btn-sys" onclick="flipDrawingVerticalLayout()" title="عكس اتجاه الرسم والمخطط بالكامل رأساً على عقب (قلب المسار)">
+              <span>🔃 عكس المخطط</span>
+            </button>
+          </div>
+
+          <div class="header-user-sep" style="width:1px;height:20px;background:rgba(255,255,255,0.15);margin:0 4px;"></div>
+
           <button id="btn-settings" class="btn-sys btn-sys-settings" data-perm="btn_settings" onclick="openSettingsPanel()" title="إعدادات النظام — إدارة المستخدمين والقوائم والنشاط" style="display:none;">
             <span>⚙️ الإعدادات</span>
           </button>
@@ -215,20 +228,6 @@
           </button>
           <button class="cad-tool-btn" data-perm="btn_switch" onclick="quickAddSwitchPrompt()" title="إضافة سكينة هوائية مفصلية">
             <span>⚡ سكينة</span>
-          </button>
-        </div>
-
-        <div class="cad-ribbon-sep"></div>
-
-        <!-- مجموعة اتجاه مسار الرسم (تحكم كامل: من أسفل لأعلى ⬆️ / من أعلى لأسفل ⬇️) -->
-        <div class="cad-group" id="cad-group-drawing-dir">
-          <span class="cad-group-tag">اتجاه الرسم</span>
-          <button id="btn-toggle-drawing-dir" class="cad-tool-btn cad-btn-dir" onclick="toggleDrawingDirection()" title="التبديل بين اتجاه تدفق الرسم: من أعلى لأسفل (⬇️) أو من أسفل لأعلى (⬆️)">
-            <span id="drawing-dir-icon">⬇️</span>
-            <span id="drawing-dir-label">من أعلى لأسفل</span>
-          </button>
-          <button id="btn-flip-vertical" class="cad-tool-btn" onclick="flipDrawingVerticalLayout()" title="عكس اتجاه الرسم والمخطط بالكامل رأساً على عقب (قلب المسار)">
-            <span>🔃 عكس المخطط</span>
           </button>
         </div>
       </div>
@@ -2063,13 +2062,13 @@
   </div>
 
   <script src="js/jszip.min.js"></script>
-  <script src="js/default_projects.js?v=5.3"></script>
-  <script src="js/auth.js?v=5.3"></script>
-  <script src="js/components.js?v=5.3"></script>
-  <script src="js/simulation.js?v=5.3"></script>
-  <script src="js/canvas.js?v=5.3"></script>
-  <script src="js/app.js?v=5.3"></script>
-  <script src="js/settings.js?v=5.3"></script>
+  <script src="js/default_projects.js?v=5.5"></script>
+  <script src="js/auth.js?v=5.5"></script>
+  <script src="js/components.js?v=5.5"></script>
+  <script src="js/simulation.js?v=5.5"></script>
+  <script src="js/canvas.js?v=5.5"></script>
+  <script src="js/app.js?v=5.5"></script>
+  <script src="js/settings.js?v=5.5"></script>
   <script src="js/gun.min.js"></script>
   <script src="js/realtime_sync.js?v=2.0"></script>
 </body>

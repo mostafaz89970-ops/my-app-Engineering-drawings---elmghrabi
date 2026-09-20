@@ -425,6 +425,7 @@ async function saveDropdownSettings() {
   _saveSettingsLocally(appSettings);
   populateDropdownsFromSettings(appSettings.dropdowns);
   showToast('✅ تم حفظ إعدادات القوائم بنجاح!', 'success');
+  logActivity('change_settings', 'تعديل وحفظ إعدادات القوائم المنسدلة');
 
   try {
     const res = await fetch('/api/settings/dropdowns', {
@@ -1002,6 +1003,7 @@ async function submitUserForm() {
   }
 
   showToast('✅ ' + (isEdit ? 'تم تحديث بيانات وصلاحيات المستخدم بنجاح' : 'تم إضافة المستخدم الجديد بنجاح'), 'success');
+  logActivity(isEdit ? 'edit_user' : 'add_user', (isEdit ? 'تعديل بيانات المستخدم: ' : 'إضافة مستخدم جديد: ') + name + ' (' + targetUserId + ')');
   closeUserForm();
 
   // 2. محاولة المزامنة مع الخادم في الخلفية إن كان متصلاً
@@ -1052,6 +1054,7 @@ async function deleteUserConfirm(userId, userName) {
   renderUsersTab();
   await _refreshLoginUserList();
   showToast('✅ تم حذف المستخدم بنجاح', 'success');
+  logActivity('delete_user', 'حذف المستخدم: ' + userName + ' (' + userId + ')');
 
   try {
     const res = await fetch('/api/users/delete', {
@@ -1206,6 +1209,7 @@ async function saveSectorsSettings() {
   }
 
   showToast("✅ تم حفظ وتحديث جميع القطاعات والإدارات بنجاح!", "success");
+  logActivity("change_settings", "تحديث وحفظ بيانات القطاعات والإدارات");
   renderSectorsTab();
 
   try {
@@ -1230,16 +1234,92 @@ async function saveSectorsSettings() {
 // ─── Tab 3: Activity Log ───────────────────────────────────────────────────────
 let activityData = [];
 
+const ACTIVITY_ACTION_LABELS = {
+  "login": "تسجيل دخول",
+  "logout": "تسجيل خروج",
+  "add_node": "إضافة معدة/محطة",
+  "edit_node": "تعديل معدة",
+  "delete_node": "حذف معدة",
+  "add_section": "رسم خط/كابل",
+  "delete_section": "حذف خط",
+  "save_project": "حفظ مشروع",
+  "load_project": "فتح مشروع",
+  "delete_project": "حذف مشروع",
+  "export_excel": "تصدير Excel",
+  "export_powerpoint": "تصدير PowerPoint",
+  "add_user": "إضافة مستخدم",
+  "edit_user": "تعديل مستخدم",
+  "delete_user": "حذف مستخدم",
+  "change_password": "تغيير كلمة المرور",
+  "change_settings": "تعديل الإعدادات"
+};
+
 async function renderActivityTab() {
   await loadActivityLog();
 }
 
 async function loadActivityLog() {
-  const userFilter   = document.getElementById('log-filter-user')?.value   || '';
+  const userFilter   = (document.getElementById('log-filter-user')?.value || '').trim().toLowerCase();
   const actionFilter = document.getElementById('log-filter-action')?.value || '';
   const dateFrom     = document.getElementById('log-filter-from')?.value   || '';
   const dateTo       = document.getElementById('log-filter-to')?.value     || '';
 
+  // 1. أولاً: قراءة السجلات المحلية من localStorage (Offline-first فوري)
+  let localLogs = [];
+  try {
+    const raw = localStorage.getItem('sld_activity_log');
+    if (raw) {
+      localLogs = JSON.parse(raw);
+    }
+  } catch(e) {
+    console.warn('Error reading local activity log:', e);
+  }
+
+  // إذا كان السجل فارغاً تماماً، نهيئ سجل أولي بتسجيل دخول المستخدم الحالي
+  if (!localLogs || localLogs.length === 0) {
+    const u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : (window.currentUser || { id: 'admin', name: 'المدير العام' });
+    const now = new Date();
+    localLogs = [
+      {
+        id: 'act_' + Date.now(),
+        date: now.toISOString().slice(0, 10),
+        time: now.toTimeString().slice(0, 8),
+        user_id: u.id || 'admin',
+        user_name: u.name || 'المدير العام',
+        action: 'login',
+        action_label: 'تسجيل دخول',
+        details: 'بدء الجلسة في المنظومة الهندسية السحابية'
+      }
+    ];
+    try {
+      localStorage.setItem('sld_activity_log', JSON.stringify(localLogs));
+    } catch(e) {}
+  }
+
+  // تصفية السجلات حسب الفلاتر المطلوبة
+  let filtered = [...localLogs];
+  if (userFilter) {
+    filtered = filtered.filter(e =>
+      (e.user_id && e.user_id.toLowerCase().includes(userFilter)) ||
+      (e.user_name && e.user_name.toLowerCase().includes(userFilter))
+    );
+  }
+  if (actionFilter) {
+    filtered = filtered.filter(e => e.action === actionFilter);
+  }
+  if (dateFrom) {
+    filtered = filtered.filter(e => e.date >= dateFrom);
+  }
+  if (dateTo) {
+    filtered = filtered.filter(e => e.date <= dateTo);
+  }
+
+  activityData = filtered;
+  _renderActivityTable(filtered);
+  _renderActivityStats({ total: filtered.length });
+  _fillActionFilterOptions(ACTIVITY_ACTION_LABELS);
+
+  // 2. محاولة جلب السجلات من الخادم والمزامنة في الخلفية إن كان متصلاً
   let url = `/api/activity-log?limit=500`;
   if (userFilter)   url += `&user=${encodeURIComponent(userFilter)}`;
   if (actionFilter) url += `&action=${encodeURIComponent(actionFilter)}`;
@@ -1248,15 +1328,17 @@ async function loadActivityLog() {
 
   try {
     const res = await fetch(url);
-    const data = await res.json();
-    if (data.success) {
-      activityData = data.entries;
-      _renderActivityTable(data.entries);
-      _renderActivityStats(data.stats);
-      _fillActionFilterOptions(data.action_labels);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success && Array.isArray(data.entries) && data.entries.length > 0) {
+        activityData = data.entries;
+        _renderActivityTable(data.entries);
+        _renderActivityStats(data.stats || { total: data.entries.length });
+        if (data.action_labels) _fillActionFilterOptions(data.action_labels);
+      }
     }
   } catch (e) {
-    console.error('Error loading activity log:', e);
+    // يعمل محلياً من التخزين المحلي دون انقطاع
   }
 }
 
@@ -1265,15 +1347,15 @@ function _renderActivityTable(entries) {
   if (!tbody) return;
 
   if (!entries || entries.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="empty-msg">لا توجد سجلات نشاط</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-msg">لا توجد سجلات نشاط مطابقة</td></tr>';
     return;
   }
 
   tbody.innerHTML = entries.map(e => `
     <tr>
       <td class="log-date">${e.date}<br><small>${e.time}</small></td>
-      <td>${e.user_name}<br><small style="color:#718096">${e.user_id}</small></td>
-      <td><span class="action-badge action-${e.action}">${e.action_label}</span></td>
+      <td>${e.user_name || e.user_id}<br><small style="color:#718096">${e.user_id}</small></td>
+      <td><span class="action-badge action-${e.action}">${e.action_label || e.action}</span></td>
       <td class="log-details">${e.details || '—'}</td>
     </tr>
   `).join('');
@@ -1299,16 +1381,21 @@ function _fillActionFilterOptions(actionLabels) {
 async function clearActivityLog() {
   if (!confirm('هل تريد مسح سجل النشاط كاملاً؟\nهذا الإجراء لا يمكن التراجع عنه.')) return;
   try {
-    const res = await fetch('/api/activity-log/clear', {
+    localStorage.removeItem('sld_activity_log');
+  } catch(e) {}
+
+  activityData = [];
+  _renderActivityTable([]);
+  _renderActivityStats({ total: 0 });
+  if (window.showToast) showToast('✅ تم مسح سجل النشاط بنجاح', 'success');
+
+  try {
+    fetch('/api/activity-log/clear', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ admin: currentUser })
-    });
-    const data = await res.json();
-    showToast(data.success ? '✅ تم مسح السجل' : '❌ ' + data.message,
-              data.success ? 'success' : 'error');
-    if (data.success) loadActivityLog();
-  } catch (e) { showToast('❌ خطأ في الاتصال', 'error'); }
+      body: JSON.stringify({ admin: currentUser || window.currentUser })
+    }).catch(() => {});
+  } catch (e) { /* silent fail */ }
 }
 
 function exportActivityLogCSV() {
@@ -1325,20 +1412,49 @@ function exportActivityLogCSV() {
   link.click();
 }
 
-// ─── Public: Log Activity (يُستدعى من app.js) ────────────────────────────────
+// ─── Public: Log Activity (Offline-first مع دعم التخزين المحلي والمزامنة) ──
 async function logActivity(action, details = '') {
-  if (!currentUser) return;
+  const u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : (window.currentUser || null);
+  if (!u) return;
+
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10);
+  const timeStr = now.toTimeString().slice(0, 8);
+
+  const entry = {
+    id: 'act_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+    date: dateStr,
+    time: timeStr,
+    user_id: u.id || 'unknown',
+    user_name: u.name || 'مستخدم',
+    action: action,
+    action_label: ACTIVITY_ACTION_LABELS[action] || action,
+    details: details || ''
+  };
+
   try {
-    await fetch('/api/activity-log/add', {
+    let localLogs = [];
+    const raw = localStorage.getItem('sld_activity_log');
+    if (raw) localLogs = JSON.parse(raw);
+    localLogs.unshift(entry);
+    if (localLogs.length > 500) localLogs = localLogs.slice(0, 500);
+    localStorage.setItem('sld_activity_log', JSON.stringify(localLogs));
+  } catch(e) {
+    console.warn('Error saving activity log locally:', e);
+  }
+
+  // محاولة الإرسال للخادم في الخلفية
+  try {
+    fetch('/api/activity-log/add', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        user_id:   currentUser.id,
-        user_name: currentUser.name,
+        user_id:   u.id,
+        user_name: u.name,
         action,
         details
       })
-    });
+    }).catch(() => {});
   } catch (e) { /* silent fail */ }
 }
 
