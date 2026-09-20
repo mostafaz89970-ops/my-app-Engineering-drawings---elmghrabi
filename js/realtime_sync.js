@@ -120,6 +120,21 @@
         console.error('Error applying remote sync update:', err);
       }
     });
+
+    // الاستماع لحالة وضع الصيانة اللحظية لجميع الأجهزة
+    roomNode.get('system_maintenance_mode').on(function (val) {
+      if (val === null || val === undefined) return;
+      var isActive = (val === true || val === 'true');
+      var localActive = (localStorage.getItem('sld_maintenance_mode') === 'true');
+      if (isActive !== localActive) {
+        localStorage.setItem('sld_maintenance_mode', isActive ? 'true' : 'false');
+        if (window.checkMaintenanceState) window.checkMaintenanceState();
+        if (window.updateMaintenanceBtnUI) window.updateMaintenanceBtnUI();
+        if (window.showToast) {
+          window.showToast(isActive ? '🚨 دخلت المنظومة في وضع الصيانة والتحديث الآن' : '✅ تم إنهاء وضع الصيانة وفتح المنظومة لجميع المستخدمين', isActive ? 'warning' : 'info');
+        }
+      }
+    });
   }
 
   // بث التحديثات لجميع الأجهزة عند إجراء أي تعديل
@@ -256,8 +271,20 @@
     if (window.showToast) window.showToast('📡 تم إرسال المخطط الحالي قسرياً لجميع الأجهزة المتصلة بنجاح!', 'success');
   }
 
+  function broadcastMaintenanceState(isActive) {
+    if (!gunInstance) return;
+    try {
+      var roomNode = gunInstance.get(currentRoom);
+      roomNode.get('system_maintenance_mode').put(isActive ? 'true' : 'false');
+      console.log('📡 تم بث حالة وضع الصيانة لجميع الأجهزة سحابياً:', isActive);
+    } catch (e) {
+      console.warn('Error broadcasting maintenance state:', e);
+    }
+  }
+
   // تصدير الواجهات
   window.broadcastProjectUpdate = broadcastLocalChange;
+  window.broadcastMaintenanceState = broadcastMaintenanceState;
   window.openSyncModal = openSyncModal;
   window.closeSyncModal = closeSyncModal;
   window.changeSyncRoom = changeSyncRoom;

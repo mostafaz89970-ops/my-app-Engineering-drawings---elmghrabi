@@ -162,13 +162,14 @@ function filterLoginUsers() {
 const DEFAULT_FALLBACK_USERS = [
   {
     id: "admin",
-    name: "المدير العام (م/ مصطفى المغربي)",
+    name: "المدير العام والمطور (م/ مصطفى المغربي)",
     role: "admin",
     sector: "المنيا شمال",
     administration: "بني مزار شرق",
     password_plain: "123450",
     is_active: true,
-    permissions: ["all", "edit_network", "export", "settings", "manage_users"]
+    is_developer: true,
+    permissions: ["all", "developer", "edit_network", "export", "settings", "manage_users"]
   },
   {
     id: "planning_eng",
@@ -335,6 +336,22 @@ async function handleLogin(e) {
   }
 
   // نجاح تسجيل الدخول
+  // فحص وضع الصيانة وقفل المنظومة لغير المطور
+  if (isMaintenanceModeActive() && !isDeveloperUser(loggedInUser)) {
+    const errorDiv = document.getElementById("login-error");
+    if (errorDiv) {
+      errorDiv.textContent = "⛔ عذراً، المنظومة في وضع الصيانة والتحديث حالياً بواسطة المهندس المطور. الدخول مقصور على المطور فقط.";
+      errorDiv.style.display = "block";
+      errorDiv.style.color = "#f87171";
+    }
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = "<span>تسجيل الدخول الآمن</span> <span class=\"arrow-icon\">➔</span>";
+    }
+    checkMaintenanceState();
+    return;
+  }
+
   currentUser = loggedInUser;
   window.currentUser = currentUser;
   sessionToken = token || "token_session_" + Date.now();
@@ -475,10 +492,19 @@ function handleLogout() {
     const btn = document.getElementById("btn-settings");
     if (btn) btn.style.display = "none";
 
+    // إخفاء زر الصيانة تماماً عند الخروج
+    const btnMaint = document.getElementById("btn-maintenance-mode");
+    if (btnMaint) btnMaint.style.setProperty("display", "none", "important");
+    const maintBanner = document.getElementById("maintenance-active-banner");
+    if (maintBanner) maintBanner.style.display = "none";
+
     // إعادة تحديث قائمة المستخدمين في نافذة تسجيل الدخول
     if (window.loadInitialUsers) {
       window.loadInitialUsers();
     }
+
+    // فحص وتطبيق حالة شاشة الصيانة
+    checkMaintenanceState();
   }
 }
 
@@ -525,6 +551,19 @@ function applyUserPermissions() {
   if (btnSettings) {
     btnSettings.style.display = (hasPermission("btn_settings") || hasPermission("settings")) ? "" : "none";
   }
+
+  // زر وضع الصيانة (يظهر للمطور فقط حصراً — مخفي تماماً عن باقي المستخدمين)
+  const btnMaint = document.getElementById("btn-maintenance-mode");
+  if (btnMaint) {
+    if (isDeveloperUser()) {
+      btnMaint.style.setProperty("display", "inline-flex", "important");
+      updateMaintenanceBtnUI();
+    } else {
+      btnMaint.style.setProperty("display", "none", "important");
+    }
+  }
+
+  checkMaintenanceState();
 }
 
 function updateDesignerName(name) {
@@ -646,10 +685,165 @@ window.addEventListener("DOMContentLoaded", async () => {
       }
     }
   }
+
+  // فحص وضع الصيانة عند بدء تحميل الصفحة
+  checkMaintenanceState();
+  updateMaintenanceBtnUI();
 });
 
 function onLoginUserChange() {
   // الاختيار هرمي: القطاع -> الإدارة -> المستخدم
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// وضع الصيانة الحصري للمطور (Developer Maintenance Mode Logic)
+// ════════════════════════════════════════════════════════════════════════════
+
+function isDeveloperUser(user = (currentUser || window.currentUser)) {
+  if (!user) return false;
+  return user.id === "admin" ||
+         user.is_developer === true ||
+         user.role === "developer" ||
+         user.role === "dev" ||
+         (Array.isArray(user.permissions) && user.permissions.includes("developer"));
+}
+
+function isMaintenanceModeActive() {
+  return localStorage.getItem("sld_maintenance_mode") === "true";
+}
+
+function updateMaintenanceBtnUI() {
+  const btn = document.getElementById("btn-maintenance-mode");
+  const icon = document.getElementById("maint-btn-icon");
+  const label = document.getElementById("maint-btn-label");
+  const banner = document.getElementById("maintenance-active-banner");
+  const isMaint = isMaintenanceModeActive();
+  const isDev = isDeveloperUser();
+
+  if (btn) {
+    if (isDev) {
+      btn.style.setProperty("display", "inline-flex", "important");
+      if (isMaint) {
+        btn.classList.add("maint-active");
+        if (icon) icon.textContent = "🚨";
+        if (label) label.textContent = "الصيانة: مفعلة 🔴";
+        btn.title = "وضع الصيانة مفعّل حالياً! انقر لإلغاء القفل وفتح المنظومة لجميع المستخدمين";
+      } else {
+        btn.classList.remove("maint-active");
+        if (icon) icon.textContent = "🛠️";
+        if (label) label.textContent = "وضع الصيانة";
+        btn.title = "تفعيل وضع الصيانة وقفل المنظومة على باقي المستخدمين (للمطور فقط)";
+      }
+    } else {
+      btn.style.setProperty("display", "none", "important");
+    }
+  }
+
+  if (banner) {
+    banner.style.display = (isMaint && isDev) ? "flex" : "none";
+  }
+
+  const devModalBtn = document.getElementById("dev-modal-maint-btn");
+  if (devModalBtn) {
+    devModalBtn.innerHTML = isMaint
+      ? "<span>🚨 إلغاء وضع الصيانة (المنظومة مقفلة حالياً)</span>"
+      : "<span>🛠️ تفعيل وضع الصيانة (قفل المنظومة للمطور فقط)</span>";
+    devModalBtn.style.background = isMaint ? "rgba(239, 68, 68, 0.25)" : "rgba(245, 158, 11, 0.25)";
+    devModalBtn.style.borderColor = isMaint ? "#ef4444" : "#f59e0b";
+    devModalBtn.style.color = isMaint ? "#fca5a5" : "#fcd34d";
+  }
+}
+
+function checkMaintenanceState() {
+  const isMaint = isMaintenanceModeActive();
+  const overlay = document.getElementById("maintenance-lock-overlay");
+  const banner = document.getElementById("maintenance-active-banner");
+  const isDev = isDeveloperUser();
+
+  if (!isMaint) {
+    if (overlay) overlay.style.display = "none";
+    if (banner) banner.style.display = "none";
+    return;
+  }
+
+  // وضع الصيانة نشط
+  if (isDev) {
+    // المطور مسموح له بالدخول والعمل بحرية كاملة ويرى بانر التنبيه
+    if (overlay) overlay.style.display = "none";
+    if (banner) banner.style.display = "flex";
+  } else {
+    // باقي المستخدمين أو الزوار: حظر فوري وعرض شاشة الصيانة
+    if (overlay) overlay.style.display = "flex";
+    if (banner) banner.style.display = "none";
+  }
+}
+
+function toggleMaintenanceMode() {
+  if (!isDeveloperUser()) {
+    alert("⛔ عذراً، هذا الإجراء مخصص حصرياً للمهندس المطور (ENG-MOSTAFA ELMGHRABY)!");
+    return;
+  }
+
+  const currentlyActive = isMaintenanceModeActive();
+  const targetState = !currentlyActive;
+
+  const msg = targetState
+    ? "هل ترغب بالفعل في تفعيل [وضع الصيانة] للمنظومة بالكامل؟\n\n⚠️ عند التفعيل:\n- سيتم قفل المنظومة فوراً ومنع جميع المستخدمين من الدخول أو العمل.\n- ستظهر لهم شاشة الصيانة والتحديث الدوري.\n- تظل المنظومة متاحة لك فقط كمطور للعمل والتحديث بحرية."
+    : "هل ترغب في إنهاء وإلغاء [وضع الصيانة] الآن؟\n\n✅ سيتم فتح المنظومة لجميع المهندسين والمستخدمين للدخول والعمل بشكل طبيعي كالمعتاد.";
+
+  if (!confirm(msg)) return;
+
+  localStorage.setItem("sld_maintenance_mode", targetState ? "true" : "false");
+
+  // بث لحظي عبر GunDB للأجهزة الأخرى المتصلة في نفس اللحظة
+  if (window.broadcastMaintenanceState) {
+    window.broadcastMaintenanceState(targetState);
+  }
+
+  if (window.logActivity) {
+    window.logActivity("change_settings", targetState ? "تفعيل وضع الصيانة وقفل المنظومة للمطور" : "إلغاء وضع الصيانة وفتح المنظومة للجميع");
+  }
+
+  updateMaintenanceBtnUI();
+  checkMaintenanceState();
+
+  if (window.showToast) {
+    window.showToast(
+      targetState ? "🛠️ تم تفعيل وضع الصيانة! المنظومة مقفلة الآن لغير المطور." : "✅ تم إلغاء الصيانة وفتح المنظومة لجميع المستخدمين بنجاح!",
+      targetState ? "warning" : "success"
+    );
+  }
+}
+
+function openDeveloperLoginFromMaintenance() {
+  const overlay = document.getElementById("maintenance-lock-overlay");
+  if (overlay) overlay.style.display = "none";
+
+  const appShell = document.getElementById("app-shell");
+  if (appShell) appShell.style.display = "none";
+
+  const loginModal = document.getElementById("login-modal");
+  if (loginModal) {
+    loginModal.classList.remove("hidden");
+    loginModal.classList.add("active");
+    loginModal.style.display = "flex";
+  }
+
+  const userSelect = document.getElementById("user-select");
+  if (userSelect) {
+    userSelect.value = "admin";
+  }
+  const pwInput = document.getElementById("password-input");
+  if (pwInput) {
+    pwInput.value = "";
+    pwInput.focus();
+  }
+  const errorDiv = document.getElementById("login-error");
+  if (errorDiv) {
+    errorDiv.textContent = "🔐 مرحباً بك يا بشمهندس مصطفى، يرجى إدخال كلمة المرور لتجاوز شاشة الصيانة والدخول.";
+    errorDiv.style.display = "block";
+    errorDiv.style.color = "#38bdf8";
+  }
 }
 
 window.hasPermission = hasPermission;
@@ -662,4 +856,10 @@ window.onLoginSectorChange = onLoginSectorChange;
 window.onLoginAdminChange = onLoginAdminChange;
 window.onLoginUserChange = onLoginUserChange;
 window.loadInitialUsers = loadInitialUsers;
+window.isDeveloperUser = isDeveloperUser;
+window.isMaintenanceModeActive = isMaintenanceModeActive;
+window.updateMaintenanceBtnUI = updateMaintenanceBtnUI;
+window.checkMaintenanceState = checkMaintenanceState;
+window.toggleMaintenanceMode = toggleMaintenanceMode;
+window.openDeveloperLoginFromMaintenance = openDeveloperLoginFromMaintenance;
 

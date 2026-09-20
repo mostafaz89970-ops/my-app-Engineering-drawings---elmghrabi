@@ -160,6 +160,12 @@
             </button>
           </div>
 
+          <!-- زر وضع الصيانة (يظهر للمطور فقط حصراً — مخفي تماماً عن باقي المستخدمين) -->
+          <button id="btn-maintenance-mode" class="btn-sys btn-sys-maintenance" onclick="toggleMaintenanceMode()" title="التحكم في وضع الصيانة وقفل المنظومة (للمطور فقط)" style="display:none !important;">
+            <span id="maint-btn-icon">🛠️</span>
+            <span id="maint-btn-label">وضع الصيانة</span>
+          </button>
+
           <div class="header-user-sep" style="width:1px;height:20px;background:rgba(255,255,255,0.15);margin:0 4px;"></div>
 
           <button id="btn-settings" class="btn-sys btn-sys-settings" data-perm="btn_settings" onclick="openSettingsPanel()" title="إعدادات النظام — إدارة المستخدمين والقوائم والنشاط" style="display:none;">
@@ -299,6 +305,15 @@
         </div>
       </div>
     </header>
+
+    <!-- بانر وضع الصيانة النشط (يظهر للمطور فقط لتذكيره بأن المنظومة تحت الصيانة ومقفلة على باقي المستخدمين) -->
+    <div id="maintenance-active-banner" class="maintenance-banner" style="display:none;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="maint-pulse">🚨</span>
+        <span><strong>تنبيه للمطور:</strong> وضع الصيانة مفعّل حالياً — المنظومة مقفلة تماماً ومحجوبة عن كافة المستخدمين ومتاحة لك فقط للتطوير والتعديل.</span>
+      </div>
+      <button type="button" class="btn-maint-disable" onclick="toggleMaintenanceMode()">إلغاء وضع الصيانة وفتح المنظومة للجميع ✕</button>
+    </div>
 
     <!-- حاوية التنبيهات العائمة (Toast Container) -->
     <div id="toast-container" class="toast-container"></div>
@@ -2000,6 +2015,23 @@
           </div>
         </div>
 
+        <!-- بطاقة تحكم المطور: وضع الصيانة وقفل المنظومة -->
+        <div class="dev-card-section" style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.35);border-radius:8px;padding:12px 14px;margin-bottom:14px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+            <div>
+              <div style="font-weight:700;color:#fbbf24;font-size:13.5px;display:flex;align-items:center;gap:6px;">
+                <span>🛠️</span> لوحة تحكم المطور: وضع الصيانة وقفل المنظومة
+              </div>
+              <div style="font-size:11.5px;color:#94a3b8;margin-top:3px;">
+                يتيح لك قفل المنظومة على جميع المستخدمين فوراً أثناء العمل على التحديثات والتعديلات.
+              </div>
+            </div>
+            <button id="dev-modal-maint-btn" class="btn-sys btn-sys-maintenance" onclick="toggleMaintenanceMode()" style="padding:6px 14px;font-size:12px;font-weight:bold;">
+              <span>🛠️ تفعيل وضع الصيانة</span>
+            </button>
+          </div>
+        </div>
+
         <!-- بطاقة نبذة عن المهندس المطور -->
         <div class="dev-card-section">
           <div class="dev-card-title">
@@ -2061,16 +2093,60 @@
     </div>
   </div>
 
+  <!-- ==================== شاشة حظر وضع الصيانة (تظهر للزوار والمستخدمين العاديين عند تفعيل الصيانة) ==================== -->
+  <div id="maintenance-lock-overlay" class="maintenance-lock-overlay" style="display:none;">
+    <div class="maintenance-dialog">
+      <div class="maint-icon-wrap">
+        <span class="maint-big-icon">🛠️</span>
+        <span class="maint-sub-icon">⚡</span>
+      </div>
+      <h2 class="maint-title">المنظومة في وضع الصيانة والتحديث الدوري</h2>
+      <p class="maint-subtitle">
+        نحيطكم علماً بأن المنظومة الهندسية تخضع حالياً لأعمال التطوير والصيانة الدورية لرفع الكفاءة وإضافة ميزات هندسية جديدة.
+      </p>
+
+      <div class="maint-dev-card">
+        <div class="maint-dev-info">
+          <span class="maint-dev-label">إشراف وتطوير المهندس:</span>
+          <strong class="maint-dev-name">م. مصطفى المغربي (ENG-MOSTAFA ELMGHRABY)</strong>
+          <span class="maint-dev-role">مهندس قوى وتوزيع شبكات الجهد المتوسط والمنخفض — شركة مصر الوسطى</span>
+        </div>
+        <div class="maint-dev-contacts">
+          <a href="tel:01124158545" class="btn-maint-contact btn-call" title="اتصال هاتفي مباشر">
+            <span>📞 01124158545</span>
+          </a>
+          <a href="https://wa.me/201124158545" target="_blank" class="btn-maint-contact btn-wa" title="تواصل عبر الواتساب">
+            <span>💬 محادثة واتساب فورية</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="maint-status-pill">
+        <span class="maint-pulse-dot"></span>
+        <span>المنظومة مغلقة ومؤمنة مؤقتاً لحين انتهاء التحديثات</span>
+      </div>
+
+      <div class="maint-footer-actions">
+        <button type="button" class="btn-maint-dev-login" onclick="openDeveloperLoginFromMaintenance()" title="تسجيل دخول المطور المشرف لمتابعة العمل">
+          <span>🔐 تسجيل دخول المطور (Developer Login)</span>
+        </button>
+        <button type="button" class="btn-maint-refresh" onclick="location.reload()" title="التحقق من انتهاء الصيانة وإعادة التحميل">
+          <span>🔄 إعادة التحميل والتحقق</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script src="js/jszip.min.js"></script>
-  <script src="js/default_projects.js?v=5.5"></script>
-  <script src="js/auth.js?v=5.5"></script>
-  <script src="js/components.js?v=5.5"></script>
-  <script src="js/simulation.js?v=5.5"></script>
-  <script src="js/canvas.js?v=5.5"></script>
-  <script src="js/app.js?v=5.5"></script>
-  <script src="js/settings.js?v=5.5"></script>
+  <script src="js/default_projects.js?v=5.6"></script>
+  <script src="js/auth.js?v=5.6"></script>
+  <script src="js/components.js?v=5.6"></script>
+  <script src="js/simulation.js?v=5.6"></script>
+  <script src="js/canvas.js?v=5.6"></script>
+  <script src="js/app.js?v=5.6"></script>
+  <script src="js/settings.js?v=5.6"></script>
   <script src="js/gun.min.js"></script>
-  <script src="js/realtime_sync.js?v=2.0"></script>
+  <script src="js/realtime_sync.js?v=2.1"></script>
 </body>
 </html>
 
