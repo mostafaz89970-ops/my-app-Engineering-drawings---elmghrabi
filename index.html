@@ -140,6 +140,12 @@
             <span>👨‍💻 المطور</span>
           </button>
 
+          <!-- شارة وزر المزامنة السحابية اللحظية بين كافة الأجهزة -->
+          <div id="cloud-sync-badge" class="sync-status-badge badge-connected" onclick="openSyncModal()" title="انقر لعرض تفاصيل المزامنة السحابية اللحظية بين كافة الأجهزة">
+            <span class="sync-dot green"></span>
+            <span>مزامنة سحابية لحظية ⚡</span>
+          </div>
+
           <button id="btn-settings" class="btn-sys" data-perm="btn_settings" onclick="openSettingsPanel()" title="إعدادات النظام — إدارة المستخدمين والقوائم والنشاط" style="display:none;">
             <span>⚙️ الإعدادات</span>
           </button>
@@ -2057,6 +2063,8 @@
   <script src="js/canvas.js?v=5.0"></script>
   <script src="js/app.js?v=5.0"></script>
   <script src="js/settings.js?v=5.0"></script>
+  <script src="js/gun.min.js"></script>
+  <script src="js/realtime_sync.js?v=2.0"></script>
 </body>
 </html>
 

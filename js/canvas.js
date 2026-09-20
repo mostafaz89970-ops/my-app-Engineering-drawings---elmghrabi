@@ -737,6 +737,9 @@ function renderNetwork() {
       localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
     } catch(e) {}
   }
+  if (window.broadcastProjectUpdate) {
+    window.broadcastProjectUpdate("render");
+  }
 }
 
 // ─── تبديل لون خلفية صفحة الرسم (أبيض / داكن) ──────────────────────────────────
@@ -847,6 +850,7 @@ function toggleTitleBlockMinimize(event) {
 
 window.toggleCanvasBackground = toggleCanvasBackground;
 window.initCanvasTheme = initCanvasTheme;
+window.initCanvas = initCanvas;
 window.openDeveloperModal = openDeveloperModal;
 window.closeDeveloperModal = closeDeveloperModal;
 window.toggleTitleBlockMinimize = toggleTitleBlockMinimize;

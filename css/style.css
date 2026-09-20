@@ -1521,3 +1521,39 @@ body.dragging-node * {
   margin-bottom: 4px;
   font-size: 13px;
 }
+
+/* شارة المزامنة السحابية اللحظية بين الأجهزة */
+.sync-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.sync-status-badge:hover {
+  background: rgba(16, 185, 129, 0.25);
+  transform: translateY(-1px);
+}
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.sync-dot.green { background-color: #10b981; box-shadow: 0 0 8px #10b981; }
+.sync-dot.blue { background-color: #3b82f6; box-shadow: 0 0 8px #3b82f6; }
+.sync-dot.purple { background-color: #a855f7; box-shadow: 0 0 8px #a855f7; }
+.sync-dot.red { background-color: #ef4444; }
+.sync-dot.pulse { animation: syncPulse 0.8s infinite alternate; }
+@keyframes syncPulse {
+  from { transform: scale(0.8); opacity: 0.6; }
+  to { transform: scale(1.3); opacity: 1; }
+}
