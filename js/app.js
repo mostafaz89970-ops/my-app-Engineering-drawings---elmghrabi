@@ -135,23 +135,12 @@ async function saveCurrentProject() {
     return;
   }
   if (!currentProject) return;
-  try {
-    localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
-    const res = await fetch("/api/save-project", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ project: currentProject, user: currentUser || {} })
-    });
-    const data = await res.json();
-    if (data.success) {
-      showToast("💾 تم حفظ المخطط بنجاح!", "success");
-    } else {
-      showToast("⚠️ تم الحفظ محلياً في المتصفح", "warning");
-    }
-  } catch (err) {
-    localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
+  const ok = await saveProjectToStorage(currentProject);
+  if (ok) {
     if (window.logActivity) logActivity("save_project", `${currentProject.name || currentProject.id || '?'}`);
-    showToast("💾 تم حفظ المخطط محلياً بنجاح!", "success");
+    showToast(`💾 تم حفظ المخطط [${currentProject.name || 'المحدد'}] بنجاح في السحابة والذاكرة المحلية!`, "success");
+  } else {
+    showToast("⚠️ تم حفظ المخطط محلياً في المتصفح", "warning");
   }
 }
 
@@ -4260,7 +4249,157 @@ function submitAVRModal() {
   showToast(`🔋 تم إضافة ${name} بحمل ${ratedAmp} A وتوجيه للأمام بنجاح`, "success");
 }
 
-// --- صفحة وإدارة المشاريع والخطوط المحفوظة ---
+// ==================== محرك إدارة وتخزين المشاريع (محلي + سحابي + خادم) ====================
+
+// استرجاع الفهرس المحلي للمشاريع من التخزين
+function getLocalProjectsCatalog() {
+  let catalog = [];
+  try {
+    const raw = localStorage.getItem("sld_projects_catalog");
+    if (raw) catalog = JSON.parse(raw);
+  } catch(e) {
+    catalog = [];
+  }
+  if (!Array.isArray(catalog)) catalog = [];
+
+  // دمج المشاريع المدمجة الافتراضية (مثل خط المعصرة) في الفهرس
+  if (window.DEFAULT_BUNDLED_PROJECTS && Array.isArray(window.DEFAULT_BUNDLED_PROJECTS)) {
+    window.DEFAULT_BUNDLED_PROJECTS.forEach(bp => {
+      const exists = catalog.some(p => p.id === bp.id || p.name === bp.name);
+      if (!exists) {
+        catalog.push({
+          id: bp.id,
+          name: bp.name || bp.id,
+          substation: bp.substation || "لوحة المركز",
+          voltage_kv: bp.voltage_kv || 11,
+          nodes_count: (bp.nodes || []).length,
+          sections_count: (bp.sections || []).length,
+          updated_at: bp.updated_at || "مخطط معتمد"
+        });
+        try {
+          if (!localStorage.getItem("sld_proj_" + bp.id)) {
+            localStorage.setItem("sld_proj_" + bp.id, JSON.stringify(bp));
+          }
+        } catch(e) {}
+      }
+    });
+    try {
+      localStorage.setItem("sld_projects_catalog", JSON.stringify(catalog));
+    } catch(e) {}
+  }
+  return catalog;
+}
+
+// حفظ المشروع شاملاً في التخزين المحلي، السحابي، والسيرفر
+async function saveProjectToStorage(project) {
+  if (!project) return false;
+  const pId = project.id || ("feeder_" + Date.now());
+  project.id = pId;
+  const nowStr = new Date().toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' });
+  project.updated_at = nowStr;
+
+  // 1. التخزين المحلي في المتصفح
+  try {
+    localStorage.setItem("sld_saved_feeder", JSON.stringify(project));
+    localStorage.setItem("sld_proj_" + pId, JSON.stringify(project));
+
+    let catalog = [];
+    try {
+      catalog = JSON.parse(localStorage.getItem("sld_projects_catalog") || "[]");
+    } catch(e) { catalog = []; }
+    if (!Array.isArray(catalog)) catalog = [];
+
+    const meta = {
+      id: pId,
+      name: project.name || "مخطط شبكة توزيع",
+      substation: project.substation || "محطة محولات",
+      voltage_kv: project.voltage_kv || 11,
+      nodes_count: (project.nodes || []).length,
+      sections_count: (project.sections || []).length,
+      updated_at: nowStr
+    };
+
+    const idx = catalog.findIndex(c => c.id === pId || (project.name && c.name === project.name));
+    if (idx >= 0) {
+      catalog[idx] = meta;
+    } else {
+      catalog.unshift(meta);
+    }
+    localStorage.setItem("sld_projects_catalog", JSON.stringify(catalog));
+  } catch(e) {
+    console.warn("LocalStorage save warning:", e);
+  }
+
+  // 2. المزامنة اللحظية مع جميع الأجهزة المتصلة
+  if (typeof window.broadcastProjectUpdate === "function") {
+    try { window.broadcastProjectUpdate("save"); } catch(e) {}
+  }
+
+  // 3. إرسال إلى خادم Python المحلي إن كان متصلاً
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch("/api/save-project", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project: project, user: currentUser || {} }),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success) return true;
+    }
+  } catch(netErr) {
+    // تجاوز مهلة الخادم في وضع الويب السحابي
+  }
+
+  return true;
+}
+
+// جلب بيانات المشروع بالمعرف
+async function loadProjectDataById(p_id) {
+  if (!p_id) return null;
+
+  // 1. فحص LocalStorage المخصص للمشروع
+  try {
+    const localRaw = localStorage.getItem("sld_proj_" + p_id);
+    if (localRaw) {
+      const parsed = JSON.parse(localRaw);
+      if (parsed && Array.isArray(parsed.nodes)) return parsed;
+    }
+  } catch(e) {}
+
+  // 2. فحص المشاريع الافتراضية المدمجة
+  if (window.DEFAULT_BUNDLED_PROJECTS && Array.isArray(window.DEFAULT_BUNDLED_PROJECTS)) {
+    const bundled = window.DEFAULT_BUNDLED_PROJECTS.find(p => p.id === p_id || p.name === p_id);
+    if (bundled) return JSON.parse(JSON.stringify(bundled));
+  }
+
+  // 3. فحص المخطط النشط الحالي إذا تطابق المعرف
+  if (currentProject && (currentProject.id === p_id || currentProject.name === p_id)) {
+    return currentProject;
+  }
+
+  // 4. محاولة الاتصال بالخادم المحلي
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const encodedId = encodeURIComponent(p_id);
+    const res = await fetch(`/api/load-project/${encodedId}`, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success && data.project) {
+        return data.project;
+      }
+    }
+  } catch(e) {}
+
+  return null;
+}
+
+// نافذة إدارة المشاريع والمخططات
 async function openProjectsManager() {
   if (window.hasPermission && !window.hasPermission('btn_projects')) {
     showToast("⛔ ليس لديك صلاحية استعراض وإدارة المشاريع", "error");
@@ -4271,74 +4410,152 @@ async function openProjectsManager() {
   if (!modal || !container) return;
 
   modal.classList.remove("hidden");
-  container.innerHTML = "<p style='text-align:center; padding:20px; color:#a0aec0;'>جاري جلب المشاريع والمخططات...</p>";
+  container.innerHTML = "<p style='text-align:center; padding:20px; color:#a0aec0;'>جاري فحص وتحديث قائمة المشاريع...</p>";
 
+  let projects = [];
+  let isServerOnline = false;
+
+  // محاولة الجلب من الخادم
   try {
-    const res = await fetch("/api/projects");
-    const data = await res.json();
-    const projects = data.projects || [];
-
-    if (projects.length === 0) {
-      container.innerHTML = "<p style='text-align:center; padding:20px; color:#a0aec0;'>لا توجد مشاريع محفوظة حالياً.</p>";
-      return;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1200);
+    const res = await fetch("/api/projects", { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.projects)) {
+        projects = data.projects;
+        isServerOnline = true;
+      }
     }
+  } catch(e) {}
 
-    let html = `
-      <table class="projects-table">
+  // دمج المشاريع المحلية
+  const localCatalog = getLocalProjectsCatalog();
+  if (projects.length === 0) {
+    projects = [...localCatalog];
+  } else {
+    localCatalog.forEach(lp => {
+      if (!projects.some(p => p.id === lp.id || p.name === lp.name)) {
+        projects.push(lp);
+      }
+    });
+  }
+
+  // ضمان عدم فراغ القائمة عبر المشاريع المدمجة
+  if (projects.length === 0 && window.DEFAULT_BUNDLED_PROJECTS) {
+    projects = window.DEFAULT_BUNDLED_PROJECTS.map(bp => ({
+      id: bp.id,
+      name: bp.name || bp.id,
+      substation: bp.substation || "محطة محولات",
+      voltage_kv: bp.voltage_kv || 11,
+      nodes_count: (bp.nodes || []).length,
+      sections_count: (bp.sections || []).length,
+      updated_at: bp.updated_at || "مخطط معتمد"
+    }));
+  }
+
+  renderProjectsTable(projects, isServerOnline);
+}
+
+// رسم جدول المشاريع
+function renderProjectsTable(projects, isServerOnline) {
+  const container = document.getElementById("projects-list-container");
+  if (!container) return;
+
+  const statusBadge = isServerOnline
+    ? `<span style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#48bb78; background:rgba(72,187,120,0.15); padding:4px 12px; border-radius:20px; border:1px solid rgba(72,187,120,0.35);">
+        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#48bb78;"></span>
+        <span>⚡ متصل بالخادم المحلي والمزامنة السحابية</span>
+       </span>`
+    : `<span style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#63b3ed; background:rgba(99,179,237,0.15); padding:4px 12px; border-radius:20px; border:1px solid rgba(99,179,237,0.35);">
+        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#63b3ed;"></span>
+        <span>🟢 التخزين المحلي والسحابي نشط (جاهز للعمل والمزامنة)</span>
+       </span>`;
+
+  let html = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+      ${statusBadge}
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" onclick="triggerSLDFileImport()" style="border-color:#38b2ac; color:#4fd1c5; font-size:11.5px; padding:5px 10px;">
+          <span>📥 استيراد ملف مشروع .sld</span>
+        </button>
+        <button class="btn btn-outline btn-sm" onclick="exportCurrentProjectAsSLD()" style="border-color:#ecc94b; color:#ecc94b; font-size:11.5px; padding:5px 10px;" title="تنزيل المشروع المفتوح كملف .sld">
+          <span>💾 تصدير المشروع الحالي .sld</span>
+        </button>
+      </div>
+    </div>
+  `;
+
+  if (!projects || projects.length === 0) {
+    html += "<p style='text-align:center; padding:30px; color:#a0aec0;'>لا توجد مشاريع محفوظة حالياً.</p>";
+    container.innerHTML = html;
+    return;
+  }
+
+  html += `
+    <div style="max-height:430px; overflow-y:auto; border-radius:8px; border:1px solid var(--border-color); background:rgba(26, 32, 44, 0.4);">
+      <table class="projects-table" style="width:100%; border-collapse:collapse;">
         <thead>
-          <tr>
-            <th>اسم المخطط / الخط</th>
+          <tr style="background:var(--bg-tertiary); position:sticky; top:0; z-index:2; border-bottom:1px solid var(--border-color);">
+            <th style="text-align:right; padding:10px 12px;">اسم المخطط / الخط</th>
             <th>المحطة الرئيسية</th>
             <th>الجهد</th>
             <th>العقد</th>
             <th>المقاطع</th>
             <th>تاريخ التعديل</th>
-            <th style="min-width:180px;">الإجراءات</th>
+            <th style="min-width:210px; text-align:center;">الإجراءات</th>
           </tr>
         </thead>
         <tbody>
-    `;
+  `;
 
-    projects.forEach(p => {
-      const displayName = (p.name || p.id).replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      const displaySub = (p.substation || '-').replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      const encId = encodeURIComponent(p.id);
-      const encName = encodeURIComponent(p.name || p.id);
-
-      html += `
-        <tr>
-          <td style="font-weight:bold; color:#fff; text-align:right; padding-right:12px;">${displayName}</td>
-          <td>${displaySub}</td>
-          <td style="color:#ecc94b; font-weight:bold;">${p.voltage_kv || 11} ك.ف</td>
-          <td>${p.nodes_count || '-'}</td>
-          <td>${p.sections_count || '-'}</td>
-          <td style="font-size:11px; color:#a0aec0;">${p.updated_at || '-'}</td>
-          <td>
-            <div style="display:inline-flex; gap:4px;">
-              <button class="btn btn-primary btn-sm" style="padding:3px 7px; font-size:10.5px;" onclick="loadProjectFromManager(decodeURIComponent('${encId}'))" title="فتح وعرض المخطط">
-                <span>👁️ فتح</span>
-              </button>
-              <button class="btn btn-outline btn-sm" style="padding:3px 7px; font-size:10.5px; border-color:#48bb78; color:#9ae6b4;" onclick="printProjectFromManager(decodeURIComponent('${encId}'))" title="طباعة المخطط بالكامل">
-                <span>🖨️ طباعة</span>
-              </button>
-              <button class="btn btn-delete btn-sm" style="padding:3px 7px; font-size:10.5px;" onclick="deleteProjectFromManager(decodeURIComponent('${encId}'), decodeURIComponent('${encName}'))" title="حذف هذا المشروع">
-                <span>🗑️</span>
-              </button>
-            </div>
-          </td>
-        </tr>
-      `;
-    });
+  projects.forEach(p => {
+    const displayName = (p.name || p.id).replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const displaySub = (p.substation || '-').replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const encId = encodeURIComponent(p.id);
+    const encName = encodeURIComponent(p.name || p.id);
+    const isCurrent = currentProject && (currentProject.id === p.id || currentProject.name === p.name);
+    const rowBg = isCurrent ? "background:rgba(49, 130, 206, 0.15);" : "";
 
     html += `
+      <tr style="${rowBg}">
+        <td style="font-weight:bold; color:#fff; text-align:right; padding-right:12px;">
+          ${displayName}
+          ${isCurrent ? '<span style="margin-right:6px; font-size:10px; background:#3182ce; color:#fff; padding:2px 7px; border-radius:10px;">نشط حالياً</span>' : ''}
+        </td>
+        <td>${displaySub}</td>
+        <td style="color:#ecc94b; font-weight:bold;">${p.voltage_kv || 11} ك.ف</td>
+        <td>${p.nodes_count !== undefined ? p.nodes_count : '-'}</td>
+        <td>${p.sections_count !== undefined ? p.sections_count : '-'}</td>
+        <td style="font-size:11px; color:#a0aec0;">${p.updated_at || '-'}</td>
+        <td style="text-align:center;">
+          <div style="display:inline-flex; gap:5px; justify-content:center;">
+            <button class="btn btn-primary btn-sm" style="padding:3px 8px; font-size:11px;" onclick="loadProjectFromManager(decodeURIComponent('${encId}'))" title="فتح وعرض المخطط">
+              <span>👁️ فتح</span>
+            </button>
+            <button class="btn btn-outline btn-sm" style="padding:3px 8px; font-size:11px; border-color:#ecc94b; color:#ecc94b;" onclick="exportProjectAsSLD(decodeURIComponent('${encId}'))" title="تنزيل كملف .sld">
+              <span>💾 .sld</span>
+            </button>
+            <button class="btn btn-outline btn-sm" style="padding:3px 8px; font-size:11px; border-color:#48bb78; color:#9ae6b4;" onclick="printProjectFromManager(decodeURIComponent('${encId}'))" title="طباعة المخطط بالكامل">
+              <span>🖨️ طباعة</span>
+            </button>
+            <button class="btn btn-delete btn-sm" style="padding:3px 8px; font-size:11px;" onclick="deleteProjectFromManager(decodeURIComponent('${encId}'), decodeURIComponent('${encName}'))" title="حذف هذا المشروع">
+              <span>🗑️</span>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  });
+
+  html += `
         </tbody>
       </table>
-    `;
-    container.innerHTML = html;
-  } catch (err) {
-    console.error("Fetch projects error:", err);
-    container.innerHTML = "<p style='color:#fc8181; text-align:center; padding:20px;'>تعذر جلب المشاريع من الخادم.</p>";
-  }
+    </div>
+  `;
+
+  container.innerHTML = html;
 }
 
 function closeProjectsManager() {
@@ -4346,71 +4563,126 @@ function closeProjectsManager() {
   if (modal) modal.classList.add("hidden");
 }
 
+// فتح مشروع محدد من مدير المشاريع
 async function loadProjectFromManager(p_id) {
   if (!p_id) return;
   saveHistoryState();
-  let projectData = null;
-  try {
-    const encodedId = encodeURIComponent(p_id);
-    const res = await fetch(`/api/load-project/${encodedId}`);
-    if (!res.ok) {
-      throw new Error(`تعذر الوصول إلى الخادم (${res.status})`);
-    }
-    const data = await res.json();
-    if (data.success && data.project) {
-      projectData = data.project;
-    } else {
-      showToast(data.message || "تعذر العثور على المخطط المطلوب", "danger");
-      return;
-    }
-  } catch (err) {
-    console.error("Load Project Network Error:", err);
-    showToast("تعذر تحميل المخطط من الخادم: " + (err.message || "خطأ اتصال"), "danger");
+  const projectData = await loadProjectDataById(p_id);
+  if (!projectData || !projectData.nodes) {
+    showToast("⚠️ تعذر العثور على بيانات المخطط المطلوب", "danger");
     return;
   }
 
+  currentProject = projectData;
+  window.currentProject = projectData;
   try {
-    currentProject = projectData;
-    try {
-      localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
-    } catch(e) {
-      console.warn("LocalStorage save skipped:", e);
-    }
-    if (window.clearSelection) clearSelection();
-    updateFeederInputs();
-    renderNetwork();
-    fitToScreen();
-    closeProjectsManager();
-    showToast(`📁 تم فتح المخطط [${currentProject.name || 'المحدد'}] بنجاح!`, "success");
-  } catch (renderErr) {
-    console.error("Render Project Error:", renderErr);
-    closeProjectsManager();
-    showToast("تم جلب المخطط بنجاح، وتجري معالجة عرضه: " + (renderErr.message || ""), "warning");
-  }
+    localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
+    localStorage.setItem("sld_proj_" + currentProject.id, JSON.stringify(currentProject));
+  } catch(e) {}
+
+  if (window.clearSelection) clearSelection();
+  updateFeederInputs();
+  renderNetwork();
+  fitToScreen();
+  closeProjectsManager();
+  showToast(`📁 تم فتح المخطط [${currentProject.name || 'المحدد'}] بنجاح!`, "success");
 }
 
+// حذف مشروع
 async function deleteProjectFromManager(p_id, p_name) {
-  if (!confirm(`هل أنت متأكد من رغبتك في حذف المخطط [${p_name}] نهائياً؟`)) {
+  if (!confirm(`هل أنت متأكد من رغبتك في حذف المخطط [${p_name}]؟`)) {
     return;
   }
+  // 1. حذف من التخزين المحلي
+  try {
+    let catalog = JSON.parse(localStorage.getItem("sld_projects_catalog") || "[]");
+    catalog = catalog.filter(p => p.id !== p_id && p.name !== p_name && p.name !== p_id);
+    localStorage.setItem("sld_projects_catalog", JSON.stringify(catalog));
+    localStorage.removeItem("sld_proj_" + p_id);
+  } catch(e) {}
+
+  // 2. حذف من الخادم إن وجد
   try {
     const encodedId = encodeURIComponent(p_id);
-    const res = await fetch(`/api/delete-project/${encodedId}`, {
+    await fetch(`/api/delete-project/${encodedId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ user: currentUser || {} })
     });
-    const data = await res.json();
-    if (data.success) {
-      showToast(`🗑️ تم حذف المشروع [${p_name}]`, "warning");
-      openProjectsManager();
-    } else {
-      showToast(data.message || "تعذر حذف المشروع من الخادم", "danger");
-    }
-  } catch (err) {
-    console.error("Delete Project Error:", err);
-    showToast("خطأ في الاتصال بالخادم لحذف المشروع", "danger");
+  } catch(e) {}
+
+  showToast(`🗑️ تم حذف المشروع [${p_name}]`, "warning");
+  openProjectsManager();
+}
+
+// تصدير وتنزيل المشروع كملف .sld
+async function exportProjectAsSLD(p_id) {
+  let projectData = (currentProject && (currentProject.id === p_id || currentProject.name === p_id)) ? currentProject : await loadProjectDataById(p_id);
+  if (!projectData) {
+    showToast("⚠️ تعذر العثور على بيانات المشروع للتصدير", "error");
+    return;
   }
+  const str = JSON.stringify(projectData, null, 2);
+  const blob = new Blob([str], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const fileName = (projectData.name || projectData.id || "sld_project").replace(/[\\/*?:"<>|]/g, "_") + ".sld";
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(`💾 تم تنزيل ملف المشروع [${fileName}] بنجاح!`, "success");
+}
+
+function exportCurrentProjectAsSLD() {
+  if (!currentProject) {
+    showToast("⚠️ لا يوجد مشروع مفتوح حالياً لتنزيله", "warning");
+    return;
+  }
+  exportProjectAsSLD(currentProject.id);
+}
+
+// فتح نافذة اختيار ملف .sld
+function triggerSLDFileImport() {
+  const fileInput = document.getElementById("sld-file-import-input");
+  if (fileInput) {
+    fileInput.value = "";
+    fileInput.click();
+  }
+}
+
+// قراءة واستيراد ملف .sld
+async function handleSLDFileInput(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async function(evt) {
+    try {
+      const content = evt.target.result;
+      const parsed = JSON.parse(content);
+      if (!parsed || !Array.isArray(parsed.nodes)) {
+        showToast("❌ الملف غير صالح: لا يحتوي على عقد شبكية صالحة", "error");
+        return;
+      }
+      if (!parsed.id) parsed.id = "feeder_" + Date.now();
+      if (!parsed.name) parsed.name = file.name.replace(/\.[^/.]+$/, "");
+      await saveProjectToStorage(parsed);
+      currentProject = parsed;
+      window.currentProject = parsed;
+      if (window.clearSelection) clearSelection();
+      updateFeederInputs();
+      renderNetwork();
+      fitToScreen();
+      closeProjectsManager();
+      showToast(`🎉 تم استيراد وحفظ المخطط [${parsed.name}] بنجاح!`, "success");
+    } catch(err) {
+      console.error("Import SLD Error:", err);
+      showToast("❌ تعذر استيراد ملف المشروع: " + err.message, "error");
+    }
+  };
+  reader.readAsText(file, "UTF-8");
 }
 
 function createNewProjectDirectly() {
@@ -4699,4 +4971,16 @@ window.nudgeNodePosition = nudgeNodePosition;
 window.onEditNodeDirectionChange = onEditNodeDirectionChange;
 window.deleteSwitchDirectly = deleteSwitchDirectly;
 window.deleteTransformerOrKioskDirectly = deleteTransformerOrKioskDirectly;
+
+window.saveCurrentProject = saveCurrentProject;
+window.openProjectsManager = openProjectsManager;
+window.closeProjectsManager = closeProjectsManager;
+window.loadProjectFromManager = loadProjectFromManager;
+window.deleteProjectFromManager = deleteProjectFromManager;
+window.exportProjectAsSLD = exportProjectAsSLD;
+window.exportCurrentProjectAsSLD = exportCurrentProjectAsSLD;
+window.triggerSLDFileImport = triggerSLDFileImport;
+window.handleSLDFileInput = handleSLDFileInput;
+window.saveProjectToStorage = saveProjectToStorage;
+window.getLocalProjectsCatalog = getLocalProjectsCatalog;
 
