@@ -182,8 +182,8 @@ const DEFAULT_FALLBACK_USERS = [
     name: "مهندس تخطيط وشبكات",
     role: "engineer",
     sector: "المنيا شمال",
-    administration: "بني مزار شرق",
-    password_plain: "1234500",
+    administration: "بني مزار غرب",
+    password_plain: "123456",
     is_active: true,
     permissions: ["all", "edit_network", "export", "settings"]
   },
@@ -192,10 +192,30 @@ const DEFAULT_FALLBACK_USERS = [
     name: "مهندس تشغيل ومناورات",
     role: "operator",
     sector: "المنيا شمال",
-    administration: "بني مزار شرق",
-    password_plain: "1234500",
+    administration: "مغاغة",
+    password_plain: "123456",
     is_active: true,
     permissions: ["all", "edit_network", "export"]
+  },
+  {
+    id: "technician",
+    name: "فني شبكات وتوزيع",
+    role: "tech",
+    sector: "المنيا شمال",
+    administration: "العدوة",
+    password_plain: "123456",
+    is_active: true,
+    permissions: ["view", "export"]
+  },
+  {
+    id: "eng-Wlaa Ahmade",
+    name: "eng-Wlaa Ahmade",
+    role: "engineer",
+    sector: "المنيا شمال",
+    administration: "بني مزار شرق",
+    password_plain: "123456",
+    is_active: true,
+    permissions: ["all", "btn_projects", "btn_save", "btn_print", "btn_excel", "btn_cable", "btn_overhead", "btn_line_between", "btn_quick_line", "btn_substation", "btn_switch", "btn_trans", "btn_cascade_trans", "btn_kiosk", "btn_kiosk_from_kiosk", "btn_rmu", "btn_avr", "btn_simulation", "btn_calculations", "btn_undo", "btn_delete"]
   }
 ];
 

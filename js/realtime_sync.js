@@ -26,6 +26,33 @@
   var isInitialSyncDone = false;
   var lastUserUpdateTimestamp = 0;
   var lastDrawingUpdateTimestamp = 0;
+  var lastServerEventId = 0;
+  var isLocalServerActive = false;
+
+  // 1. قناة البث المباشر بين كافة التبويبات والنوافذ في نفس المتصفح (0ms Latency)
+  var localBroadcastChannel = null;
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      localBroadcastChannel = new BroadcastChannel('sld_studio_sync_v1');
+      localBroadcastChannel.onmessage = function (e) {
+        if (e && e.data) {
+          handleIncomingCloudPayload(e.data);
+        }
+      };
+    }
+  } catch (_) {}
+
+  // 2. ناقل التزامن عبر التخزين المحلي (يدعم المتصفحات القديمة وتعدد النوافذ)
+  window.addEventListener('storage', function (e) {
+    if (e.key === 'sld_sync_bus' && e.newValue) {
+      try {
+        var b = JSON.parse(e.newValue);
+        if (b && b.payload && b.payload.senderId !== deviceId) {
+          handleIncomingCloudPayload(b.payload);
+        }
+      } catch (_) {}
+    }
+  });
 
   // دالة تشفير سريعة للمقارنة وتجنب التكرار
   function fastHash(str) {
@@ -38,7 +65,7 @@
     return hash;
   }
 
-  // بث الأحداث السحابية الفورية
+  // بث الأحداث الفورية عبر كافة القنوات المتعددة (محلي، شبكي، سحابي)
   function postCloudEvent(type, data, reason) {
     try {
       var author = (window.currentUser && window.currentUser.name) ?
@@ -53,25 +80,54 @@
         data: data
       };
 
-      var targetUrl = 'https://ntfy.sh/' + encodeURIComponent(currentRoom);
+      // أ) بث فوري لجميع النوافذ والتبويبات لنفس المتصفح عبر BroadcastChannel
+      if (localBroadcastChannel) {
+        try { localBroadcastChannel.postMessage(payload); } catch (_) {}
+      }
 
-      fetch(targetUrl, {
+      // ب) بث فوري عبر ناقل التخزين المحلي
+      try {
+        localStorage.setItem('sld_sync_bus', JSON.stringify({ payload: payload, r: Math.random(), t: Date.now() }));
+      } catch (_) {}
+
+      // ج) بث فوري إلى خادم المنظومة المحلي لكافة الأجهزة المتصلة على الشبكة (LAN)
+      fetch('/api/sync/publish', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Title': 'SLD Sync: ' + type
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       }).then(function (res) {
         if (res.ok) {
+          isLocalServerActive = true;
           updateBadgeUI('broadcast');
-          setTimeout(function () { updateBadgeUI('connected'); }, 1200);
+          setTimeout(function () { updateBadgeUI('connected'); }, 800);
         }
-      }).catch(function (err) {
-        console.warn('Sync post warning:', err);
-      });
+      }).catch(function (_) {});
+
+      // د) بث سحابي عبر ntfy.sh للأجهزة البعيدة عبر الإنترنت مع مهلة لحماية الاتصال
+      try {
+        var targetUrl = 'https://ntfy.sh/' + encodeURIComponent(currentRoom);
+        var controller = new AbortController();
+        var to = setTimeout(function () { controller.abort(); }, 3500);
+
+        fetch(targetUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Title': 'SLD Sync: ' + type
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        }).then(function (res) {
+          clearTimeout(to);
+          if (res.ok) {
+            updateBadgeUI('broadcast');
+            setTimeout(function () { updateBadgeUI('connected'); }, 800);
+          }
+        }).catch(function (_) {});
+      } catch (_) {}
+
     } catch (e) {
-      console.warn('Error sending cloud event:', e);
+      console.warn('Error sending sync event:', e);
     }
   }
 
@@ -485,7 +541,54 @@
     if (window.showToast) window.showToast('📡 تم بث كافة البيانات (المخطط، المشاريع، المستخدمين) لجميع الأجهزة بنجاح!', 'success');
   }
 
-  // ─── 11. تصدير الواجهات إلى window ───────────────────────────────────────────
+  // ─── 11. مزامنة الخادم المحلي التلقائية (LAN & Local Web Hub) ─────────────────
+  async function fetchServerState() {
+    try {
+      var controller = new AbortController();
+      var to = setTimeout(function () { controller.abort(); }, 2000);
+      var res = await fetch('/api/sync/state', { signal: controller.signal });
+      clearTimeout(to);
+      if (res.ok) {
+        var data = await res.json();
+        if (data && data.success) {
+          isLocalServerActive = true;
+          applyFullSyncDataset({
+            project: data.project,
+            catalog: data.catalog,
+            users: data.users,
+            maintenanceMode: data.maintenance_mode
+          }, 'خادم المنظومة المركزي');
+          updateBadgeUI('connected');
+        }
+      }
+    } catch (_) {}
+  }
+
+  async function pollLocalServerEvents() {
+    try {
+      var controller = new AbortController();
+      var to = setTimeout(function () { controller.abort(); }, 1800);
+      var res = await fetch('/api/sync/poll?since=' + lastServerEventId, { signal: controller.signal });
+      clearTimeout(to);
+      if (res.ok) {
+        var data = await res.json();
+        if (data && data.success && Array.isArray(data.events)) {
+          isLocalServerActive = true;
+          if (typeof data.latest_id === 'number') {
+            lastServerEventId = data.latest_id;
+          }
+          for (var i = 0; i < data.events.length; i++) {
+            var ev = data.events[i];
+            if (ev && ev.senderId !== deviceId) {
+              await handleIncomingCloudPayload(ev);
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  // ─── 12. تصدير الواجهات إلى window ───────────────────────────────────────────
   window.broadcastProjectUpdate = broadcastLocalDrawing;
   window.broadcastProjectSaved = broadcastProjectSaved;
   window.broadcastProjectDeleted = broadcastProjectDeleted;
@@ -496,8 +599,15 @@
   window.changeSyncRoom = changeSyncRoom;
   window.forceBroadcastProject = forceBroadcastProject;
 
-  // ─── 12. تهيئة الاتصال والمزامنة عند تحميل الصفحة ─────────────────────────────
+  // ─── 13. تهيئة الاتصال والمزامنة عند تحميل الصفحة ─────────────────────────────
   function startSyncEngine() {
+    // 1. مزامنة فورية مع الخادم المحلي (إن وُجد) لجلب المخطط والمستخدمين
+    fetchServerState();
+
+    // 2. فحص الخادم المحلي كل 750 ملي ثانية لضمان سرعة فائقة بين كافة المتصفحات والأجهزة
+    setInterval(pollLocalServerEvents, 750);
+
+    // 3. ربط القناة السحابية ntfy.sh (للأجهزة البعيدة عبر الإنترنت)
     connectCloudSSE();
     pollStartupCloudState();
 
@@ -510,10 +620,10 @@
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
-      setTimeout(startSyncEngine, 300);
+      setTimeout(startSyncEngine, 200);
     });
   } else {
-    setTimeout(startSyncEngine, 300);
+    setTimeout(startSyncEngine, 200);
   }
 
 })();
