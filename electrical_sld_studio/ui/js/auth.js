@@ -344,7 +344,21 @@ async function handleLogin(e) {
   }
 
   if (!restored) {
-    if (window.createNewProjectDirectly) {
+    if (window.DEFAULT_BUNDLED_PROJECTS && window.DEFAULT_BUNDLED_PROJECTS.length > 0) {
+      const defaultProj = JSON.parse(JSON.stringify(window.DEFAULT_BUNDLED_PROJECTS[0]));
+      if (typeof currentProject !== "undefined") {
+        currentProject = defaultProj;
+      }
+      window.currentProject = defaultProj;
+      try {
+        localStorage.setItem("sld_saved_feeder", JSON.stringify(defaultProj));
+        localStorage.setItem("sld_proj_" + defaultProj.id, JSON.stringify(defaultProj));
+      } catch(e) {}
+      if (window.updateFeederInputs) window.updateFeederInputs();
+      if (window.renderNetwork) window.renderNetwork();
+      if (window.fitToScreen) window.fitToScreen();
+      if (window.showToast) window.showToast(`📂 تم استرجاع مخطط [${defaultProj.name}] بنجاح!`, "success");
+    } else if (window.createNewProjectDirectly) {
       window.createNewProjectDirectly();
     } else if (window.loadDemoVideoProject) {
       window.loadDemoVideoProject();
@@ -517,6 +531,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         const parsed = JSON.parse(savedLocal);
         if (parsed && parsed.nodes && parsed.nodes.length > 0) {
           currentProject = parsed;
+          window.currentProject = parsed;
           if (window.updateFeederInputs) window.updateFeederInputs();
           if (window.renderNetwork) window.renderNetwork();
           if (window.fitToScreen) window.fitToScreen();
@@ -527,7 +542,19 @@ window.addEventListener("DOMContentLoaded", async () => {
       }
     }
     if (!restored) {
-      if (window.createNewProjectDirectly) {
+      if (window.DEFAULT_BUNDLED_PROJECTS && window.DEFAULT_BUNDLED_PROJECTS.length > 0) {
+        const defaultProj = JSON.parse(JSON.stringify(window.DEFAULT_BUNDLED_PROJECTS[0]));
+        currentProject = defaultProj;
+        window.currentProject = defaultProj;
+        try {
+          localStorage.setItem("sld_saved_feeder", JSON.stringify(defaultProj));
+          localStorage.setItem("sld_proj_" + defaultProj.id, JSON.stringify(defaultProj));
+        } catch(e) {}
+        if (window.updateFeederInputs) window.updateFeederInputs();
+        if (window.renderNetwork) window.renderNetwork();
+        if (window.fitToScreen) window.fitToScreen();
+        restored = true;
+      } else if (window.createNewProjectDirectly) {
         window.createNewProjectDirectly();
       }
     }
