@@ -3163,19 +3163,34 @@ async function processPptxFile(file) {
   if (applyBtn) applyBtn.disabled = true;
 
   try {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("force_autolayout", "false");
-    formData.append("user", JSON.stringify(currentUser || {}));
+    let data = null;
 
-    const res = await fetch("/api/import-powerpoint", {
-      method: "POST",
-      body: formData
-    });
+    // 1. محاولة الاستيراد عبر الخادم إن كان متاحاً
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("force_autolayout", "false");
+      formData.append("user", JSON.stringify(currentUser || {}));
 
-    const data = await res.json();
-    if (!data.success || !data.project) {
-      throw new Error(data.message || "تعذر قراءة محتوى الملف");
+      const res = await fetch("/api/import-powerpoint", {
+        method: "POST",
+        body: formData
+      });
+
+      if (res.ok) {
+        data = await res.json();
+      }
+    } catch (netErr) {
+      console.warn("Backend import endpoint unavailable, switching to browser-native parser:", netErr);
+    }
+
+    // 2. إذا لم يتوفر الخادم (الاستضافة السحابية أو GitHub Pages) نقوم بفك واستخراج المخطط محلياً بالمتصفح فوراً
+    if (!data || !data.success || !data.project) {
+      data = await parsePowerPointClientSide(file);
+    }
+
+    if (!data || !data.success || !data.project) {
+      throw new Error(data?.message || "تعذر قراءة محتوى ملف الباور بوينت");
     }
 
     pendingImportProject = data.project;
@@ -3226,6 +3241,141 @@ async function processPptxFile(file) {
     if (loader) loader.style.display = "none";
     alert(`تعذر استيراد ملف الباور بوينت: ${err.message}`);
   }
+}
+
+// دالة فك واستخراج بيانات المخطط من ملف PowerPoint داخل المتصفح مباشرة (Client-Side)
+async function parsePowerPointClientSide(file) {
+  // فحص ما إذا كان الملف JSON / SLD مباشرة
+  if (file.name.endsWith('.sld') || file.name.endsWith('.json')) {
+    const text = await file.text();
+    const project = JSON.parse(text);
+    return {
+      success: true,
+      project: project,
+      summary: {
+        feeder_name: project.name || "مخطط مستورد",
+        substation: project.substation || "محطة المحولات",
+        voltage_kv: project.voltage_kv || 11,
+        total_length: project.sections ? project.sections.reduce((a, s) => a + (Number(s.length_m) || 0), 0) : 0,
+        transformers_count: project.nodes ? project.nodes.filter(n => n.type === 'transformer').length : 0,
+        kiosks_count: project.nodes ? project.nodes.filter(n => n.type === 'kiosk').length : 0,
+        switches_count: project.nodes ? project.nodes.filter(n => n.type === 'switch').length : 0,
+        mode: "lossless_embedded"
+      }
+    };
+  }
+
+  if (typeof JSZip === "undefined") {
+    throw new Error("جاري تحميل مكتبة قراءة العروض التقديمية... يرجى إعادة المحاولة خلال ثانية واحدة");
+  }
+
+  const zip = await JSZip.loadAsync(file);
+  const slideFile = zip.file("ppt/slides/slide1.xml");
+  if (!slideFile) {
+    throw new Error("لم يتم العثور على الشريحة الأولى في ملف PowerPoint");
+  }
+
+  const slideXml = await slideFile.async("text");
+  
+  // استخراج المخطط المدمج فائق الدقة (Embedded Lossless SLD)
+  const idx = slideXml.indexOf("SLD_DATA_JSON::");
+  if (idx !== -1) {
+    const sub = slideXml.substring(idx + "SLD_DATA_JSON::".length);
+    const endIdx = sub.indexOf("</a:t>");
+    const jsonStr = endIdx !== -1 ? sub.substring(0, endIdx) : sub;
+    const unescaped = jsonStr.replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+    const project = JSON.parse(unescaped);
+    return {
+      success: true,
+      project: project,
+      summary: {
+        feeder_name: project.name || "مخطط شبكة التوزيع",
+        substation: project.substation || "محطة المحولات",
+        voltage_kv: project.voltage_kv || 11,
+        total_length: project.sections ? project.sections.reduce((a, s) => a + (Number(s.length_m) || 0), 0) : 0,
+        transformers_count: project.nodes ? project.nodes.filter(n => n.type === 'transformer').length : 0,
+        kiosks_count: project.nodes ? project.nodes.filter(n => n.type === 'kiosk').length : 0,
+        switches_count: project.nodes ? project.nodes.filter(n => n.type === 'switch').length : 0,
+        mode: "lossless_embedded"
+      }
+    };
+  }
+
+  // في حال كان ملف PowerPoint خارجي بدون بيانات مدمجة، استخراج النصوص والعناصر تلقائياً
+  const textMatches = slideXml.match(/<a:t>([^<]+)<\/a:t>/g) || [];
+  const extractedTexts = textMatches.map(m => m.replace(/<\/?a:t>/g, "").trim()).filter(t => t.length > 0);
+
+  let feederName = "مغذي مستورد من PowerPoint";
+  let substationName = "محطة المحولات الرئيسية";
+  for (const t of extractedTexts) {
+    if (t.includes("مغذي") || t.includes("خروج")) feederName = t;
+    if (t.includes("محطة") || t.includes("محولات")) substationName = t;
+  }
+
+  const fallbackProject = {
+    id: "feeder_pptx_" + Date.now(),
+    name: feederName,
+    substation: substationName,
+    voltage_kv: 11.0,
+    sector: "المنيا شمال",
+    administration: "بني مزار شرق",
+    nodes: [
+      { id: "node_sub", name: substationName, type: "substation", x: 450, y: 120, status: "closed" }
+    ],
+    sections: []
+  };
+
+  let currentY = 240;
+  let prevNodeId = "node_sub";
+  let count = 1;
+
+  for (const text of extractedTexts) {
+    if (text === feederName || text === substationName || text.length < 2) continue;
+    let nodeType = "switch";
+    if (text.includes("محول") || text.includes("KVA") || text.includes("ك.ف.أ")) nodeType = "transformer";
+    else if (text.includes("كشك") || text.includes("لوحة")) nodeType = "kiosk";
+
+    const nodeId = "node_" + count;
+    fallbackProject.nodes.push({
+      id: nodeId,
+      name: text,
+      type: nodeType,
+      x: 450,
+      y: currentY,
+      capacity_kva: nodeType === "transformer" ? 100 : undefined,
+      status: "closed"
+    });
+
+    fallbackProject.sections.push({
+      id: "sec_" + count,
+      name: "مقطع " + count,
+      from_node: prevNodeId,
+      to_node: nodeId,
+      type: "overhead",
+      size: "70/12",
+      length_m: 250
+    });
+
+    prevNodeId = nodeId;
+    currentY += 120;
+    count++;
+    if (count > 30) break;
+  }
+
+  return {
+    success: true,
+    project: fallbackProject,
+    summary: {
+      feeder_name: fallbackProject.name,
+      substation: fallbackProject.substation,
+      voltage_kv: 11,
+      total_length: fallbackProject.sections.length * 250,
+      transformers_count: fallbackProject.nodes.filter(n => n.type === 'transformer').length,
+      kiosks_count: fallbackProject.nodes.filter(n => n.type === 'kiosk').length,
+      switches_count: fallbackProject.nodes.filter(n => n.type === 'switch').length,
+      mode: "native_layout"
+    }
+  };
 }
 
 async function applyPowerPointImport() {
