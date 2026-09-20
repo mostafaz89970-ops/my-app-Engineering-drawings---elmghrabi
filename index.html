@@ -145,11 +145,15 @@
             <span class="sync-dot green"></span>
             <span>مزامنة سحابية لحظية ⚡</span>
           </div>
+        </div>
 
-          <button id="btn-settings" class="btn-sys" data-perm="btn_settings" onclick="openSettingsPanel()" title="إعدادات النظام — إدارة المستخدمين والقوائم والنشاط" style="display:none;">
+        <!-- قسم المستخدم والإعدادات (ثابت ومحمي دائماً لمنع أي اختفاء عند تكبير الشاشة) -->
+        <div class="header-user-section">
+          <button id="btn-settings" class="btn-sys btn-sys-settings" data-perm="btn_settings" onclick="openSettingsPanel()" title="إعدادات النظام — إدارة المستخدمين والقوائم والنشاط" style="display:none;">
             <span>⚙️ الإعدادات</span>
           </button>
           <div class="user-badge">
+            <span class="user-avatar-icon">👤</span>
             <span id="current-user-name" class="user-name">المدير العام</span>
             <button type="button" class="btn-user-action" onclick="openSelfPasswordModal()" title="تغيير كلمة المرور الخاصة بي">🔑</button>
             <button class="btn-logout" onclick="handleLogout()" title="تسجيل الخروج">🚪</button>
