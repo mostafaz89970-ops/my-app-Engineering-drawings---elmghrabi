@@ -1,0 +1,16 @@
+{
+  "hosting": {
+    "public": "electrical_sld_studio/ui",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

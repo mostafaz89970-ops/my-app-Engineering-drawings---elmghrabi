@@ -67,6 +67,16 @@ def serve_static(filepath):
     return static_file(filepath, root=UI_DIR)
 
 
+@app.route('/css/<filepath:path>')
+def serve_css(filepath):
+    return static_file(filepath, root=os.path.join(UI_DIR, "css"))
+
+
+@app.route('/js/<filepath:path>')
+def serve_js(filepath):
+    return static_file(filepath, root=os.path.join(UI_DIR, "js"))
+
+
 # ==================== AUTH ====================
 
 @app.route('/api/users', method=['GET', 'OPTIONS'])
