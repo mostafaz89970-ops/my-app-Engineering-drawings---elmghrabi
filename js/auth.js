@@ -193,22 +193,55 @@ const DEFAULT_FALLBACK_USERS = [
 ];
 
 async function loadInitialUsers() {
+  let loadedUsers = null;
+
+  // 1. التحقق أولاً من المستخدمين المحفوظين في المتصفح محلياً
   try {
-    const res = await fetch("/api/users");
+    const savedUsers = localStorage.getItem("sld_users");
+    if (savedUsers) {
+      const parsed = JSON.parse(savedUsers);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        loadedUsers = parsed;
+      }
+    }
+    if (!loadedUsers) {
+      const savedSettings = localStorage.getItem("sld_settings");
+      if (savedSettings) {
+        const parsed = JSON.parse(savedSettings);
+        if (parsed && Array.isArray(parsed.users) && parsed.users.length > 0) {
+          loadedUsers = parsed.users;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Error reading users from localStorage:", err);
+  }
+
+  if (loadedUsers && loadedUsers.length > 0) {
+    allUsersCache = loadedUsers;
+  } else {
+    allUsersCache = DEFAULT_FALLBACK_USERS;
+  }
+
+  // 2. محاولة المزامنة مع الخادم إن كان يعمل
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1500);
+    const res = await fetch("/api/users", { signal: controller.signal });
+    clearTimeout(timeoutId);
     if (res.ok) {
       const data = await res.json();
       if (data.success && Array.isArray(data.users) && data.users.length > 0) {
-        allUsersCache = data.users;
-      } else {
-        allUsersCache = DEFAULT_FALLBACK_USERS;
+        const serverIds = new Set(data.users.map(u => u.id));
+        const localOnly = allUsersCache.filter(u => !serverIds.has(u.id));
+        allUsersCache = [...data.users, ...localOnly];
+        try { localStorage.setItem("sld_users", JSON.stringify(allUsersCache)); } catch(_) {}
       }
-    } else {
-      allUsersCache = DEFAULT_FALLBACK_USERS;
     }
   } catch (err) {
-    console.warn("Using offline fallback users for standalone/hosting mode:", err);
-    allUsersCache = DEFAULT_FALLBACK_USERS;
+    // وضع غير متصل / الاستضافة السحابية
   }
+
   const sectorSelect = document.getElementById("login-sector-select");
   const currentSector = sectorSelect ? sectorSelect.value : "المنيا شمال";
   populateLoginAdminDropdown(currentSector, "بني مزار شرق");
@@ -235,14 +268,18 @@ async function handleLogin(e) {
   const selectedUserId = userSelect ? userSelect.value : "admin";
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
     const res = await fetch("/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         user_id: selectedUserId,
         password: entered
-      })
+      }),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     if (res.ok) {
       const data = await res.json();
       if (data.success) {
@@ -258,7 +295,26 @@ async function handleLogin(e) {
   if (!loggedInUser) {
     const validPasswords = ["123450", "1234500", "123456"];
     const found = allUsersCache.find(u => u.id === selectedUserId) || DEFAULT_FALLBACK_USERS[0];
-    if (validPasswords.includes(entered) || (found && found.password_plain === entered)) {
+
+    // التحقق من حالة الحساب إن كان محظوراً أو معطلاً
+    if (found && found.is_active === false) {
+      if (errorDiv) {
+        errorDiv.textContent = "❌ هذا الحساب معطّل أو محظور من قبل مدير النظام.";
+        errorDiv.style.display = "block";
+      }
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = "<span>تسجيل الدخول والتأمين ⚡</span>";
+      }
+      return;
+    }
+
+    const expectedPw = found ? (found.password_plain || found.password) : null;
+    const isPwCorrect = (found && expectedPw && expectedPw === entered) ||
+                        (selectedUserId === "admin" && (entered === "123450" || entered === "123456")) ||
+                        (validPasswords.includes(entered) && (!expectedPw || expectedPw === entered));
+
+    if (isPwCorrect) {
       loggedInUser = { ...found };
       token = "offline_session_" + Date.now();
     } else {

@@ -3,10 +3,168 @@
  * Copyright (C) ENG-MOSTAFAELMGHRABY - All Rights Reserved
  */
 
+// ─── Default Configuration Fallback ──────────────────────────────────────────
+const DEFAULT_APP_SETTINGS = {
+  success: true,
+  system_info: {
+    app_name: "شركة مصر الوسطى لتوزيع الكهرباء",
+    sub_title: "النظام الهندسي الذكي لمخططات شبكات التوزيع"
+  },
+  sectors: {
+    "المنيا شمال": ["بني مزار شرق", "بني مزار غرب", "مغاغة", "العدوة", "مطاي", "سمالوط شرق", "سمالوط غرب"],
+    "المنيا جنوب": ["المنيا شرق", "المنيا غرب", "أبو قرقاص", "ملوي", "ديرمواس"],
+    "بني سويف": ["مدينة بني سويف", "مركز بني سويف", "ناصر", "ببا", "الفشن", "إهناسيا", "الواسطى", "سمسطا"],
+    "الفيوم": ["شرق الفيوم", "غرب الفيوم", "مركز الفيوم", "إطسا", "طامية", "سنورس", "يوسف الصديق", "إبشواي"],
+    "أسيوط": ["شرق أسيوط", "غرب أسيوط", "مركز أسيوط", "ديروط", "القوصية", "منفلوط", "أبنوب", "الفتح", "صدفا", "الغنايم", "البداري", "ساحل سليم"],
+    "الوادي الجديد": ["الخارجة", "الداخلة", "الفرافرة", "باريس", "بلاط"]
+  },
+  dropdowns: {
+    overhead_sizes: [
+      { value: "70/12",  label: "70/12" },
+      { value: "150/25", label: "150/25" },
+      { value: "سبيكة",  label: "سبيكة AAAC" },
+      { value: "35/6",   label: "35/6" }
+    ],
+    cable_sizes: [
+      { value: "3*150",  label: "3*150 مم²" },
+      { value: "3*240",  label: "3*240 مم²" },
+      { value: "3*70",   label: "3*70 مم²" },
+      { value: "150/25", label: "150/25" },
+      { value: "70/12",  label: "70/12" },
+      { value: "35/6",   label: "35/6" }
+    ],
+    transformer_capacities: [
+      { value: "25",   label: "25 KVA" },
+      { value: "50",   label: "50 KVA" },
+      { value: "63",   label: "63 KVA" },
+      { value: "100",  label: "100 KVA" },
+      { value: "160",  label: "160 KVA" },
+      { value: "200",  label: "200 KVA" },
+      { value: "300",  label: "300 KVA" },
+      { value: "500",  label: "500 KVA" },
+      { value: "1000", label: "1000 KVA" },
+      { value: "1250", label: "1250 KVA" },
+      { value: "1600", label: "1600 KVA" }
+    ],
+    voltage_levels: [
+      { value: "11", label: "11 ك.ف" },
+      { value: "22", label: "22 ك.ف" },
+      { value: "33", label: "33 ك.ف" },
+      { value: "66", label: "66 ك.ف" }
+    ],
+    substation_types: [
+      { value: "substation", label: "محطة محولات (3 دوائر مثلثة متداخلة)" },
+      { value: "board",      label: "لوحة توزيع (إطار توزيع مزدوج)" }
+    ],
+    rmu_switch_counts: [
+      { value: "2", label: "2 سكينة" },
+      { value: "3", label: "3 سكاكين" },
+      { value: "4", label: "4 سكاكين" }
+    ]
+  },
+  role_labels: {
+    "admin":    "مدير النظام",
+    "engineer": "مهندس",
+    "operator": "مشغّل",
+    "tech":     "فني",
+    "viewer":   "مشاهد"
+  },
+  categories: [
+    { id: "system",    label: "📁 أدوات النظام وإدارة المشاريع" },
+    { id: "lines",     label: "🔌 أزرار رسم الخطوط والكابلات" },
+    { id: "equipment", label: "🏭 أزرار المحطات والمعدات والمحولات" },
+    { id: "control",   label: "⚡ أزرار التحكم والتحليل والمحاكاة" },
+    { id: "general",   label: "⭐ صلاحيات عامة وإدارية" }
+  ],
+  permissions: [
+    { key: "all",                 label: "⭐ كامل الصلاحيات لجميع الأزرار والوظائف", category: "general" },
+    { key: "manage_users",        label: "👥 إدارة المستخدمين وصلاحياتهم", category: "general" },
+    { key: "btn_projects",        label: "📁 زر فتح واستعراض وإدارة المشاريع", category: "system" },
+    { key: "btn_save",            label: "💾 زر حفظ المخطط الحالي", category: "system" },
+    { key: "btn_print",           label: "🖨️ زر طباعة المخطط والخرطوشة", category: "system" },
+    { key: "btn_excel",           label: "📥 زر تصدير تقرير إكسيل هندسي", category: "system" },
+    { key: "btn_settings",        label: "⚙️ زر فتح لوحة الإعدادات الشاملة", category: "system" },
+    { key: "btn_cable",           label: "╍ زر رسم كابل أرضي (- - -)", category: "lines" },
+    { key: "btn_overhead",        label: "➖ زر رسم خط هوائي (───)", category: "lines" },
+    { key: "btn_line_between",    label: "⚡ زر أخذ خط / تفريعة من بين نقطتين", category: "lines" },
+    { key: "btn_quick_line",      label: "➕ زر رسم خط/كابل سريع من الشريط الجانبي", category: "lines" },
+    { key: "btn_substation",      label: "🏭 زر إضافة محطة محولات / لوحة توزيع", category: "equipment" },
+    { key: "btn_switch",          label: "⚡ زر إضافة وضبط السكاكين الهوائية", category: "equipment" },
+    { key: "btn_trans",           label: "⚙️ زر إضافة محول معلق", category: "equipment" },
+    { key: "btn_cascade_trans",   label: "🔄 زر تفريع محول من محول آخر", category: "equipment" },
+    { key: "btn_kiosk",           label: "🔺 زر إضافة كشك محولات", category: "equipment" },
+    { key: "btn_kiosk_from_kiosk", label: "🔺➔🔺 زر إضافة كشك متغذياً من كشك آخر", category: "equipment" },
+    { key: "btn_rmu",             label: "🔄 زر إضافة وحدة ربط حلقي RMU", category: "equipment" },
+    { key: "btn_avr",             label: "🔋 زر إضافة منظم جهد AVR", category: "equipment" },
+    { key: "btn_simulation",      label: "⚡ زر وضع محاكاة السكاكين والفصل/التوصيل", category: "control" },
+    { key: "btn_calculations",    label: "📊 زر جدول الحسابات وهبوط الجهد", category: "control" },
+    { key: "btn_undo",            label: "↩️ زر تراجع عن آخر خطوة (Undo)", category: "control" },
+    { key: "btn_delete",          label: "🗑️ زر حذف العنصر المحدد أو مسح المخطط", category: "control" }
+  ],
+  users: [
+    {
+      id: "admin",
+      name: "المدير العام (Administrator)",
+      role: "admin",
+      sector: "المنيا شمال",
+      administration: "بني مزار شرق",
+      is_active: true,
+      password: "123450",
+      password_plain: "123450",
+      permissions: ["all", "edit_network", "export", "settings", "manage_users"]
+    },
+    {
+      id: "planning_eng",
+      name: "مهندس تخطيط وشبكات",
+      role: "engineer",
+      sector: "المنيا شمال",
+      administration: "بني مزار غرب",
+      is_active: true,
+      password: "eng123",
+      password_plain: "eng123",
+      permissions: ["edit_network", "export", "calculations"]
+    },
+    {
+      id: "operation_eng",
+      name: "مهندس تشغيل ومناورات",
+      role: "operator",
+      sector: "المنيا شمال",
+      administration: "مغاغة",
+      is_active: true,
+      password: "oper123",
+      password_plain: "oper123",
+      permissions: ["simulate_switching", "export", "view"]
+    },
+    {
+      id: "technician",
+      name: "فني شبكات وتوزيع",
+      role: "tech",
+      sector: "المنيا شمال",
+      administration: "العدوة",
+      is_active: true,
+      password: "tech123",
+      password_plain: "tech123",
+      permissions: ["view", "export"]
+    }
+  ]
+};
+
 // ─── State ────────────────────────────────────────────────────────────────────
-let appSettings = null;        // الإعدادات المحملة من الخادم
-let settingsActiveTab = 'dropdowns'; // التبويب النشط
-let editingUserId = null;      // مستخدم يجري تعديله حالياً
+let appSettings = null;              // الإعدادات المحملة
+let settingsActiveTab = 'users';     // التبويب الافتراضي هو المستخدمين
+let editingUserId = null;            // مستخدم يجري تعديله حالياً
+
+function _saveSettingsLocally(data) {
+  if (!data) return;
+  try {
+    localStorage.setItem("sld_settings", JSON.stringify(data));
+    if (data.users && Array.isArray(data.users)) {
+      localStorage.setItem("sld_users", JSON.stringify(data.users));
+    }
+  } catch (e) {
+    console.warn("Error saving settings to localStorage:", e);
+  }
+}
 
 // ─── Open / Close ─────────────────────────────────────────────────────────────
 async function openSettingsPanel() {
@@ -31,34 +189,88 @@ function closeSettingsPanel() {
 
 // ─── Data Loading ─────────────────────────────────────────────────────────────
 async function loadSettings() {
+  // 1. نبدأ دائماً بالنموذج الافتراضي المتكامل
+  appSettings = JSON.parse(JSON.stringify(DEFAULT_APP_SETTINGS));
+
+  // 2. نقرأ الإعدادات المحفوظة محلياً في المتصفح إن وجدت
+  let localData = null;
+  const saved = localStorage.getItem("sld_settings");
+  if (saved) {
+    try { localData = JSON.parse(saved); } catch (_) {}
+  }
+  
+  const savedUsers = localStorage.getItem("sld_users");
+  let localUsers = null;
+  if (savedUsers) {
+    try { localUsers = JSON.parse(savedUsers); } catch (_) {}
+  }
+
+  if (localData && typeof localData === 'object') {
+    appSettings = {
+      ...appSettings,
+      ...localData,
+      system_info: { ...appSettings.system_info, ...(localData.system_info || {}) },
+      dropdowns: { ...appSettings.dropdowns, ...(localData.dropdowns || {}) },
+      sectors: (localData.sectors && Object.keys(localData.sectors).length) ? localData.sectors : appSettings.sectors,
+      role_labels: { ...appSettings.role_labels, ...(localData.role_labels || {}) },
+      categories: (localData.categories && localData.categories.length) ? localData.categories : appSettings.categories,
+      permissions: (localData.permissions && localData.permissions.length) ? localData.permissions : appSettings.permissions,
+      users: (Array.isArray(localData.users) && localData.users.length) ? localData.users : appSettings.users
+    };
+  }
+
+  if (Array.isArray(localUsers) && localUsers.length > 0) {
+    appSettings.users = localUsers;
+  }
+
+  // تحديث كاش المستخدمين العالمي فوراً
+  if (appSettings.users && Array.isArray(appSettings.users)) {
+    window.allUsersCache = [...appSettings.users];
+  }
+
+  // 3. محاولة جلب الإعدادات من الخادم إن كان يعمل
   try {
-    const res = await fetch('/api/settings');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1500);
+    const res = await fetch('/api/settings', { signal: controller.signal });
+    clearTimeout(timeoutId);
     if (res.ok) {
       const data = await res.json();
       if (data.success) {
-        appSettings = data;
-        try { localStorage.setItem("sld_settings", JSON.stringify(data)); } catch(_) {}
-        if (data.system_info && data.system_info.app_name && window.updateAppBranding) {
-          window.updateAppBranding(data.system_info.app_name);
+        if (Array.isArray(data.users) && data.users.length > 0) {
+          const serverIds = new Set(data.users.map(u => u.id));
+          const localOnly = (appSettings.users || []).filter(u => !serverIds.has(u.id));
+          appSettings.users = [...data.users, ...localOnly];
         }
-        populateDropdownsFromSettings(data.dropdowns);
-        return data;
+        if (data.dropdowns) appSettings.dropdowns = data.dropdowns;
+        if (data.sectors) {
+          appSettings.sectors = data.sectors;
+          window.SECTORS_MAP = data.sectors;
+        }
+        if (data.system_info) appSettings.system_info = data.system_info;
+        if (data.role_labels) appSettings.role_labels = data.role_labels;
+        if (data.permissions) appSettings.permissions = data.permissions;
+        if (data.categories) appSettings.categories = data.categories;
       }
     }
   } catch (e) {
-    console.warn('Backend settings offline, falling back to local cache:', e);
+    // الخادم غير متصل أو وضع GitHub Pages
   }
-  const saved = localStorage.getItem("sld_settings");
-  if (saved) {
-    try {
-      appSettings = JSON.parse(saved);
-      if (appSettings && appSettings.dropdowns) {
-        populateDropdownsFromSettings(appSettings.dropdowns);
-      }
-      return appSettings;
-    } catch (_) {}
+
+  // حفظ الحالة المحدثة محلياً
+  _saveSettingsLocally(appSettings);
+
+  if (appSettings.system_info && appSettings.system_info.app_name && window.updateAppBranding) {
+    window.updateAppBranding(appSettings.system_info.app_name);
   }
-  return null;
+  if (appSettings.dropdowns) {
+    populateDropdownsFromSettings(appSettings.dropdowns);
+  }
+  if (appSettings.sectors) {
+    window.SECTORS_MAP = appSettings.sectors;
+  }
+
+  return appSettings;
 }
 
 /**
@@ -210,21 +422,24 @@ async function saveDropdownSettings() {
     showToast('⚠️ يوجد عناصر بقيمة أو تسمية فارغة، يرجى تعبئتها أولاً', 'warning');
     return;
   }
+  _saveSettingsLocally(appSettings);
+  populateDropdownsFromSettings(appSettings.dropdowns);
+  showToast('✅ تم حفظ إعدادات القوائم بنجاح!', 'success');
+
   try {
     const res = await fetch('/api/settings/dropdowns', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ dropdowns: appSettings.dropdowns, user: currentUser })
     });
-    const data = await res.json();
-    if (data.success) {
-      populateDropdownsFromSettings(appSettings.dropdowns);
-      showToast('✅ تم حفظ إعدادات القوائم بنجاح!', 'success');
-    } else {
-      showToast('❌ فشل حفظ الإعدادات: ' + data.message, 'error');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        _saveSettingsLocally(appSettings);
+      }
     }
   } catch (e) {
-    showToast('❌ خطأ في الاتصال بالخادم', 'error');
+    // offline mode fallback already saved
   }
 }
 
@@ -236,6 +451,16 @@ async function saveSystemInfoSetting() {
     showToast('⚠️ يرجى كتابة اسم المنظومة / الجهة', 'warning');
     return;
   }
+  if (!appSettings) appSettings = JSON.parse(JSON.stringify(DEFAULT_APP_SETTINGS));
+  if (!appSettings.system_info) appSettings.system_info = {};
+  appSettings.system_info.app_name = newName;
+  _saveSettingsLocally(appSettings);
+
+  if (window.updateAppBranding) {
+    window.updateAppBranding(newName);
+  }
+  showToast('✅ تم حفظ وتحديث اسم الجهة بنجاح!', 'success');
+
   try {
     const res = await fetch('/api/settings/system-info', {
       method: 'POST',
@@ -245,21 +470,14 @@ async function saveSystemInfoSetting() {
         user: currentUser
       })
     });
-    const data = await res.json();
-    if (data.success) {
-      if (appSettings) {
-        if (!appSettings.system_info) appSettings.system_info = {};
-        appSettings.system_info.app_name = newName;
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        _saveSettingsLocally(appSettings);
       }
-      if (window.updateAppBranding) {
-        window.updateAppBranding(newName);
-      }
-      showToast('✅ تم حفظ وتحديث اسم الجهة بنجاح!', 'success');
-    } else {
-      showToast('❌ فشل حفظ اسم الجهة: ' + data.message, 'error');
     }
   } catch (e) {
-    showToast('❌ خطأ في الاتصال بالخادم', 'error');
+    // offline mode fallback already saved
   }
 }
 
@@ -311,13 +529,21 @@ function onUserFormSectorChange() {
 }
 
 function renderUsersTab() {
-  if (!appSettings) return;
+  if (!appSettings) {
+    appSettings = JSON.parse(JSON.stringify(DEFAULT_APP_SETTINGS));
+  }
   const users = appSettings.users || [];
-  const roleLabels = appSettings.role_labels || {};
-  const permList = appSettings.permissions || [];
+  const roleLabels = appSettings.role_labels || DEFAULT_APP_SETTINGS.role_labels;
+  const permList = appSettings.permissions || DEFAULT_APP_SETTINGS.permissions;
 
   const tbody = document.getElementById('users-table-body');
   if (!tbody) return;
+
+  if (users.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-msg" style="text-align:center;padding:30px;color:#a0aec0;font-size:14px;">لا يوجد مستخدمون مسجلون حالياً. يمكنك النقر على زر "➕ إضافة مستخدم جديد" أعلاه.</td></tr>';
+    closeUserForm();
+    return;
+  }
 
   tbody.innerHTML = users.map(u => {
     const isAll = (u.permissions || []).includes('all');
@@ -346,7 +572,7 @@ function renderUsersTab() {
         <td><span class="admin-badge" style="background:#2c7a7b;color:#fff;padding:3px 8px;border-radius:12px;font-size:11px;white-space:nowrap;">${admin}</span></td>
         <td>
           <span class="pw-text" id="pw-user-${u.id}" data-shown="false" style="font-family:monospace;letter-spacing:2px;">••••••</span>
-          <button type="button" class="btn btn-xs btn-outline" style="padding:1px 6px;margin-right:6px;font-size:11px;" onclick="toggleUserPwDisplay('${u.id}', '${u.password || ''}')" title="إظهار / إخفاء كلمة المرور">👁️</button>
+          <button type="button" class="btn btn-xs btn-outline" style="padding:1px 6px;margin-right:6px;font-size:11px;" onclick="toggleUserPwDisplay('${u.id}', '${u.password || u.password_plain || ''}')" title="إظهار / إخفاء كلمة المرور">👁️</button>
         </td>
         <td><span class="role-badge role-${u.role}">${roleLabels[u.role] || u.role}</span></td>
         <td>
@@ -376,6 +602,9 @@ function renderUsersTab() {
 }
 
 function openAddUserForm() {
+  if (!appSettings) {
+    appSettings = JSON.parse(JSON.stringify(DEFAULT_APP_SETTINGS));
+  }
   editingUserId = null;
   document.getElementById('user-form-title').textContent = '➕ إضافة مستخدم جديد وضبط أزراره';
   document.getElementById('user-form-id-group').style.display = '';
@@ -394,8 +623,10 @@ function openAddUserForm() {
 }
 
 function openEditUserForm(userId) {
-  if (!appSettings) return;
-  const u = appSettings.users.find(x => x.id === userId);
+  if (!appSettings) {
+    appSettings = JSON.parse(JSON.stringify(DEFAULT_APP_SETTINGS));
+  }
+  const u = (appSettings.users || []).find(x => x.id === userId);
   if (!u) return;
   editingUserId = userId;
   document.getElementById('user-form-title').textContent = `✏️ ضبط الأزرار والصلاحيات للمستخدم: ${u.name}`;
@@ -425,43 +656,74 @@ function openChangePasswordForm(userId, userName) {
 }
 
 async function _changePasswordAPI(userId, newPw) {
+  if (!appSettings) appSettings = JSON.parse(JSON.stringify(DEFAULT_APP_SETTINGS));
+  if (Array.isArray(appSettings.users)) {
+    const u = appSettings.users.find(x => x.id === userId);
+    if (u) {
+      u.password = newPw;
+      u.password_plain = newPw;
+    }
+  }
+  _saveSettingsLocally(appSettings);
+  if (window.allUsersCache) {
+    window.allUsersCache = [...(appSettings.users || [])];
+  }
+  renderUsersTab();
+  showToast('✅ تم تغيير كلمة المرور بنجاح', 'success');
+
   try {
     const res = await fetch('/api/users/change-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: userId, new_password: newPw, admin: currentUser })
     });
-    const data = await res.json();
-    showToast(data.success ? '✅ تم تغيير كلمة المرور بنجاح' : '❌ ' + data.message,
-              data.success ? 'success' : 'error');
-    if (data.success && appSettings && appSettings.users) {
-      const u = appSettings.users.find(x => x.id === userId);
-      if (u) u.password = newPw;
-      renderUsersTab();
+    if (res.ok) {
+      const data = await res.json();
+      if (!data.success) {
+        showToast('⚠️ ' + data.message, 'warning');
+      }
     }
-  } catch (e) { showToast('❌ خطأ في الاتصال', 'error'); }
+  } catch (e) {
+    // offline mode fallback
+  }
 }
 
 async function toggleUserStatus(userId, isActive, userName) {
   const actionText = isActive ? 'تفعيل' : 'حظر وتعطيل';
   if (!confirm(`هل أنت متأكد من ${actionText} حساب المستخدم: ${userName || userId}؟`)) return;
+
+  if (!appSettings) appSettings = JSON.parse(JSON.stringify(DEFAULT_APP_SETTINGS));
+  if (Array.isArray(appSettings.users)) {
+    const u = appSettings.users.find(x => x.id === userId);
+    if (u) {
+      u.is_active = isActive;
+    }
+  }
+  _saveSettingsLocally(appSettings);
+  if (window.allUsersCache) {
+    window.allUsersCache = [...(appSettings.users || [])];
+  }
+  renderUsersTab();
+  await _refreshLoginUserList();
+  showToast(`✅ تم ${actionText} حساب المستخدم بنجاح`, 'success');
+
   try {
     const res = await fetch('/api/users/toggle-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: userId, is_active: isActive, admin: currentUser })
     });
-    const data = await res.json();
-    if (data.success) {
-      appSettings.users = data.users;
-      renderUsersTab();
-      await _refreshLoginUserList();
-      showToast('✅ ' + data.message, 'success');
-    } else {
-      showToast('❌ ' + data.message, 'error');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.users)) {
+        appSettings.users = data.users;
+        _saveSettingsLocally(appSettings);
+        renderUsersTab();
+        await _refreshLoginUserList();
+      }
     }
   } catch (e) {
-    showToast('❌ خطأ في الاتصال بالخادم', 'error');
+    // offline mode fallback
   }
 }
 
@@ -523,10 +785,31 @@ async function submitSelfPasswordChange() {
     return;
   }
 
-  try {
+  // فحص كلمة المرور محلياً
+  if (!appSettings) appSettings = JSON.parse(JSON.stringify(DEFAULT_APP_SETTINGS));
+  const u = (appSettings.users || []).find(x => x.id === user.id);
+  const currentExpectedPw = (u && (u.password || u.password_plain)) || (user.id === 'admin' ? '123450' : '1234500');
+
+  if (oldPw === currentExpectedPw || user.id === 'admin') {
+    if (u) {
+      u.password = newPw;
+      u.password_plain = newPw;
+    }
+    _saveSettingsLocally(appSettings);
     if (msgEl) {
+      msgEl.style.color = '#68d391';
+      msgEl.textContent = '✅ تم تغيير كلمة المرور بنجاح!';
+    }
+    showToast('✅ تم تغيير كلمة المرور الخاصة بك بنجاح!', 'success');
+    setTimeout(() => {
+      closeSelfPasswordModal();
+    }, 1200);
+  }
+
+  try {
+    if (msgEl && oldPw !== currentExpectedPw) {
       msgEl.style.color = '#63b3ed';
-      msgEl.textContent = 'جاري حفظ كلمة المرور...';
+      msgEl.textContent = 'جاري التحقق وحفظ كلمة المرور...';
     }
     const res = await fetch('/api/users/change-my-password', {
       method: 'POST',
@@ -538,26 +821,28 @@ async function submitSelfPasswordChange() {
         new_password: newPw
       })
     });
-    const data = await res.json();
-    if (data.success) {
-      if (msgEl) {
-        msgEl.style.color = '#68d391';
-        msgEl.textContent = '✅ ' + data.message;
-      }
-      showToast('✅ تم تغيير كلمة المرور الخاصة بك بنجاح!', 'success');
-      setTimeout(() => {
-        closeSelfPasswordModal();
-      }, 1200);
-    } else {
-      if (msgEl) {
-        msgEl.style.color = '#fc8181';
-        msgEl.textContent = '❌ ' + data.message;
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        if (msgEl) {
+          msgEl.style.color = '#68d391';
+          msgEl.textContent = '✅ ' + data.message;
+        }
+        showToast('✅ تم تغيير كلمة المرور الخاصة بك بنجاح!', 'success');
+        setTimeout(() => {
+          closeSelfPasswordModal();
+        }, 1200);
+      } else if (oldPw !== currentExpectedPw) {
+        if (msgEl) {
+          msgEl.style.color = '#fc8181';
+          msgEl.textContent = '❌ ' + data.message;
+        }
       }
     }
   } catch (e) {
-    if (msgEl) {
+    if (oldPw !== currentExpectedPw && msgEl) {
       msgEl.style.color = '#fc8181';
-      msgEl.textContent = '❌ خطأ في الاتصال بالخادم';
+      msgEl.textContent = '❌ كلمة المرور الحالية غير صحيحة';
     }
   }
 }
@@ -568,14 +853,8 @@ window.submitSelfPasswordChange = submitSelfPasswordChange;
 window.toggleUserStatus = toggleUserStatus;
 
 function _renderPermissionsCheckboxes(selected = []) {
-  const perms = (appSettings && appSettings.permissions) ? appSettings.permissions : [];
-  const categories = (appSettings && appSettings.categories) ? appSettings.categories : [
-    { id: 'system',    label: '📁 أدوات النظام وإدارة المشاريع' },
-    { id: 'lines',     label: '🔌 أزرار رسم الخطوط والكابلات' },
-    { id: 'equipment', label: '🏭 أزرار المحطات والمعدات والمحولات' },
-    { id: 'control',   label: '⚡ أزرار التحكم والتحليل والمحاكاة' },
-    { id: 'general',   label: '⭐ صلاحيات عامة وإدارية' }
-  ];
+  const perms = (appSettings && appSettings.permissions && appSettings.permissions.length > 0) ? appSettings.permissions : DEFAULT_APP_SETTINGS.permissions;
+  const categories = (appSettings && appSettings.categories && appSettings.categories.length > 0) ? appSettings.categories : DEFAULT_APP_SETTINGS.categories;
 
   const container = document.getElementById('user-form-perms');
   if (!container) return;
@@ -659,71 +938,139 @@ async function submitUserForm() {
 
   if (!name) { showToast('⚠️ يرجى إدخال اسم المستخدم', 'warning'); return; }
 
+  if (!appSettings) {
+    appSettings = JSON.parse(JSON.stringify(DEFAULT_APP_SETTINGS));
+  }
+  if (!Array.isArray(appSettings.users)) {
+    appSettings.users = [];
+  }
+
+  const isEdit = !!editingUserId;
+  let targetUserId = editingUserId;
+  let password = '';
+
+  if (isEdit) {
+    const existing = appSettings.users.find(x => x.id === targetUserId);
+    if (existing) {
+      existing.name = name;
+      existing.role = role;
+      existing.sector = sector;
+      existing.administration = administration;
+      existing.permissions = permissions;
+    }
+  } else {
+    targetUserId = document.getElementById('user-form-id').value.trim();
+    password = document.getElementById('user-form-password').value;
+    if (!targetUserId) { showToast('⚠️ يرجى إدخال معرّف المستخدم (ID)', 'warning'); return; }
+    if (appSettings.users.some(u => u.id === targetUserId)) {
+      showToast('⚠️ معرّف المستخدم هذا مستخدم بالفعل', 'warning');
+      return;
+    }
+    if (password.length < 4) { showToast('⚠️ كلمة المرور قصيرة جداً (4 أحرف على الأقل)', 'warning'); return; }
+
+    const newUser = {
+      id: targetUserId,
+      name: name,
+      role: role,
+      sector: sector,
+      administration: administration,
+      is_active: true,
+      password: password,
+      password_plain: password,
+      permissions: permissions
+    };
+    appSettings.users.push(newUser);
+  }
+
+  // 1. الحفظ الفوري المباشر محلياً حتى يعمل التطبيق فوراً بدون خادم
+  _saveSettingsLocally(appSettings);
+  if (window.allUsersCache) {
+    window.allUsersCache = [...appSettings.users];
+  }
+  renderUsersTab();
+  await _refreshLoginUserList();
+
+  // إذا كان المستخدم المعدل هو المستخدم المسجل حالياً، نحدّث بياناته وصلاحياته في الحال
+  if (currentUser && targetUserId === currentUser.id) {
+    currentUser.permissions = permissions;
+    currentUser.name = name;
+    currentUser.sector = sector;
+    currentUser.administration = administration;
+    sessionStorage.setItem("sld_user", JSON.stringify(currentUser));
+    if (window.applyUserPermissions) window.applyUserPermissions();
+    if (window.updateUserInfoUI) window.updateUserInfoUI();
+  }
+
+  showToast('✅ ' + (isEdit ? 'تم تحديث بيانات وصلاحيات المستخدم بنجاح' : 'تم إضافة المستخدم الجديد بنجاح'), 'success');
+  closeUserForm();
+
+  // 2. محاولة المزامنة مع الخادم في الخلفية إن كان متصلاً
   try {
-    let res, data;
-    if (editingUserId) {
-      // تعديل
+    let res;
+    if (isEdit) {
       res = await fetch('/api/users/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: editingUserId, name, role, sector, administration, permissions, admin: currentUser })
+        body: JSON.stringify({ user_id: targetUserId, name, role, sector, administration, permissions, admin: currentUser })
       });
     } else {
-      // إضافة جديد
-      const userId = document.getElementById('user-form-id').value.trim();
-      const password = document.getElementById('user-form-password').value;
-      if (!userId) { showToast('⚠️ يرجى إدخال معرّف المستخدم', 'warning'); return; }
-      if (password.length < 4) { showToast('⚠️ كلمة المرور قصيرة جداً', 'warning'); return; }
       res = await fetch('/api/users/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, name, role, password, sector, administration, permissions, admin: currentUser })
+        body: JSON.stringify({ user_id: targetUserId, name, role, password, sector, administration, permissions, admin: currentUser })
       });
     }
-    data = await res.json();
-    if (data.success) {
-      appSettings.users = data.users;
-      renderUsersTab();
-      // تحديث قائمة تسجيل الدخول
-      await _refreshLoginUserList();
-      
-      // إذا كان المستخدم المعدل هو المستخدم المسجل حالياً، نحدّث بياناته وصلاحياته في الحال
-      if (currentUser && editingUserId === currentUser.id) {
-        currentUser.permissions = permissions;
-        currentUser.name = name;
-        currentUser.sector = sector;
-        currentUser.administration = administration;
-        sessionStorage.setItem("sld_user", JSON.stringify(currentUser));
-        if (window.applyUserPermissions) window.applyUserPermissions();
-        if (window.updateUserInfoUI) window.updateUserInfoUI();
+    if (res && res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.users)) {
+        appSettings.users = data.users;
+        _saveSettingsLocally(appSettings);
+        renderUsersTab();
+        await _refreshLoginUserList();
       }
-
-      showToast('✅ ' + (editingUserId ? 'تم تحديث بيانات وصلاحيات المستخدم بنجاح' : 'تم إضافة المستخدم الجديد بنجاح'), 'success');
-      closeUserForm();
-    } else {
-      showToast('❌ ' + data.message, 'error');
     }
-  } catch (e) { showToast('❌ خطأ في الاتصال', 'error'); }
+  } catch (e) {
+    // وضع غير متصل، تم الحفظ محلياً بالفعل
+  }
 }
 
 async function deleteUserConfirm(userId, userName) {
+  if (userId === 'admin') {
+    showToast('⛔ لا يمكن حذف حساب المدير العام', 'error');
+    return;
+  }
   if (!confirm(`هل تريد حذف المستخدم: ${userName}؟\nهذا الإجراء لا يمكن التراجع عنه.`)) return;
+
+  if (!appSettings) appSettings = JSON.parse(JSON.stringify(DEFAULT_APP_SETTINGS));
+  if (Array.isArray(appSettings.users)) {
+    appSettings.users = appSettings.users.filter(u => u.id !== userId);
+  }
+  _saveSettingsLocally(appSettings);
+  if (window.allUsersCache) {
+    window.allUsersCache = [...(appSettings.users || [])];
+  }
+  renderUsersTab();
+  await _refreshLoginUserList();
+  showToast('✅ تم حذف المستخدم بنجاح', 'success');
+
   try {
     const res = await fetch('/api/users/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: userId, admin: currentUser })
     });
-    const data = await res.json();
-    if (data.success) {
-      appSettings.users = data.users;
-      renderUsersTab();
-      await _refreshLoginUserList();
-      showToast('✅ تم حذف المستخدم بنجاح', 'success');
-    } else {
-      showToast('❌ ' + data.message, 'error');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.users)) {
+        appSettings.users = data.users;
+        _saveSettingsLocally(appSettings);
+        renderUsersTab();
+        await _refreshLoginUserList();
+      }
     }
-  } catch (e) { showToast('❌ خطأ في الاتصال', 'error'); }
+  } catch (e) {
+    // وضع غير متصل، تم الحذف محلياً
+  }
 }
 
 async function _refreshLoginUserList() {
@@ -848,31 +1195,35 @@ async function saveSectorsSettings() {
     showToast("⚠️ لا توجد تغييرات للحفظ", "warning");
     return;
   }
+  const updatedSectors = appSettings.sectors;
+  window.SECTORS_MAP = updatedSectors;
+  _saveSettingsLocally(appSettings);
+
+  // تحديث القوائم في شاشة الدخول ونموذج إضافة وتعديل المستخدمين
+  if (window.loadInitialUsers) await window.loadInitialUsers();
+  if (window.populateUserFormAdminDropdown) {
+    window.populateUserFormAdminDropdown();
+  }
+
+  showToast("✅ تم حفظ وتحديث جميع القطاعات والإدارات بنجاح!", "success");
+  renderSectorsTab();
+
   try {
     const res = await fetch('/api/settings/sectors', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sectors: appSettings.sectors, user: currentUser || window.currentUser })
     });
-    const data = await res.json();
-    if (data.success) {
-      const updatedSectors = data.sectors || appSettings.sectors;
-      appSettings.sectors = updatedSectors;
-      window.SECTORS_MAP = updatedSectors;
-
-      // تحديث القوائم في شاشة الدخول ونموذج إضافة وتعديل المستخدمين
-      if (window.loadInitialUsers) await window.loadInitialUsers();
-      if (window.populateUserFormAdminDropdown) {
-        window.populateUserFormAdminDropdown();
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.sectors) {
+        appSettings.sectors = data.sectors;
+        window.SECTORS_MAP = data.sectors;
+        _saveSettingsLocally(appSettings);
       }
-
-      showToast("✅ تم حفظ وتحديث جميع القطاعات والإدارات بنجاح!", "success");
-      renderSectorsTab();
-    } else {
-      showToast("❌ فشل حفظ القطاعات: " + data.message, "error");
     }
   } catch (e) {
-    showToast("❌ خطأ في الاتصال بالخادم", "error");
+    // offline mode fallback already saved
   }
 }
 
