@@ -1309,15 +1309,6 @@ const Components = {
           <text x="0" y="3.5" text-anchor="middle" fill="${defOffset !== 0 ? '#38BDF8' : strokeColor}" font-size="9" font-weight="bold" pointer-events="none">${isVertical ? '↔' : '↕'}</text>
         </g>
 
-        ${(cornerX !== null && cornerY !== null && isOrthogonalCable) ? `
-        <!-- مقبض توجيه وتبديل زاوية الكابل القائمة 90° -->
-        <g class="sld-corner-handle-group" data-sec-id="${sec.id}" transform="translate(${cornerX}, ${cornerY})" onclick="event.stopPropagation(); toggleSection90DegreeCorner('${sec.id}')" style="cursor:pointer;" title="انقر لتبديل مسار الكابل 90° (أفقي ➔ رأسي ⇄ رأسي ➔ أفقي)">
-          <circle cx="0" cy="0" r="14" fill="transparent" />
-          <circle cx="0" cy="0" r="${isSelected ? 9 : 7.5}" class="sld-corner-handle-circle" fill="#0F172A" stroke="${isSelected ? '#00F0FF' : '#38BDF8'}" stroke-width="2" />
-          <text x="0" y="3.5" text-anchor="middle" fill="${isSelected ? '#00F0FF' : '#38BDF8'}" font-size="9" font-weight="bold" pointer-events="none">📐</text>
-        </g>
-        ` : ''}
-
         <!-- مقبض سحب وتوجيه الخط من الأمام في أي اتجاه -->
         <g class="sld-stretch-handle-group" data-sec-id="${sec.id}" data-node-id="${toNode ? toNode.id : ''}">
           <circle cx="${x2}" cy="${y2}" r="16" fill="transparent" style="cursor:move;" />

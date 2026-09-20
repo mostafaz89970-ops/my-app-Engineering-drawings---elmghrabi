@@ -4372,7 +4372,9 @@ async function saveProjectToStorage(project) {
   }
 
   // 2. المزامنة اللحظية مع جميع الأجهزة المتصلة
-  if (typeof window.broadcastProjectUpdate === "function") {
+  if (typeof window.broadcastProjectSaved === "function") {
+    try { window.broadcastProjectSaved(project, catalog); } catch(e) {}
+  } else if (typeof window.broadcastProjectUpdate === "function") {
     try { window.broadcastProjectUpdate("save"); } catch(e) {}
   }
 
@@ -4640,6 +4642,10 @@ async function deleteProjectFromManager(p_id, p_name) {
     catalog = catalog.filter(p => p.id !== p_id && p.name !== p_name && p.name !== p_id);
     localStorage.setItem("sld_projects_catalog", JSON.stringify(catalog));
     localStorage.removeItem("sld_proj_" + p_id);
+
+    if (typeof window.broadcastProjectDeleted === "function") {
+      try { window.broadcastProjectDeleted(p_id, catalog); } catch(e) {}
+    }
   } catch(e) {}
 
   // 2. حذف من الخادم إن وجد
@@ -5154,5 +5160,43 @@ window.quickToggleSelectedSectionCorner = quickToggleSelectedSectionCorner;
 window.quickOrientSelectedSection = quickOrientSelectedSection;
 window.quickResetSelectedSectionDeflect = quickResetSelectedSectionDeflect;
 window.quickEditSelectedSection = quickEditSelectedSection;
+
+// ─── استقبال ومزامنة المشاريع سحابياً فور وصولها من جهاز آخر ───────────────────
+function applySyncedProject(project, catalog) {
+  if (project && project.id) {
+    try {
+      localStorage.setItem("sld_proj_" + project.id, JSON.stringify(project));
+      localStorage.setItem("sld_saved_feeder", JSON.stringify(project));
+      window.currentProject = project;
+      if (typeof updateFeederInputs === "function") updateFeederInputs();
+      if (typeof renderNetwork === "function") renderNetwork();
+    } catch(e) {}
+  }
+  if (Array.isArray(catalog)) {
+    try {
+      localStorage.setItem("sld_projects_catalog", JSON.stringify(catalog));
+      const modal = document.getElementById("projects-manager-modal");
+      if (modal && !modal.classList.contains("hidden") && typeof renderProjectsManagerList === "function") {
+        renderProjectsManagerList();
+      }
+    } catch(e) {}
+  }
+}
+
+function applySyncedCatalog(catalog) {
+  if (Array.isArray(catalog)) {
+    try {
+      localStorage.setItem("sld_projects_catalog", JSON.stringify(catalog));
+      const modal = document.getElementById("projects-manager-modal");
+      if (modal && !modal.classList.contains("hidden") && typeof renderProjectsManagerList === "function") {
+        renderProjectsManagerList();
+      }
+    } catch(e) {}
+  }
+}
+
+window.applySyncedProject = applySyncedProject;
+window.applySyncedCatalog = applySyncedCatalog;
+
 
 
