@@ -366,6 +366,10 @@ async function handleLogin(e) {
 
   applyUserPermissions();
 
+  if (window.logActivity) {
+    try { window.logActivity("login", "تسجيل دخول ناجح للمنظومة"); } catch(e) {}
+  }
+
   try {
     if (window.initSettings) await window.initSettings();
   } catch(e) { console.warn("initSettings error:", e); }
@@ -429,6 +433,11 @@ async function handleLogin(e) {
 
 function handleLogout() {
   if (confirm("هل ترغب بالفعل في تسجيل الخروج من منظومة المخططات؟")) {
+    // تسجيل نشاط الخروج محلياً وسحابياً قبل مسح بيانات المستخدم
+    if (window.logActivity) {
+      try { window.logActivity("logout", "تسجيل خروج من منظومة المخططات"); } catch(e) {}
+    }
+
     // إرسال طلب تسجيل الخروج للخادم (لتسجيل النشاط)
     if (sessionToken) {
       fetch("/api/logout", {
@@ -442,12 +451,34 @@ function handleLogout() {
     currentUser = null;
     window.currentUser = null;
     sessionToken = null;
-    document.getElementById("password-input").value = "";
-    document.getElementById("app-shell").classList.add("hidden");
-    document.getElementById("login-modal").classList.remove("hidden");
+
+    const pwInput = document.getElementById("password-input");
+    if (pwInput) pwInput.value = "";
+
+    const errDiv = document.getElementById("login-error");
+    if (errDiv) errDiv.style.display = "none";
+
+    const appShell = document.getElementById("app-shell");
+    if (appShell) {
+      appShell.classList.add("hidden");
+      appShell.style.display = "none";
+    }
+
+    const loginModal = document.getElementById("login-modal");
+    if (loginModal) {
+      loginModal.classList.remove("hidden");
+      loginModal.classList.add("active");
+      loginModal.style.display = "flex";
+    }
+
     // إخفاء زر الإعدادات
     const btn = document.getElementById("btn-settings");
     if (btn) btn.style.display = "none";
+
+    // إعادة تحديث قائمة المستخدمين في نافذة تسجيل الدخول
+    if (window.loadInitialUsers) {
+      window.loadInitialUsers();
+    }
   }
 }
 
