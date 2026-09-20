@@ -154,13 +154,17 @@ let appSettings = null;              // الإعدادات المحملة
 let settingsActiveTab = 'users';     // التبويب الافتراضي هو المستخدمين
 let editingUserId = null;            // مستخدم يجري تعديله حالياً
 
-function _saveSettingsLocally(data) {
+function _saveSettingsLocally(data, shouldBroadcast) {
   if (!data) return;
   try {
     localStorage.setItem("sld_settings", JSON.stringify(data));
     if (data.users && Array.isArray(data.users)) {
       localStorage.setItem("sld_users", JSON.stringify(data.users));
-      if (typeof window.broadcastUsersUpdate === "function") {
+      window.allUsersCache = [...data.users];
+      if (typeof allUsersCache !== 'undefined') {
+        allUsersCache = [...data.users];
+      }
+      if (shouldBroadcast !== false && typeof window.broadcastUsersUpdate === "function") {
         try { window.broadcastUsersUpdate(data.users); } catch(_) {}
       }
     }
@@ -260,8 +264,8 @@ async function loadSettings() {
     // الخادم غير متصل أو وضع GitHub Pages
   }
 
-  // حفظ الحالة المحدثة محلياً
-  _saveSettingsLocally(appSettings);
+  // حفظ الحالة المحدثة محلياً دون بثها سحابياً لمنع الكتابة على السحابة
+  _saveSettingsLocally(appSettings, false);
 
   if (appSettings.system_info && appSettings.system_info.app_name && window.updateAppBranding) {
     window.updateAppBranding(appSettings.system_info.app_name);

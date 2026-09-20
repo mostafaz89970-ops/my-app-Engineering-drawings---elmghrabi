@@ -3,7 +3,18 @@
  * Copyright (C) ENG-MOSTAFAELMGHRABY - All Rights Reserved
  */
 
-let currentProject = null;
+var currentProject = window.currentProject || null;
+window.currentProject = currentProject;
+
+window.setCurrentProject = function(proj) {
+  currentProject = proj;
+  window.currentProject = proj;
+  return proj;
+};
+window.getCurrentProject = function() {
+  return currentProject || window.currentProject;
+};
+
 let currentLineDialogType = "هوائي";
 let currentTransDialogType = "transformer";
 
@@ -4744,6 +4755,7 @@ function createNewProjectDirectly() {
     ],
     sections: []
   };
+  window.currentProject = currentProject;
   if (window.clearSelection) clearSelection();
   updateFeederInputs();
   renderNetwork();
@@ -5167,9 +5179,12 @@ function applySyncedProject(project, catalog) {
     try {
       localStorage.setItem("sld_proj_" + project.id, JSON.stringify(project));
       localStorage.setItem("sld_saved_feeder", JSON.stringify(project));
+      currentProject = project;
       window.currentProject = project;
       if (typeof updateFeederInputs === "function") updateFeederInputs();
       if (typeof renderNetwork === "function") renderNetwork();
+      if (typeof fitToScreen === "function") fitToScreen();
+      else if (window.fitToScreen) window.fitToScreen();
     } catch(e) {}
   }
   if (Array.isArray(catalog)) {
