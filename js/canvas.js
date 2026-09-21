@@ -248,6 +248,10 @@ function finishNodeDrag(e) {
 
   if (didDrag) {
     lastDragEndTime = Date.now();
+    if (currentProject && currentProject.nodes) {
+      const draggedNode = currentProject.nodes.find(n => n.id === targetNodeId);
+      if (draggedNode) draggedNode.updated_at = Date.now();
+    }
     if (typeof saveHistoryState === "function") saveHistoryState();
     if (typeof updateLiveMetrics === "function") updateLiveMetrics();
     if (incomingSection) {

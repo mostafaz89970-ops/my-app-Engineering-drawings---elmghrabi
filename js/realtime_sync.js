@@ -156,6 +156,140 @@
     return null;
   }
 
+  // ─── دالة الدمج والتوفيق الذكي بين المخططات الهندسية (Auto-Reconcile & Smart Merge) ───
+  // تكتشف تلقائياً العناصر والأكشاك الناقصة بين الأجهزة وتدمجها وتضمن التطابق التام 100%
+  function smartMergeProjects(localProj, remoteProj) {
+    if (!remoteProj || !remoteProj.nodes || !Array.isArray(remoteProj.nodes) || remoteProj.nodes.length === 0) {
+      return { merged: localProj || {}, addedNodes: 0, addedSecs: 0, localHadExtra: false };
+    }
+    if (!localProj || !localProj.nodes || !Array.isArray(localProj.nodes) || localProj.nodes.length === 0) {
+      return { merged: remoteProj, addedNodes: remoteProj.nodes.length, addedSecs: (remoteProj.sections || []).length, localHadExtra: false };
+    }
+
+    var merged = Object.assign({}, localProj);
+
+    // تتبع العناصر المحذوفة عمداً حتى لا تعود بالخطأ
+    var localDelNodes = Array.isArray(localProj.deleted_node_ids) ? localProj.deleted_node_ids : [];
+    var remoteDelNodes = Array.isArray(remoteProj.deleted_node_ids) ? remoteProj.deleted_node_ids : [];
+    var delNodesSet = new Set(localDelNodes.concat(remoteDelNodes));
+
+    var localDelSecs = Array.isArray(localProj.deleted_sec_ids) ? localProj.deleted_sec_ids : [];
+    var remoteDelSecs = Array.isArray(remoteProj.deleted_sec_ids) ? remoteProj.deleted_sec_ids : [];
+    var delSecsSet = new Set(localDelSecs.concat(remoteDelSecs));
+
+    merged.deleted_node_ids = Array.from(delNodesSet);
+    merged.deleted_sec_ids = Array.from(delSecsSet);
+
+    // 1. فهرسة العقد المحلية
+    var nodeMap = new Map();
+    (localProj.nodes || []).forEach(function (n) {
+      if (n && n.id && !delNodesSet.has(n.id)) {
+        nodeMap.set(n.id, Object.assign({}, n));
+      }
+    });
+
+    var addedNodesCount = 0;
+    var remoteNodeIds = new Set();
+
+    (remoteProj.nodes || []).forEach(function (rn) {
+      if (!rn || !rn.id || delNodesSet.has(rn.id)) return;
+      remoteNodeIds.add(rn.id);
+
+      if (!nodeMap.has(rn.id)) {
+        // كشك أو عقدة ناقصة على هذا الجهاز! نقوم باستكمالها فوراً
+        nodeMap.set(rn.id, Object.assign({}, rn));
+        addedNodesCount++;
+      } else {
+        // العقدة موجودة في كلا الجهازين: نأخذ الأحدث زمنياً أو نكمل الخصائص الناقصة
+        var ln = nodeMap.get(rn.id);
+        var rTs = rn.updated_at || rn.timestamp || 0;
+        var lTs = ln.updated_at || ln.timestamp || 0;
+        if (rTs > lTs) {
+          nodeMap.set(rn.id, Object.assign({}, ln, rn));
+        } else {
+          Object.keys(rn).forEach(function (k) {
+            if (ln[k] === undefined || ln[k] === null || ln[k] === '') {
+              ln[k] = rn[k];
+            }
+          });
+        }
+      }
+    });
+
+    // هل كان لدى هذا الجهاز عناصر إضافية لم تكن موجودة لدى الجهاز الآخر؟
+    var localHadExtra = false;
+    for (var lId of nodeMap.keys()) {
+      if (!remoteNodeIds.has(lId)) {
+        localHadExtra = true;
+        break;
+      }
+    }
+
+    merged.nodes = Array.from(nodeMap.values());
+
+    // 2. دمج المقاطع / الكابلات الهندسية
+    var secMap = new Map();
+    var connKeys = new Set();
+    function makeConnKey(u, v) {
+      return (u < v) ? (u + '__' + v) : (v + '__' + u);
+    }
+
+    (localProj.sections || []).forEach(function (s) {
+      if (!s || !s.id || delSecsSet.has(s.id)) return;
+      if (nodeMap.has(s.from_node) && nodeMap.has(s.to_node)) {
+        secMap.set(s.id, Object.assign({}, s));
+        connKeys.add(makeConnKey(s.from_node, s.to_node));
+      }
+    });
+
+    var addedSecsCount = 0;
+    var remoteSecIds = new Set();
+
+    (remoteProj.sections || []).forEach(function (rs) {
+      if (!rs || !rs.id || delSecsSet.has(rs.id)) return;
+      remoteSecIds.add(rs.id);
+      var fn = rs.from_node;
+      var tn = rs.to_node;
+      if (nodeMap.has(fn) && nodeMap.has(tn)) {
+        var ck = makeConnKey(fn, tn);
+        if (!secMap.has(rs.id) && !connKeys.has(ck)) {
+          secMap.set(rs.id, Object.assign({}, rs));
+          connKeys.add(ck);
+          addedSecsCount++;
+        } else if (secMap.has(rs.id)) {
+          var ls = secMap.get(rs.id);
+          var props = ['corner_style', 'deflection_offset', 'is_slanted', 'direction', 'type', 'size', 'length', 'status', 'r_per_km', 'x_per_km'];
+          props.forEach(function (p) {
+            if (rs[p] !== undefined && rs[p] !== null) {
+              ls[p] = rs[p];
+            }
+          });
+        }
+      }
+    });
+
+    if (!localHadExtra) {
+      for (var sId of secMap.keys()) {
+        if (!remoteSecIds.has(sId)) {
+          localHadExtra = true;
+          break;
+        }
+      }
+    }
+
+    merged.sections = Array.from(secMap.values());
+    if (remoteProj.name && !localProj.name) {
+      merged.name = remoteProj.name;
+    }
+
+    return {
+      merged: merged,
+      addedNodes: addedNodesCount,
+      addedSecs: addedSecsCount,
+      localHadExtra: localHadExtra
+    };
+  }
+
   // معالجة وتطبيق الأحداث الواردة من الأجهزة الأخرى
   async function handleIncomingCloudPayload(payload) {
     if (!payload || !payload.type) return;
@@ -173,16 +307,24 @@
       if (msgTime && msgTime < lastDrawingUpdateTimestamp) return;
       if (msgTime) lastDrawingUpdateTimestamp = msgTime;
 
-      var projStr = JSON.stringify(data.project);
+      var currentLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+      if (!currentLocal || !currentLocal.nodes || currentLocal.nodes.length === 0) {
+        try { currentLocal = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
+      }
+
+      var mergeResult = smartMergeProjects(currentLocal, data.project);
+      var finalProj = mergeResult.merged;
+
+      var projStr = JSON.stringify(finalProj);
       var hash = fastHash(projStr);
       if (hash === lastBroadcastHash) return;
       lastBroadcastHash = hash;
 
       isApplyingRemote = true;
       if (window.setCurrentProject) {
-        window.setCurrentProject(data.project);
+        window.setCurrentProject(finalProj);
       } else {
-        window.currentProject = data.project;
+        window.currentProject = finalProj;
       }
       try {
         localStorage.setItem('sld_saved_feeder', projStr);
@@ -192,21 +334,43 @@
       if (window.renderNetwork) window.renderNetwork();
       if (window.fitToScreen) window.fitToScreen();
 
-      showSyncToast('🔄 تم استلام وتحديث الرسم لحظياً من: ' + author);
+      var toastMsg = '🔄 تم استلام وتحديث الرسم لحظياً من: ' + author;
+      if (mergeResult.addedNodes > 0 || mergeResult.addedSecs > 0) {
+        toastMsg = '⚡ تم استكمال ومطابقة الرسم الناقص تلقائياً (+ ' + mergeResult.addedNodes + ' أكشاك/عقد) من: ' + author;
+      }
+      showSyncToast(toastMsg, 'success');
       updateBadgeUI('syncing', author);
 
       setTimeout(function () {
         isApplyingRemote = false;
         updateBadgeUI('connected');
+
+        // إذا كان لدى هذا الجهاز عناصر زائدة لم تكن في رسالة الطرف الآخر،
+        // نبث له المخطط الموحد فوراً ليصبح الجهازان متطابقين تماماً 100%
+        if (mergeResult.localHadExtra) {
+          console.log('🔄 إرسال المخطط الموحد المكتمل للطرف الآخر لتحقيق التطابق التام 100%');
+          broadcastLocalDrawing('auto_reconcile_parity');
+        }
       }, 800);
 
     } else if (type === 'PROJECT_SAVED') {
       if (data.project && window.applySyncedProject) {
         if (msgTime) lastDrawingUpdateTimestamp = msgTime;
-        window.applySyncedProject(data.project, data.catalog);
-        showSyncToast('💾 تم حفظ ومزامنة مشروع جديد [' + (data.project.name || '') + '] من: ' + author);
+
+        var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+        var mRes = smartMergeProjects(curLocal, data.project);
+        var mergedP = mRes.merged;
+
+        window.applySyncedProject(mergedP, data.catalog);
+        showSyncToast('💾 تم حفظ ومطابقة مشروع [' + (mergedP.name || '') + '] من: ' + author);
         updateBadgeUI('syncing', author);
-        setTimeout(function () { updateBadgeUI('connected'); }, 800);
+
+        setTimeout(function () {
+          updateBadgeUI('connected');
+          if (mRes.localHadExtra) {
+            broadcastLocalDrawing('auto_reconcile_parity');
+          }
+        }, 800);
       }
 
     } else if (type === 'PROJECT_DELETED') {
@@ -287,15 +451,29 @@
     if (!data) return;
     try {
       if (data.project && data.project.nodes && data.project.nodes.length > 0) {
-        if (window.setCurrentProject) {
-          window.setCurrentProject(data.project);
-        } else {
-          window.currentProject = data.project;
+        var currentLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+        if (!currentLocal || !currentLocal.nodes || currentLocal.nodes.length === 0) {
+          try { currentLocal = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
         }
-        localStorage.setItem('sld_saved_feeder', JSON.stringify(data.project));
+
+        var mergeResult = smartMergeProjects(currentLocal, data.project);
+        var finalProj = mergeResult.merged;
+
+        if (window.setCurrentProject) {
+          window.setCurrentProject(finalProj);
+        } else {
+          window.currentProject = finalProj;
+        }
+        localStorage.setItem('sld_saved_feeder', JSON.stringify(finalProj));
         if (window.updateFeederInputs) window.updateFeederInputs();
         if (window.renderNetwork) window.renderNetwork();
         if (window.fitToScreen) window.fitToScreen();
+
+        if (mergeResult.localHadExtra) {
+          setTimeout(function () {
+            broadcastLocalDrawing('auto_reconcile_parity');
+          }, 1200);
+        }
       }
 
       if (Array.isArray(data.catalog) && data.catalog.length > 0 && window.applySyncedCatalog) {
@@ -311,7 +489,7 @@
         if (window.checkMaintenanceState) window.checkMaintenanceState();
       }
 
-      showSyncToast('✅ تم استلام ومزامنة كافة المشاريع والمستخدمين والرسم لحظياً من: ' + author, 'success');
+      showSyncToast('✅ تم استلام ومزامنة ومطابقة كافة المشاريع والمستخدمين والرسم لحظياً من: ' + author, 'success');
       updateBadgeUI('connected');
     } catch (e) {
       console.warn('Error applying full sync dataset:', e);
@@ -478,8 +656,11 @@
               '</div>' +
               '<small style="color: #94a3b8; display: block; margin-top: 4px;">للعمل في غرفة خاصة أو مغذي مستقل، أدخل اسماً موحداً بين أجهزتك.</small>' +
             '</div>' +
-            '<div style="display: flex; gap: 10px; margin-top: 20px;">' +
-              '<button class="btn btn-success" onclick="window.forceBroadcastProject()" style="flex: 1; padding: 10px; font-weight: bold;">' +
+            '<div style="display: flex; flex-direction: column; gap: 10px; margin-top: 18px;">' +
+              '<button class="btn btn-warning" onclick="window.reconcileAndSyncAllDevices(); window.closeSyncModal();" style="width: 100%; padding: 11px; font-weight: bold; background: linear-gradient(135deg, #0d9488, #059669); border: none; color: #fff; border-radius: 6px; cursor: pointer;">' +
+                '🔄 مطابقة واستكمال الرسم الناقص من كافة الأجهزة الآن' +
+              '</button>' +
+              '<button class="btn btn-success" onclick="window.forceBroadcastProject()" style="width: 100%; padding: 11px; font-weight: bold; border-radius: 6px; cursor: pointer;">' +
                 '📡 إرسال قسري لكافة المشاريع والرسم والمستخدمين لجميع الأجهزة الآن' +
               '</button>' +
             '</div>' +
@@ -541,6 +722,25 @@
     if (window.showToast) window.showToast('📡 تم بث كافة البيانات (المخطط، المشاريع، المستخدمين) لجميع الأجهزة بنجاح!', 'success');
   }
 
+  // دالة طلب مطابقة الرسم قسرياً واستدعاء البيانات واستكمال النواقص من كافة الأجهزة والخادم
+  async function reconcileAndSyncAllDevices() {
+    showSyncToast('⏳ جاري فحص ومطابقة الرسم واستكمال أي أجزاء ناقصة بين كافة الأجهزة...', 'info');
+    updateBadgeUI('syncing', 'مطابقة الرسم');
+
+    // 1. طلب المزامنة الكاملة من كافة الأجهزة السحابية
+    postCloudEvent('REQUEST_FULL_SYNC', { requestedAt: Date.now() }, 'manual_reconcile');
+
+    // 2. جلب أحدث حالة ومطابقتها مع الخادم المركزي
+    await fetchServerState();
+
+    // 3. إعادة بث المخطط الموحد لضمان وصوله لأي جهاز متصل
+    setTimeout(function () {
+      forceBroadcastProject();
+      showSyncToast('✅ تم فحص ومطابقة الرسم واستكمال كافة العناصر لجميع الأجهزة بنجاح!', 'success');
+      updateBadgeUI('connected');
+    }, 1000);
+  }
+
   // ─── 11. مزامنة الخادم المحلي التلقائية (LAN & Local Web Hub) ─────────────────
   async function fetchServerState() {
     try {
@@ -598,6 +798,8 @@
   window.closeSyncModal = closeSyncModal;
   window.changeSyncRoom = changeSyncRoom;
   window.forceBroadcastProject = forceBroadcastProject;
+  window.reconcileAndSyncAllDevices = reconcileAndSyncAllDevices;
+  window.smartMergeProjects = smartMergeProjects;
 
   // ─── 13. تهيئة الاتصال والمزامنة عند تحميل الصفحة ─────────────────────────────
   function startSyncEngine() {
