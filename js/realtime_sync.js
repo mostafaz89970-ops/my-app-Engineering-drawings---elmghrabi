@@ -412,6 +412,52 @@
     }
   }
 
+  // ضغط وتنظيف بيانات المخطط لتكون خفيفة جداً (<3KB) فلا تتحول إلى مرفقات وتصل فورياً
+  function compactProjectForCloud(p) {
+    if (!p) return p;
+    var cleanNodes = (p.nodes || []).map(function (n) {
+      return {
+        id: n.id,
+        type: n.type,
+        name: n.name,
+        x: Math.round(n.x || 0),
+        y: Math.round(n.y || 0),
+        capacity: n.capacity,
+        loading_pct: n.loading_pct,
+        direction: n.direction,
+        switches_count: n.switches_count,
+        has_outgoing: n.has_outgoing,
+        outgoing_terminal: n.outgoing_terminal,
+        updated_at: n.updated_at || Date.now()
+      };
+    });
+    var cleanSecs = (p.sections || []).map(function (s) {
+      return {
+        id: s.id,
+        from_node: s.from_node,
+        to_node: s.to_node,
+        type: s.type,
+        size: s.size,
+        length: s.length,
+        direction: s.direction,
+        corner_style: s.corner_style,
+        deflection_offset: s.deflection_offset,
+        is_slanted: s.is_slanted,
+        status: s.status,
+        tap_side: s.tap_side
+      };
+    });
+    return {
+      id: p.id,
+      name: p.name,
+      voltage_kv: p.voltage_kv,
+      nodes: cleanNodes,
+      sections: cleanSecs,
+      deleted_node_ids: p.deleted_node_ids || [],
+      deleted_sec_ids: p.deleted_sec_ids || []
+    };
+  }
+
   function respondToFullSyncRequest(targetDevId) {
     try {
       var curProj = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
@@ -434,10 +480,11 @@
       }
 
       var isMaint = (localStorage.getItem('sld_maintenance_mode') === 'true');
+      var compactP = compactProjectForCloud(curProj);
 
       postCloudEvent('RESPONSE_FULL_SYNC', {
         targetSenderId: targetDevId,
-        project: curProj,
+        project: compactP,
         catalog: catalog,
         users: users,
         maintenanceMode: isMaint
@@ -573,12 +620,13 @@
     clearTimeout(syncDebounceTimer);
     syncDebounceTimer = setTimeout(function () {
       try {
-        var projStr = JSON.stringify(proj);
+        var cleanProj = compactProjectForCloud(proj);
+        var projStr = JSON.stringify(cleanProj);
         var hash = fastHash(projStr);
         if (hash === lastBroadcastHash) return;
         lastBroadcastHash = hash;
 
-        postCloudEvent('DRAWING_UPDATE', { project: proj }, reason || 'drawing_edit');
+        postCloudEvent('DRAWING_UPDATE', { project: cleanProj }, reason || 'drawing_edit');
       } catch (e) {
         console.warn('Error broadcasting drawing:', e);
       }
@@ -587,7 +635,8 @@
 
   function broadcastProjectSaved(project, catalog) {
     if (!project) return;
-    postCloudEvent('PROJECT_SAVED', { project: project, catalog: catalog }, 'project_saved');
+    var cleanProj = compactProjectForCloud(project);
+    postCloudEvent('PROJECT_SAVED', { project: cleanProj, catalog: catalog }, 'project_saved');
   }
 
   function broadcastProjectDeleted(projectId, catalog) {
@@ -712,8 +761,9 @@
     }
 
     if (curProj && curProj.nodes) {
-      postCloudEvent('DRAWING_UPDATE', { project: curProj }, 'force_manual_sync');
-      broadcastProjectSaved(curProj, catalog);
+      var cleanProj = compactProjectForCloud(curProj);
+      postCloudEvent('DRAWING_UPDATE', { project: cleanProj }, 'force_manual_sync');
+      broadcastProjectSaved(cleanProj, catalog);
     }
     if (users && users.length > 0) {
       broadcastUsersUpdate(users);
@@ -788,6 +838,56 @@
     } catch (_) {}
   }
 
+  // ─── حلقة التوفيق والمطابقة التلقائية المستمرة (Continuous Background Parity Loop) ───
+  // تفحص ذاتياً كل 2.5 ثانية وتدمج أي نواقص وتضمن التطابق التام 100% دون أي تدخل بشري
+  async function continuousBackgroundReconciliation() {
+    try {
+      if (isApplyingRemote) return;
+      var controller = new AbortController();
+      var to = setTimeout(function () { controller.abort(); }, 1800);
+      var res = await fetch('/api/sync/state', { signal: controller.signal });
+      clearTimeout(to);
+      if (res.ok) {
+        var data = await res.json();
+        if (data && data.success && data.project && data.project.nodes) {
+          var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+          if (!curLocal || !curLocal.nodes || curLocal.nodes.length === 0) {
+            try { curLocal = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
+          }
+          if (curLocal && curLocal.nodes) {
+            var mRes = smartMergeProjects(curLocal, data.project);
+            if (mRes.addedNodes > 0 || mRes.addedSecs > 0) {
+              console.log('⚡ تم استكمال ومطابقة عناصر ناقصة تلقائياً في الخلفية (+ ' + mRes.addedNodes + ' عقدة)');
+              if (window.setCurrentProject) {
+                window.setCurrentProject(mRes.merged);
+              } else {
+                window.currentProject = mRes.merged;
+              }
+              localStorage.setItem('sld_saved_feeder', JSON.stringify(mRes.merged));
+              if (window.updateFeederInputs) window.updateFeederInputs();
+              if (window.renderNetwork) window.renderNetwork();
+              if (window.fitToScreen) window.fitToScreen();
+            } else if (mRes.localHadExtra) {
+              // هذا الجهاز يمتلك عناصر إضافية: نرسلها للخادم فوراً ليتم دمجها هناك
+              var cleanProj = compactProjectForCloud(curLocal);
+              fetch('/api/sync/publish', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: 'DRAWING_UPDATE',
+                  senderId: deviceId,
+                  author: (window.currentUser && window.currentUser.name) || 'مزامنة تلقائية',
+                  timestamp: Date.now(),
+                  data: { project: cleanProj }
+                })
+              }).catch(function () {});
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   // ─── 12. تصدير الواجهات إلى window ───────────────────────────────────────────
   window.broadcastProjectUpdate = broadcastLocalDrawing;
   window.broadcastProjectSaved = broadcastProjectSaved;
@@ -800,6 +900,7 @@
   window.forceBroadcastProject = forceBroadcastProject;
   window.reconcileAndSyncAllDevices = reconcileAndSyncAllDevices;
   window.smartMergeProjects = smartMergeProjects;
+  window.compactProjectForCloud = compactProjectForCloud;
 
   // ─── 13. تهيئة الاتصال والمزامنة عند تحميل الصفحة ─────────────────────────────
   function startSyncEngine() {
@@ -809,7 +910,10 @@
     // 2. فحص الخادم المحلي كل 750 ملي ثانية لضمان سرعة فائقة بين كافة المتصفحات والأجهزة
     setInterval(pollLocalServerEvents, 750);
 
-    // 3. ربط القناة السحابية ntfy.sh (للأجهزة البعيدة عبر الإنترنت)
+    // 3. حلقة المطابقة الذاتية التلقائية في الخلفية كل 2.5 ثانية (حل جذري بدون الحاجة لأزرار)
+    setInterval(continuousBackgroundReconciliation, 2500);
+
+    // 4. ربط القناة السحابية ntfy.sh (للأجهزة البعيدة عبر الإنترنت)
     connectCloudSSE();
     pollStartupCloudState();
 
