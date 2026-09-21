@@ -1546,6 +1546,81 @@ const Components = {
         isVertical: item.isVertical
       };
     });
+  },
+
+  // ─── 8. رسم كروت التنويهات والملاحظات الهندسية الحرة على المخطط ───────────────
+  renderAnnotation(anno, isSelected = false) {
+    if (!anno) return "";
+    const id = anno.id || ("anno_" + Math.random().toString(36).substr(2, 6));
+    const x = Math.round(anno.x || 100);
+    const y = Math.round(anno.y || 100);
+    const rawText = String(anno.text || "ملاحظة");
+    const lines = rawText.split('\n');
+    const fontSize = parseInt(anno.fontSize, 10) || 13;
+    const lineHeight = fontSize + 7;
+
+    // حساب أبعاد الكارت
+    let maxChars = 0;
+    lines.forEach(l => { if (l.length > maxChars) maxChars = l.length; });
+    const paddingX = 14;
+    const paddingY = 10;
+    const hasTitle = !!(anno.badgeTitle && anno.badgeTitle.trim());
+    const headerHeight = hasTitle ? 24 : 0;
+    const width = Math.max(130, Math.min(500, Math.round(maxChars * (fontSize * 0.7) + paddingX * 2 + 16)));
+    const height = Math.round(paddingY * 2 + headerHeight + (lines.length * lineHeight));
+
+    const colorTheme = anno.color || "#f59e0b";
+    const bgFill = anno.bgColor || "rgba(15, 23, 42, 0.92)";
+    const borderStroke = anno.borderColor || colorTheme;
+    const borderDash = anno.borderStyle === "dashed" ? "5,4" : (anno.borderStyle === "none" ? "none" : "none");
+    const strokeWidth = isSelected ? 2.5 : 1.5;
+    const strokeDisplay = anno.borderStyle === "none" ? "none" : borderStroke;
+    const selFilter = isSelected ? `filter="drop-shadow(0 0 10px ${colorTheme})"` : `filter="drop-shadow(0 2px 6px rgba(0,0,0,0.5))"`;
+
+    let tspans = "";
+    lines.forEach((line, idx) => {
+      const lineY = y + paddingY + headerHeight + (idx * lineHeight) + fontSize - 1;
+      const safeLine = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      tspans += `<tspan x="${x + width / 2}" y="${lineY}" text-anchor="middle">${safeLine}</tspan>`;
+    });
+
+    const headerSVG = hasTitle ? `
+      <rect x="${x}" y="${y}" width="${width}" height="${headerHeight}" rx="7" ry="7" fill="${colorTheme}" opacity="0.22"/>
+      <text x="${x + width / 2}" y="${y + 16}" fill="${colorTheme}" font-size="11.5" font-weight="bold" text-anchor="middle" font-family="Cairo, Tahoma, sans-serif">
+        📝 ${anno.badgeTitle.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}
+      </text>
+      <line x1="${x + 6}" y1="${y + headerHeight}" x2="${x + width - 6}" y2="${y + headerHeight}" stroke="${colorTheme}" stroke-opacity="0.35" stroke-width="1"/>
+    ` : '';
+
+    return `
+      <g id="annotation-${id}" class="canvas-annotation ${isSelected ? 'selected' : ''}" data-id="${id}"
+         style="cursor: move; user-select: none;"
+         onmousedown="if(window.startAnnotationDrag) window.startAnnotationDrag(event, '${id}')"
+         onclick="if(window.selectAnnotation) window.selectAnnotation(event, '${id}')"
+         ondblclick="if(window.openEditAnnotationModal) window.openEditAnnotationModal('${id}', event)"
+         ${selFilter}>
+        <!-- خلفية كارت الملاحظة -->
+        <rect x="${x}" y="${y}" width="${width}" height="${height}" rx="8" ry="8"
+              fill="${bgFill}" stroke="${strokeDisplay}" stroke-width="${strokeWidth}"
+              stroke-dasharray="${borderDash}"/>
+        ${headerSVG}
+        <!-- نصوص الملاحظة -->
+        <text fill="${anno.textColor || '#ffffff'}" font-size="${fontSize}" font-family="Cairo, Tahoma, sans-serif" font-weight="600">
+          ${tspans}
+        </text>
+        ${isSelected ? `
+          <!-- أزرار الإجراء السريع عند التحديد -->
+          <g transform="translate(${x + width - 44}, ${y - 14})" style="cursor:pointer;">
+            <rect width="20" height="20" rx="4" fill="#3b82f6" stroke="#fff" stroke-width="1" onclick="if(window.openEditAnnotationModal) window.openEditAnnotationModal('${id}', event)" title="تعديل الملاحظة"/>
+            <text x="10" y="14" font-size="11" fill="#fff" text-anchor="middle" onclick="if(window.openEditAnnotationModal) window.openEditAnnotationModal('${id}', event)">✏️</text>
+          </g>
+          <g transform="translate(${x + width - 20}, ${y - 14})" style="cursor:pointer;">
+            <rect width="20" height="20" rx="4" fill="#ef4444" stroke="#fff" stroke-width="1" onclick="if(window.deleteAnnotation) window.deleteAnnotation('${id}', event)" title="حذف الملاحظة"/>
+            <text x="10" y="14" font-size="11" fill="#fff" text-anchor="middle" onclick="if(window.deleteAnnotation) window.deleteAnnotation('${id}', event)">🗑️</text>
+          </g>
+        ` : ''}
+      </g>
+    `;
   }
 
 };

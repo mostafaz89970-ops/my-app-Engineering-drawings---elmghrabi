@@ -344,6 +344,10 @@ function deleteTransformerOrKioskDirectly(nodeId) {
 
 function openEditElementModal(type, id) {
   if (!currentProject) return;
+  if (type === "annotation") {
+    openEditAnnotationModal(id);
+    return;
+  }
   currentEditTarget = { type, id };
 
   const modal = document.getElementById("edit-element-modal");
@@ -878,6 +882,26 @@ function openSmartDeleteModal(type, id) {
   const autoBtnText = document.getElementById("btn-smart-delete-autoadjust-text");
   if (!modal || !infoBox || !planBox || !autoBtnText) return;
 
+  if (type === "annotation") {
+    const anno = (currentProject.annotations || []).find(a => a.id === id);
+    if (!anno) return;
+    const cleanSample = (anno.text || '').replace(/\n/g, ' ');
+    infoBox.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <span style="font-size:15.5px; font-weight:bold; color:#f59e0b;">📝 كارت تنويه / ملاحظة: ${anno.badgeTitle || 'ملاحظة'}</span>
+          <div style="font-size:12.5px; color:#E2E8F0; margin-top:4px;">
+            النص: <b style="color:#FDE68A;">${cleanSample.substring(0, 45)}${cleanSample.length > 45 ? '...' : ''}</b>
+          </div>
+        </div>
+      </div>
+    `;
+    planBox.innerHTML = `سيتم إزالة وحذف كارت التنويه هذا نهائياً من المخطط وإلغاء ظهوره.`;
+    autoBtnText.textContent = `🗑️ تأكيد حذف التنويه نهائياً`;
+    modal.classList.remove("hidden");
+    return;
+  }
+
   if (type === "node") {
     const node = currentProject.nodes.find(n => n.id === id);
     if (!node) return;
@@ -996,6 +1020,13 @@ function confirmSmartDelete(mode = "auto_adjust") {
 
 function executeSmartDelete(type, id, mode = "auto_adjust") {
   if (!currentProject) return;
+
+  if (type === "annotation") {
+    deleteAnnotation(id);
+    closeSmartDeleteModal();
+    return;
+  }
+
   saveHistoryState();
 
   if (!currentProject.deleted_node_ids) currentProject.deleted_node_ids = [];
@@ -6086,6 +6117,238 @@ window.navigateNodeSearch = navigateNodeSearch;
 window.clearNodeSearch = clearNodeSearch;
 window.focusNodeSearch = focusNodeSearch;
 window.selectSearchedNode = selectSearchedNode;
+
+// ─── إدارة كروت التنويهات والملاحظات الهندسية (Annotations Manager) ─────────
+let currentEditingAnnotationId = null;
+let pendingAnnotationPos = null;
+window.isPickingAnnotationPos = false;
+
+function openAddAnnotationModal(initialX, initialY) {
+  currentEditingAnnotationId = null;
+  const modal = document.getElementById("annotation-modal");
+  if (!modal) return;
+
+  const titleInput = document.getElementById("anno-title-input");
+  const textInput = document.getElementById("anno-text-input");
+  const colorSelect = document.getElementById("anno-color-select");
+  const fontSelect = document.getElementById("anno-font-size");
+  const borderSelect = document.getElementById("anno-border-style");
+  const modalTitle = document.getElementById("annotation-modal-title");
+  const deleteBtn = document.getElementById("btn-delete-annotation-modal");
+  const coordDisplay = document.getElementById("anno-coord-display");
+
+  if (modalTitle) modalTitle.innerHTML = "<span>📝</span> <span>إضافة كارت تنويه / ملاحظة هندسية</span>";
+  if (deleteBtn) deleteBtn.style.display = "none";
+
+  if (titleInput) titleInput.value = "";
+  if (textInput) textInput.value = "";
+  if (colorSelect) colorSelect.value = "#f59e0b";
+  if (fontSelect) fontSelect.value = "13";
+  if (borderSelect) borderSelect.value = "solid";
+
+  if (typeof initialX === "number" && typeof initialY === "number") {
+    pendingAnnotationPos = { x: Math.round(initialX), y: Math.round(initialY) };
+  } else {
+    const viewport = document.getElementById("viewport");
+    const rect = viewport ? viewport.getBoundingClientRect() : { width: 800, height: 600 };
+    const centerScreen = (typeof screenToStage === "function") ? 
+      screenToStage(rect.width / 2, rect.height / 2) : { x: 150, y: 150 };
+    pendingAnnotationPos = { x: Math.round(centerScreen.x || 150), y: Math.round(centerScreen.y || 150) };
+  }
+
+  if (coordDisplay) {
+    coordDisplay.textContent = `(${pendingAnnotationPos.x}, ${pendingAnnotationPos.y})`;
+  }
+
+  modal.classList.remove("hidden");
+  setTimeout(() => textInput?.focus(), 150);
+}
+window.openAddAnnotationModal = openAddAnnotationModal;
+
+function openEditAnnotationModal(annoId, e) {
+  if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+  if (!currentProject || !currentProject.annotations) return;
+  const anno = currentProject.annotations.find(a => a.id === annoId);
+  if (!anno) return;
+
+  currentEditingAnnotationId = annoId;
+  const modal = document.getElementById("annotation-modal");
+  if (!modal) return;
+
+  const titleInput = document.getElementById("anno-title-input");
+  const textInput = document.getElementById("anno-text-input");
+  const colorSelect = document.getElementById("anno-color-select");
+  const fontSelect = document.getElementById("anno-font-size");
+  const borderSelect = document.getElementById("anno-border-style");
+  const modalTitle = document.getElementById("annotation-modal-title");
+  const deleteBtn = document.getElementById("btn-delete-annotation-modal");
+  const coordDisplay = document.getElementById("anno-coord-display");
+
+  if (modalTitle) modalTitle.innerHTML = "<span>✏️</span> <span>تعديل كارت التنويه والملاحظة</span>";
+  if (deleteBtn) deleteBtn.style.display = "inline-flex";
+
+  if (titleInput) titleInput.value = anno.badgeTitle || "";
+  if (textInput) textInput.value = anno.text || "";
+  if (colorSelect) colorSelect.value = anno.color || "#f59e0b";
+  if (fontSelect) fontSelect.value = String(anno.fontSize || 13);
+  if (borderSelect) borderSelect.value = anno.borderStyle || "solid";
+
+  pendingAnnotationPos = { x: Math.round(anno.x || 100), y: Math.round(anno.y || 100) };
+  if (coordDisplay) {
+    coordDisplay.textContent = `(${pendingAnnotationPos.x}, ${pendingAnnotationPos.y})`;
+  }
+
+  modal.classList.remove("hidden");
+  setTimeout(() => textInput?.focus(), 150);
+}
+window.openEditAnnotationModal = openEditAnnotationModal;
+
+function closeAnnotationModal() {
+  const modal = document.getElementById("annotation-modal");
+  if (modal) modal.classList.add("hidden");
+  currentEditingAnnotationId = null;
+  window.isPickingAnnotationPos = false;
+  document.body.classList.remove("picking-annotation-pos");
+}
+window.closeAnnotationModal = closeAnnotationModal;
+
+function saveAnnotationFromModal() {
+  if (!currentProject) return;
+  const textInput = document.getElementById("anno-text-input");
+  const titleInput = document.getElementById("anno-title-input");
+  const colorSelect = document.getElementById("anno-color-select");
+  const fontSelect = document.getElementById("anno-font-size");
+  const borderSelect = document.getElementById("anno-border-style");
+
+  const text = (textInput?.value || "").trim();
+  if (!text) {
+    showToast("⚠️ يرجى كتابة نص التنويه أولاً", "warning");
+    textInput?.focus();
+    return;
+  }
+
+  const badgeTitle = (titleInput?.value || "").trim();
+  const color = colorSelect?.value || "#f59e0b";
+  const fontSize = parseInt(fontSelect?.value, 10) || 13;
+  const borderStyle = borderSelect?.value || "solid";
+
+  if (!currentProject.annotations) currentProject.annotations = [];
+
+  saveHistoryState();
+
+  if (currentEditingAnnotationId) {
+    const anno = currentProject.annotations.find(a => a.id === currentEditingAnnotationId);
+    if (anno) {
+      anno.text = text;
+      anno.badgeTitle = badgeTitle;
+      anno.color = color;
+      anno.borderColor = color;
+      anno.fontSize = fontSize;
+      anno.borderStyle = borderStyle;
+      if (pendingAnnotationPos) {
+        anno.x = pendingAnnotationPos.x;
+        anno.y = pendingAnnotationPos.y;
+      }
+      anno.updated_at = Date.now();
+      showToast("✅ تم تعديل كارت التنويه بنجاح", "success");
+    }
+  } else {
+    const newId = "anno_" + Date.now().toString(36) + Math.random().toString(36).substr(2, 4);
+    const newAnno = {
+      id: newId,
+      text: text,
+      badgeTitle: badgeTitle,
+      x: pendingAnnotationPos ? pendingAnnotationPos.x : 150,
+      y: pendingAnnotationPos ? pendingAnnotationPos.y : 150,
+      color: color,
+      bgColor: "rgba(15, 23, 42, 0.92)",
+      borderColor: color,
+      textColor: "#ffffff",
+      borderStyle: borderStyle,
+      fontSize: fontSize,
+      updated_at: Date.now()
+    };
+    currentProject.annotations.push(newAnno);
+    if (typeof selectElement === "function") {
+      selectElement("annotation", newId, "تنويه: " + (badgeTitle || text.substring(0, 20)));
+    }
+    showToast("✅ تم إضافة كارت التنويه في الرسم بنجاح (يمكنك سحبه لأي مكان)", "success");
+  }
+
+  if (window.currentProject) {
+    window.currentProject.annotations = currentProject.annotations;
+  }
+
+  closeAnnotationModal();
+  if (typeof renderNetwork === "function") renderNetwork();
+  if (window.broadcastProjectUpdate) window.broadcastProjectUpdate("annotation_saved");
+}
+window.saveAnnotationFromModal = saveAnnotationFromModal;
+
+function deleteAnnotation(annoId, e) {
+  if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+  if (!currentProject || !currentProject.annotations) return;
+
+  saveHistoryState();
+  currentProject.annotations = currentProject.annotations.filter(a => a.id !== annoId);
+  if (window.currentProject) {
+    window.currentProject.annotations = currentProject.annotations;
+  }
+  if (typeof selectedElement !== "undefined" && selectedElement && selectedElement.type === "annotation" && selectedElement.id === annoId) {
+    if (typeof clearSelection === "function") clearSelection();
+  }
+  if (typeof renderNetwork === "function") renderNetwork();
+  showToast("🗑️ تم حذف كارت التنويه بنجاح", "info");
+  if (window.broadcastProjectUpdate) window.broadcastProjectUpdate("annotation_deleted");
+}
+window.deleteAnnotation = deleteAnnotation;
+
+function deleteAnnotationFromModal() {
+  if (!currentEditingAnnotationId) return;
+  deleteAnnotation(currentEditingAnnotationId);
+  closeAnnotationModal();
+}
+window.deleteAnnotationFromModal = deleteAnnotationFromModal;
+
+function applyQuickAnnoPreset(title, text, color, borderStyle) {
+  const titleInput = document.getElementById("anno-title-input");
+  const textInput = document.getElementById("anno-text-input");
+  const colorSelect = document.getElementById("anno-color-select");
+  const borderSelect = document.getElementById("anno-border-style");
+
+  if (titleInput && title) titleInput.value = title;
+  if (textInput && text && !textInput.value) textInput.value = text;
+  if (colorSelect && color) colorSelect.value = color;
+  if (borderSelect && borderStyle) borderSelect.value = borderStyle;
+}
+window.applyQuickAnnoPreset = applyQuickAnnoPreset;
+
+function pickAnnotationPositionOnCanvas() {
+  const modal = document.getElementById("annotation-modal");
+  if (modal) modal.classList.add("hidden");
+
+  window.isPickingAnnotationPos = true;
+  document.body.classList.add("picking-annotation-pos");
+  showToast("🎯 انقر الآن في أي مكان على مساحة الرسم لتحديد موقع التنويه", "info", 5000);
+}
+window.pickAnnotationPositionOnCanvas = pickAnnotationPositionOnCanvas;
+
+function finalizeAnnotationPick(x, y) {
+  window.isPickingAnnotationPos = false;
+  document.body.classList.remove("picking-annotation-pos");
+  pendingAnnotationPos = { x: Math.round(x), y: Math.round(y) };
+
+  const coordDisplay = document.getElementById("anno-coord-display");
+  if (coordDisplay) {
+    coordDisplay.textContent = `(${pendingAnnotationPos.x}, ${pendingAnnotationPos.y})`;
+  }
+
+  const modal = document.getElementById("annotation-modal");
+  if (modal) modal.classList.remove("hidden");
+  showToast("📍 تم تحديد الموضع بنجاح", "success");
+}
+window.finalizeAnnotationPick = finalizeAnnotationPick;
+
 
 
 

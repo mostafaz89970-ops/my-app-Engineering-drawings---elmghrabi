@@ -26,6 +26,12 @@ let initialMeters = 1000;
 let hasDragged = false;
 let lastDragEndTime = 0;
 
+let isDraggingAnnotation = false;
+let dragAnnoId = null;
+let dragAnnoStartClient = { x: 0, y: 0 };
+let dragAnnoStartPos = { x: 0, y: 0 };
+let hasAnnoDragged = false;
+
 function screenToStage(clientX, clientY) {
   const viewport = document.getElementById("viewport");
   if (!viewport) return { x: 0, y: 0 };
@@ -495,6 +501,75 @@ function finishSectionDeflectDrag(e) {
   }
 }
 
+// ─── دوال سحب وتحريك وتحديد كروت التنويهات والملاحظات الهندسية ───────────────
+function startAnnotationDrag(e, annoId) {
+  if (!currentProject || !currentProject.annotations) return;
+  const anno = currentProject.annotations.find(a => a.id === annoId);
+  if (!anno) return;
+
+  if (e) {
+    if (typeof e.stopPropagation === "function") e.stopPropagation();
+  }
+
+  isDraggingAnnotation = true;
+  dragAnnoId = annoId;
+  hasAnnoDragged = false;
+  dragAnnoStartClient = { x: e.clientX, y: e.clientY };
+  dragAnnoStartPos = { x: Math.round(anno.x || 100), y: Math.round(anno.y || 100) };
+  document.body.classList.add("dragging-node");
+}
+window.startAnnotationDrag = startAnnotationDrag;
+
+function handleAnnotationDrag(e) {
+  if (!isDraggingAnnotation || !dragAnnoId || !currentProject || !currentProject.annotations) return;
+  const dxClient = e.clientX - dragAnnoStartClient.x;
+  const dyClient = e.clientY - dragAnnoStartClient.y;
+  if (!hasAnnoDragged && Math.hypot(dxClient, dyClient) > 3) {
+    hasAnnoDragged = true;
+  }
+  if (!hasAnnoDragged) return;
+
+  const dxStage = (e.clientX - dragAnnoStartClient.x) / canvasScale;
+  const dyStage = (e.clientY - dragAnnoStartClient.y) / canvasScale;
+
+  const anno = currentProject.annotations.find(a => a.id === dragAnnoId);
+  if (!anno) return;
+
+  anno.x = Math.round(dragAnnoStartPos.x + dxStage);
+  anno.y = Math.round(dragAnnoStartPos.y + dyStage);
+  anno.updated_at = Date.now();
+
+  renderNetwork();
+}
+
+function finishAnnotationDrag(e) {
+  if (!isDraggingAnnotation) return;
+  document.body.classList.remove("dragging-node");
+  const didDrag = hasAnnoDragged;
+  const targetId = dragAnnoId;
+
+  isDraggingAnnotation = false;
+  dragAnnoId = null;
+  hasAnnoDragged = false;
+
+  if (didDrag) {
+    if (typeof saveHistoryState === "function") saveHistoryState();
+    if (typeof updateLiveMetrics === "function") updateLiveMetrics();
+    if (window.broadcastProjectUpdate) window.broadcastProjectUpdate("annotation_moved");
+  } else if (targetId) {
+    selectAnnotation(e, targetId);
+  }
+}
+
+function selectAnnotation(e, annoId) {
+  if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+  if (!currentProject || !currentProject.annotations) return;
+  const anno = currentProject.annotations.find(a => a.id === annoId);
+  if (!anno) return;
+  selectElement("annotation", annoId, "تنويه: " + (anno.badgeTitle || (anno.text ? anno.text.substring(0, 20) : '')));
+}
+window.selectAnnotation = selectAnnotation;
+
 function initCanvas() {
   const viewport = document.getElementById("viewport");
   const stage = document.getElementById("canvas-stage");
@@ -523,6 +598,23 @@ function initCanvas() {
         e.target.closest(".official-title-block")) return;
 
     if (e.button !== 0) return; // النقر الأيسر فقط
+
+    // إذا كان المستخدم في وضع تحديد مكان التنويه على الرسم
+    if (window.isPickingAnnotationPos) {
+      e.preventDefault();
+      e.stopPropagation();
+      const st = screenToStage(e.clientX, e.clientY);
+      if (typeof window.finalizeAnnotationPick === "function") {
+        window.finalizeAnnotationPick(st.x, st.y);
+      }
+      return;
+    }
+
+    // إذا تم النقر على كارت التنويهات، لا نبدأ تحريك الكانفاس
+    const annoGroup = e.target.closest(".canvas-annotation");
+    if (annoGroup) {
+      return;
+    }
 
     const deflectGroup = e.target.closest(".sld-deflect-handle-group");
     const stretchGroup = e.target.closest(".sld-stretch-handle-group");
@@ -573,6 +665,10 @@ function initCanvas() {
   });
 
   window.addEventListener("mousemove", (e) => {
+    if (isDraggingAnnotation) {
+      handleAnnotationDrag(e);
+      return;
+    }
     if (isDraggingDeflect) {
       handleSectionDeflectDrag(e);
       return;
@@ -588,6 +684,10 @@ function initCanvas() {
   });
 
   window.addEventListener("mouseup", (e) => {
+    if (isDraggingAnnotation) {
+      finishAnnotationDrag(e);
+      return;
+    }
     if (isDraggingDeflect) {
       finishSectionDeflectDrag(e);
       return;
@@ -1103,6 +1203,20 @@ function renderNetwork() {
     }
   });
   nodesLayer.innerHTML = nodesHTML;
+
+  // 4. رسم كروت التنويهات والملاحظات الهندسية الحرة
+  const labelsLayer = document.getElementById("labels-layer");
+  if (labelsLayer) {
+    const annotations = proj.annotations || [];
+    let annoHTML = "";
+    annotations.forEach(anno => {
+      const isSelected = (selectedElement && selectedElement.type === "annotation" && selectedElement.id === anno.id);
+      if (Components && typeof Components.renderAnnotation === "function") {
+        annoHTML += Components.renderAnnotation(anno, isSelected);
+      }
+    });
+    labelsLayer.innerHTML = annoHTML;
+  }
 
   updateLiveMetrics();
 

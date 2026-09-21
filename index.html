@@ -273,6 +273,16 @@
             <span>⚡ فتح/غلق الكل</span>
           </button>
         </div>
+
+        <div class="cad-ribbon-sep"></div>
+
+        <!-- مجموعة: التنويهات والملاحظات الهندسية -->
+        <div class="cad-group">
+          <span class="cad-group-tag">تنويهات المخطط</span>
+          <button class="cad-tool-btn" onclick="openAddAnnotationModal()" title="إضافة كارت تنويه أو ملاحظة هندسية حرة في أي مكان بالرسم" style="background: rgba(245, 158, 11, 0.18); border-color: #f59e0b; color: #fbbf24; font-weight: bold;">
+            <span>📝 إضافة تنويه</span>
+          </button>
+        </div>
       </div>
 
       <!-- الصف الثالث: شريط المحولات والأكشاك والتحكم والمحاكاة (CAD Ribbon: Transformers, Kiosks & Controls) -->
@@ -434,6 +444,11 @@
           <div class="palette-item" data-perm="btn_cascade_trans" onclick="openCascadeTransformerDialog()" title="تفريع محول من محول آخر">
             <div class="item-icon">🔄</div>
             <span class="item-name">محول من محول</span>
+          </div>
+
+          <div class="palette-item" onclick="openAddAnnotationModal()" title="إضافة كارت تنويه أو ملاحظة هندسية حرة في أي مكان بالرسم" style="border-color: rgba(245, 158, 11, 0.45); background: rgba(245, 158, 11, 0.1);">
+            <div class="item-icon">📝</div>
+            <span class="item-name" style="color: #fbbf24; font-weight: bold;">تنويه / ملاحظة</span>
           </div>
         </div>
 
@@ -2251,15 +2266,104 @@
     </div>
   </div>
 
+  <!-- نافذة إضافة / تعديل تنويه وملاحظة هندسية على المخطط -->
+  <div id="annotation-modal" class="modal-overlay hidden">
+    <div class="modal-dialog" style="max-width: 530px;">
+      <div class="modal-header">
+        <h3 id="annotation-modal-title"><span>📝</span> <span>إضافة كارت تنويه / ملاحظة هندسية</span></h3>
+        <button class="modal-close" onclick="closeAnnotationModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- الوسوم والتنويهات الجاهزة بنقرة واحدة -->
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label style="font-size: 12px; color: #94A3B8; margin-bottom: 6px; display: block;">تنويهات هندسية شائعة جاهزة بنقرة واحدة:</label>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+            <button type="button" class="badge-btn" onclick="applyQuickAnnoPreset('⚠️ مفصول للصيانة', 'السكينة مفصولة لأعمال الصيانة الوقائية الطارئة', '#ef4444', 'dashed')" style="background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; padding: 4px 8px; border-radius: 4px; font-size: 11.5px; cursor: pointer;">⚠️ مفصول للصيانة</button>
+            <button type="button" class="badge-btn" onclick="applyQuickAnnoPreset('🔄 نقطة ربط حلقي', 'نقطة ربط حلقي مع مغذي مجاور (مفتوحة طبيعياً N.O)', '#3b82f6', 'solid')" style="background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; color: #93c5fd; padding: 4px 8px; border-radius: 4px; font-size: 11.5px; cursor: pointer;">🔄 ربط حلقي</button>
+            <button type="button" class="badge-btn" onclick="applyQuickAnnoPreset('⚡ كابل احتياطي', 'مسار كابل طوارئ احتياطي جاهز للمناورة', '#f59e0b', 'solid')" style="background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #fde68a; padding: 4px 8px; border-radius: 4px; font-size: 11.5px; cursor: pointer;">⚡ كابل احتياطي</button>
+            <button type="button" class="badge-btn" onclick="applyQuickAnnoPreset('🏢 كشك مقترح', 'كشك كهربائي مقترح ضمن خطة الإحلال والتجديد', '#10b981', 'dashed')" style="background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #6ee7b7; padding: 4px 8px; border-radius: 4px; font-size: 11.5px; cursor: pointer;">🏢 كشك مقترح</button>
+            <button type="button" class="badge-btn" onclick="applyQuickAnnoPreset('💡 تنويه تشغيل', 'تعليمات تشغيلية خاصة لوردية الطوارئ', '#8b5cf6', 'solid')" style="background: rgba(139, 92, 246, 0.2); border: 1px solid #8b5cf6; color: #c4b5fd; padding: 4px 8px; border-radius: 4px; font-size: 11.5px; cursor: pointer;">💡 تنويه تشغيل</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>عنوان / وسم التنويه (اختياري - يظهر أعلى الكارت):</label>
+          <input type="text" id="anno-title-input" class="form-control" placeholder="مثال: ⚠️ تنبيه صيانة، 🔄 نقطة مناورة..." />
+        </div>
+
+        <div class="form-group">
+          <label>نص التنويه أو التعليمات الهندسية (يدعم أسطر متعددة Enter):</label>
+          <textarea id="anno-text-input" class="form-control" rows="4" placeholder="اكتب ملاحظتك أو التنويه هنا بالتفصيل..." style="font-family: Cairo, Tahoma, sans-serif; resize: vertical; line-height: 1.5; font-size: 13px;"></textarea>
+        </div>
+
+        <div class="form-grid-3" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label>لون الثيم:</label>
+            <select id="anno-color-select" class="form-control">
+              <option value="#f59e0b">🟡 أصفر (تحذيري)</option>
+              <option value="#ef4444">🔴 أحمر (خطر / صيانة)</option>
+              <option value="#3b82f6">🔵 أزرق (هندسي / ربط)</option>
+              <option value="#10b981">🟢 أخضر (جاهز / سليم)</option>
+              <option value="#8b5cf6">🟣 بنفسجي (ملاحظة تشغيل)</option>
+              <option value="#06b6d4">🌐 سماوي (شبكة / كابل)</option>
+              <option value="#e2e8f0">⚪ أبيض رمادي (عام)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>حجم الخط:</label>
+            <select id="anno-font-size" class="form-control">
+              <option value="11">صغير (11px)</option>
+              <option value="13" selected>متوسط (13px)</option>
+              <option value="16">كبير (16px)</option>
+              <option value="19">عريض جداً (19px)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>نمط الإطار:</label>
+            <select id="anno-border-style" class="form-control">
+              <option value="solid" selected>متصل (Solid)</option>
+              <option value="dashed">متقطع (Dashed)</option>
+              <option value="none">بدون إطار</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 6px; padding: 10px; margin-top: 12px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-size: 12px; color: #94a3b8;">الموقع على الرسم:</div>
+            <div style="font-size: 13px; font-weight: bold; color: #f59e0b;" id="anno-coord-display">(150, 150)</div>
+          </div>
+          <button type="button" class="btn btn-outline" onclick="pickAnnotationPositionOnCanvas()" style="font-size: 12px; padding: 5px 10px;" title="انقر لتحديد موضع التنويه بالماوس مباشرة على المخطط">
+            🎯 تحديد الموضع بالنقر على الرسم
+          </button>
+        </div>
+        <div style="font-size: 11.5px; color: #94A3B8; margin-top: 6px;">
+          💡 ملاحظة: بعد الحفظ يمكنك سحب وتحريك كارت التنويه بحرية تامة بالماوس إلى أي مكان بالرسم.
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: space-between;">
+        <div>
+          <button type="button" id="btn-delete-annotation-modal" class="btn btn-danger" onclick="deleteAnnotationFromModal()" style="display: none;">
+            🗑️ حذف التنويه
+          </button>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" onclick="closeAnnotationModal()">إلغاء</button>
+          <button class="btn btn-primary" onclick="saveAnnotationFromModal()">💾 حفظ التنويه على الرسم</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="js/jszip.min.js"></script>
-  <script src="js/default_projects.js?v=16.1"></script>
-  <script src="js/auth.js?v=16.1"></script>
-  <script src="js/realtime_sync.js?v=16.1"></script>
-  <script src="js/components.js?v=16.1"></script>
-  <script src="js/simulation.js?v=16.1"></script>
-  <script src="js/canvas.js?v=16.1"></script>
-  <script src="js/app.js?v=16.1"></script>
-  <script src="js/settings.js?v=16.1"></script>
+  <script src="js/default_projects.js?v=17.0"></script>
+  <script src="js/auth.js?v=17.0"></script>
+  <script src="js/realtime_sync.js?v=17.0"></script>
+  <script src="js/components.js?v=17.0"></script>
+  <script src="js/simulation.js?v=17.0"></script>
+  <script src="js/canvas.js?v=17.0"></script>
+  <script src="js/app.js?v=17.0"></script>
+  <script src="js/settings.js?v=17.0"></script>
 </body>
 </html>
 
