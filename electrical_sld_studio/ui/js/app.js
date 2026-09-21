@@ -114,6 +114,7 @@ const historyStack = [];
 const MAX_HISTORY = 40;
 
 function saveHistoryState() {
+  window._lastLocalEditTime = Date.now();
   if (!currentProject) return;
   const snapshot = JSON.stringify(currentProject);
   historyStack.push(snapshot);
@@ -138,6 +139,7 @@ function showToast(message, type = "info") {
     setTimeout(() => { toast.remove(); }, 300);
   }, 2500);
 }
+window.showToast = showToast;
 
 // حفظ المخطط بشكل دائم ومؤمن 100% يمنع الحذف أو التراجع عند التحديث أو البث
 async function saveCurrentProject() {
@@ -3799,62 +3801,85 @@ window.onSwitchBetweenNodeAChange = onSwitchBetweenNodeAChange;
 
 // --- السكاكين الهوائية المفصلية المعتمدة - واجهة ديناميكية ذكية وسلسة ---
 function openSwitchModal(suggestedDir = 'down') {
-  // إذا لم يكن هناك مشروع، ننشئ مشروعاً جديداً تلقائياً
-  if (!currentProject) {
-    if (typeof createNewProjectDirectly === 'function') {
-      createNewProjectDirectly();
-    } else {
-      currentProject = { id: "feeder_" + Date.now(), name: "مخطط جديد", nodes: [], sections: [] };
-      window.currentProject = currentProject;
-    }
-  }
-  // إذا لا توجد نودات، نفتح المودال بنود فارغة
-  if (!currentProject.nodes) currentProject.nodes = [];
-  if (!currentProject.sections) currentProject.sections = [];
-
   window._lastSuggestedSwitchDir = suggestedDir;
   const modal = document.getElementById("switch-modal");
-  if (!modal) return;
-  populateNodeDropdowns();
-
-  // تعبئة قائمة النود المستهدف
-  const mainSelect = document.getElementById("sw-main-node");
-  let opts = "";
-  currentProject.nodes.forEach(n => {
-    let typeDesc = "";
-    if (n.type === "junction") typeDesc = "نقطة ربط مباشر";
-    else if (n.type === "switch") typeDesc = "سكينة";
-    else if (n.type === "transformer") typeDesc = "محول";
-    else if (n.type === "kiosk") typeDesc = "كشك";
-    else if (n.type === "substation") typeDesc = "محطة";
-    else typeDesc = n.type;
-
-    opts += `<option value="${n.id}">[${n.id}] ${n.name || typeDesc} (${typeDesc})</option>`;
-  });
-  if (mainSelect) mainSelect.innerHTML = opts;
-
-  // تحديد النود الافتراضي: إذا كان هناك نود محدد بالماوس، أو آخر نود تم رسمه بالمخطط
-  const lastNode = currentProject.nodes[currentProject.nodes.length - 1];
-  let defaultTargetId = (selectedElement && selectedElement.type === 'node') ? selectedElement.id : (lastNode ? lastNode.id : null);
-  if (defaultTargetId && mainSelect) {
-    mainSelect.value = defaultTargetId;
+  if (!modal) {
+    console.error("switch-modal element not found in DOM");
+    alert("تعذر العثور على نافذة السكينة");
+    return;
   }
 
-  const titleEl = document.getElementById("switch-modal-title");
-  if (titleEl) {
-    if (suggestedDir === 'right' || suggestedDir === 'horizontal' || suggestedDir === 'left') {
-      titleEl.innerHTML = "➖ إضافة وضبط سكينة هوائية (أفقية)";
-    } else {
-      titleEl.innerHTML = "⚡ إضافة وضبط سكينة هوائية (رأسية)";
-    }
-  }
-
-  // فتح المودال أولاً لضمان الظهور حتى لو حدث خطأ في دوال التهيئة
+  // إظهار النافذة المنبثقة فوراً وبأعلى أولوية ممكنة
   modal.classList.remove("hidden");
   modal.style.display = "flex";
+  modal.style.setProperty("display", "flex", "important");
+  modal.style.setProperty("z-index", "99999", "important");
 
-  try { onSwitchNewLineTypeChange(); } catch(e) { console.error("onSwitchNewLineTypeChange error:", e); }
-  try { onSwitchMainNodeChange(); } catch(e) { console.error("onSwitchMainNodeChange error:", e); }
+  try {
+    // إذا لم يكن هناك مشروع، ننشئ مشروعاً جديداً تلقائياً
+    if (!currentProject) {
+      if (typeof createNewProjectDirectly === 'function') {
+        createNewProjectDirectly();
+      } else {
+        currentProject = { id: "feeder_" + Date.now(), name: "مخطط جديد", nodes: [], sections: [] };
+        window.currentProject = currentProject;
+      }
+    }
+    if (!currentProject.nodes) currentProject.nodes = [];
+    if (!currentProject.sections) currentProject.sections = [];
+
+    // إذا لم تكن هناك أي نقطة بالرسم، ننشئ محطة/نقطة بداية افتراضية حتى تتوفر نقطة ربط
+    if (currentProject.nodes.length === 0) {
+      currentProject.nodes.push({
+        id: "N1",
+        type: "substation",
+        name: "محطة محولات",
+        x: 400,
+        y: (window.drawingFlowDirection === 'up') ? 800 : 100
+      });
+      if (typeof renderNetwork === 'function') renderNetwork();
+    }
+
+    try { populateNodeDropdowns(); } catch (e) { console.warn("populateNodeDropdowns:", e); }
+
+    // تعبئة قائمة النود المستهدف
+    const mainSelect = document.getElementById("sw-main-node");
+    let opts = "";
+    (currentProject.nodes || []).forEach(n => {
+      if (!n) return;
+      let typeDesc = "";
+      if (n.type === "junction") typeDesc = "نقطة ربط مباشر";
+      else if (n.type === "switch") typeDesc = "سكينة";
+      else if (n.type === "transformer") typeDesc = "محول";
+      else if (n.type === "kiosk") typeDesc = "كشك";
+      else if (n.type === "substation") typeDesc = "محطة";
+      else typeDesc = n.type || "نود";
+
+      opts += `<option value="${n.id}">[${n.id}] ${n.name || typeDesc} (${typeDesc})</option>`;
+    });
+    if (mainSelect) mainSelect.innerHTML = opts;
+
+    // تحديد النود الافتراضي: إذا كان هناك نود محدد بالماوس، أو آخر نود تم رسمه بالمخطط
+    const lastNode = currentProject.nodes[currentProject.nodes.length - 1];
+    let defaultTargetId = (selectedElement && selectedElement.type === 'node') ? selectedElement.id : (lastNode ? lastNode.id : null);
+    if (defaultTargetId && mainSelect) {
+      mainSelect.value = defaultTargetId;
+    }
+
+    const titleEl = document.getElementById("switch-modal-title");
+    if (titleEl) {
+      if (suggestedDir === 'right' || suggestedDir === 'horizontal' || suggestedDir === 'left') {
+        titleEl.innerHTML = "➖ إضافة وضبط سكينة هوائية (أفقية)";
+      } else {
+        titleEl.innerHTML = "⚡ إضافة وضبط سكينة هوائية (رأسية)";
+      }
+    }
+
+    try { onSwitchNewLineTypeChange(); } catch(e) { console.warn("onSwitchNewLineTypeChange error:", e); }
+    try { onSwitchMainNodeChange(); } catch(e) { console.warn("onSwitchMainNodeChange error:", e); }
+  } catch (err) {
+    console.error("Error in openSwitchModal setup:", err);
+  }
 }
 
 function closeSwitchModal() {
@@ -3862,6 +3887,8 @@ function closeSwitchModal() {
   if (modal) {
     modal.classList.add("hidden");
     modal.style.display = "none";
+    modal.style.removeProperty("display");
+    modal.style.removeProperty("z-index");
   }
 }
 
@@ -4496,25 +4523,24 @@ function submitSwitchModal() {
 }
 
 function quickAddSwitch(direction = 'vertical') {
-  // تحقق من الصلاحية فقط إذا كان المستخدم مسجل دخوله فعلاً
-  if (window.hasPermission && window.currentUser && !window.hasPermission('btn_switch')) {
-    if (window.showToast) showToast("⛔ ليس لديك صلاحية إضافة سكينة هوائية", "error");
-    return;
+  try {
+    const isHoriz = (direction === 'horizontal');
+    const targetDir = isHoriz ? 'right' : ((window.drawingFlowDirection === 'up') ? 'up' : 'down');
+    openSwitchModal(targetDir);
+  } catch (err) {
+    console.error("quickAddSwitch error:", err);
+    openSwitchModal('down');
   }
-  const isHoriz = (direction === 'horizontal');
-  const targetDir = isHoriz ? 'right' : ((window.drawingFlowDirection === 'up') ? 'up' : 'down');
-
-  // فتح نافذة السكينة دائماً مع التوجيه المسبق
-  openSwitchModal(targetDir);
 }
 
 function quickAddSwitchPrompt() {
-  if (window.hasPermission && window.currentUser && !window.hasPermission('btn_switch')) {
-    if (window.showToast) showToast("⛔ ليس لديك صلاحية إضافة سكينة هوائية", "error");
-    return;
+  try {
+    const targetDir = (window.drawingFlowDirection === 'up') ? 'up' : 'down';
+    openSwitchModal(targetDir);
+  } catch (err) {
+    console.error("quickAddSwitchPrompt error:", err);
+    openSwitchModal('down');
   }
-  const targetDir = (window.drawingFlowDirection === 'up') ? 'up' : 'down';
-  openSwitchModal(targetDir);
 }
 
 window.quickAddSwitch = quickAddSwitch;
