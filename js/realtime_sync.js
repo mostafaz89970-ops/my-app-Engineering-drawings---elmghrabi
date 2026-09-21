@@ -437,19 +437,13 @@
       if (window.renderNetwork) window.renderNetwork();
       if (window.fitToScreen) window.fitToScreen();
 
-      var toastMsg = '🔄 تم استلام وتحديث الرسم لحظياً من: ' + author;
-      if (mergeResult.addedNodes > 0 || mergeResult.addedSecs > 0) {
-        toastMsg = '⚡ تم استكمال ومطابقة الرسم الناقص تلقائياً (+ ' + mergeResult.addedNodes + ' أكشاك/عقد) من: ' + author;
-      }
-      showSyncToast(toastMsg, 'success');
+      // تحديث شارة البث السحابي الهادئة دون إزعاج المستخدم برسائل متكررة
       updateBadgeUI('syncing', author);
 
       setTimeout(function () {
         isApplyingRemote = false;
         updateBadgeUI('connected');
 
-        // إذا كان لدى هذا الجهاز عناصر زائدة لم تكن في رسالة الطرف الآخر،
-        // نبث له المخطط الموحد فوراً ليصبح الجهازان متطابقين تماماً 100%
         if (mergeResult.localHadExtra) {
           console.log('🔄 إرسال المخطط الموحد المكتمل للطرف الآخر لتحقيق التطابق التام 100%');
           broadcastLocalDrawing('auto_reconcile_parity');
@@ -462,8 +456,23 @@
 
       var curProj = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
       if (!curProj || !curProj.nodes) {
-        try { curProj = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
+        if (typeof window.getSavedFeederForAdmin === 'function') {
+          curProj = window.getSavedFeederForAdmin();
+        } else {
+          try { curProj = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
+        }
       }
+
+      var localSavedTime = 0;
+      try {
+        var st = localStorage.getItem('sld_saved_time_' + currentAdminKey) || localStorage.getItem('sld_authoritative_save_time');
+        if (st) localSavedTime = parseInt(st, 10) || 0;
+      } catch (_) {}
+      if (!localSavedTime && curProj) {
+        localSavedTime = curProj.user_saved_at || curProj.saved_at || curProj.timestamp || 0;
+      }
+      if (localSavedTime > msgTime) return;
+
       var partial = {
         id: (curProj && curProj.id) ? curProj.id : 'feeder_1789823077015',
         name: (curProj && curProj.name) ? curProj.name : 'خط المعصرة',
@@ -479,17 +488,17 @@
       } else {
         window.currentProject = updatedProj;
       }
-      try {
-        localStorage.setItem('sld_saved_feeder', JSON.stringify(updatedProj));
-      } catch (e) {}
+      if (typeof window.saveFeederForAdmin === 'function') {
+        window.saveFeederForAdmin(updatedProj);
+      } else {
+        try { localStorage.setItem('sld_saved_feeder', JSON.stringify(updatedProj)); } catch (e) {}
+      }
 
       if (window.updateFeederInputs) window.updateFeederInputs();
       if (window.renderNetwork) window.renderNetwork();
       if (window.fitToScreen) window.fitToScreen();
 
-      var chunkIdx = (chunkData.index || 0) + 1;
-      var totalC = chunkData.total || 1;
-      showSyncToast('⚡ استلام ومطابقة دفعة رسم [' + chunkIdx + '/' + totalC + '] (الإجمالي: ' + updatedProj.nodes.length + ' عقدة و ' + updatedProj.sections.length + ' مقطع)', 'info');
+      // بدون رسائل مزعجة للقطع، فقط تحديث الشارة الهادئة
       updateBadgeUI('syncing', author);
 
       setTimeout(function () {
@@ -506,7 +515,7 @@
         var mergedP = mRes.merged;
 
         window.applySyncedProject(mergedP, data.catalog);
-        showSyncToast('💾 تم حفظ ومطابقة مشروع [' + (mergedP.name || '') + '] من: ' + author);
+        showSyncToast('💾 تم استلام ومطابقة مشروع [' + (mergedP.name || '') + '] من: ' + author, 'info', true);
         updateBadgeUI('syncing', author);
 
         setTimeout(function () {
@@ -801,37 +810,71 @@
       var localNodesCount = (curLocal && Array.isArray(curLocal.nodes)) ? curLocal.nodes.length : 0;
       var remoteNodesCount = (remoteMeta && remoteMeta.nodesCount) ? remoteMeta.nodesCount : 0;
 
-      console.log('☁️ فحص سحابة Firebase للإدارة [' + currentAdminKey + ']: محلي (' + localNodesCount + ' عقدة) | سحابي (' + remoteNodesCount + ' عقدة)');
+      var localSavedTime = 0;
+      try {
+        var st = localStorage.getItem('sld_saved_time_' + currentAdminKey) || localStorage.getItem('sld_authoritative_save_time');
+        if (st) localSavedTime = parseInt(st, 10) || 0;
+      } catch (_) {}
+      if (!localSavedTime && curLocal) {
+        localSavedTime = curLocal.user_saved_at || curLocal.saved_at || curLocal.timestamp || 0;
+      }
 
-      // إذا كان الجهاز الحالي يمتلك عقداً أكثر أو مساوية للسحابة للإدارة
-      if (localNodesCount > 0 && localNodesCount >= remoteNodesCount) {
-        console.log('☁️ رفع المخطط المحلي الأكبر (' + localNodesCount + ' عقدة) إلى سحابة Firebase للإدارة [' + currentAdminKey + ']...');
-        await syncProjectDirectToFirebase(curLocal, 'auto_startup_push');
-      } else if (remoteNodesCount > 0) {
-        // إذا كانت السحابة تمتلك عناصر أكثر للإدارة:
-        console.log('☁️ استلام المخطط الكامل (' + remoteNodesCount + ' عقدة) من سحابة Firebase للإدارة [' + currentAdminKey + ']...');
+      var remoteSavedTime = (remoteMeta && (remoteMeta.user_saved_at || remoteMeta.timestamp)) ? (remoteMeta.user_saved_at || remoteMeta.timestamp) : 0;
+
+      console.log('☁️ فحص سحابة Firebase للإدارة [' + currentAdminKey + ']: وقت الحفظ المحلي (' + localSavedTime + ') | وقت السحابة (' + remoteSavedTime + ') | محلي (' + localNodesCount + ' عقدة) | سحابي (' + remoteNodesCount + ' عقدة)');
+
+      // 1. إذا كان المخطط المحلي محفوظاً ومحدثاً أكثر أو مساوياً للسحابة -> المخطط المحلي مقدس ولا يُمس نهائياً
+      if (curLocal && localNodesCount > 0 && localSavedTime >= remoteSavedTime) {
+        console.log('🔒 المخطط المحلي معتمد ومحفوظ حديثاً، رفع للسحابة لتحديثها دون لمس الرسم المحلي...');
+        await syncProjectDirectToFirebase(curLocal, 'local_authoritative_sync');
+      } 
+      // 2. إذا كان المخطط المحلي فارغاً ولكن السحابة تحتوي على رسم
+      else if ((!curLocal || localNodesCount === 0) && remoteNodesCount > 0) {
+        console.log('☁️ استلام المخطط السحابي للإدارة الفارغة محلياً (' + remoteNodesCount + ' عقدة)...');
         var projRes = await fetch(adminUrl + '/project.json');
         if (projRes.ok) {
           var remoteProj = await projRes.json();
           if (remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
-            var mRes = smartMergeProjects(curLocal, remoteProj);
-            var finalProj = mRes.merged;
-
             isApplyingRemote = true;
-            if (window.setCurrentProject) window.setCurrentProject(finalProj);
-            else window.currentProject = finalProj;
+            if (window.setCurrentProject) window.setCurrentProject(remoteProj);
+            else window.currentProject = remoteProj;
 
             if (typeof window.saveFeederForAdmin === 'function') {
-              window.saveFeederForAdmin(finalProj);
+              window.saveFeederForAdmin(remoteProj);
             } else {
-              try { localStorage.setItem('sld_saved_feeder', JSON.stringify(finalProj)); } catch (_) {}
+              try { localStorage.setItem('sld_saved_feeder', JSON.stringify(remoteProj)); } catch (_) {}
             }
 
             if (window.updateFeederInputs) window.updateFeederInputs();
             if (window.renderNetwork) window.renderNetwork();
             if (window.fitToScreen) setTimeout(window.fitToScreen, 300);
 
-            showSyncToast('☁️ تم استلام ومزامنة رسم [' + (finalProj.name || currentAdminKey) + '] كاملاً من سحابة Firebase (' + finalProj.nodes.length + ' عقدة)', 'success');
+            setTimeout(function () { isApplyingRemote = false; }, 800);
+          }
+        }
+      }
+      // 3. إذا كان هناك تحديث سحابي فعلي أحدث من جهاز آخر
+      else if (remoteSavedTime > localSavedTime && remoteMeta.senderId !== deviceId && remoteNodesCount > 0) {
+        console.log('☁️ يوجد حفظ سحابي أحدث من جهاز آخر (' + remoteSavedTime + ' > ' + localSavedTime + ')...');
+        var projRes = await fetch(adminUrl + '/project.json');
+        if (projRes.ok) {
+          var remoteProj = await projRes.json();
+          if (remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
+            isApplyingRemote = true;
+            if (window.setCurrentProject) window.setCurrentProject(remoteProj);
+            else window.currentProject = remoteProj;
+
+            if (typeof window.saveFeederForAdmin === 'function') {
+              window.saveFeederForAdmin(remoteProj);
+            } else {
+              try { localStorage.setItem('sld_saved_feeder', JSON.stringify(remoteProj)); } catch (_) {}
+            }
+
+            if (window.updateFeederInputs) window.updateFeederInputs();
+            if (window.renderNetwork) window.renderNetwork();
+            if (window.fitToScreen) setTimeout(window.fitToScreen, 300);
+
+            showSyncToast('☁️ تم تحديث الرسم من حفظ معتمد لجهاز آخر (' + (remoteMeta.author || 'مهندس آخر') + ')', 'info', true);
             setTimeout(function () { isApplyingRemote = false; }, 800);
           }
         }
@@ -927,20 +970,36 @@
 
       if (meta.timestamp > lastFirebaseTimestamp && meta.senderId !== deviceId) {
         lastFirebaseTimestamp = meta.timestamp;
+
+        var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+        if (!curLocal || !curLocal.nodes) {
+          if (typeof window.getSavedFeederForAdmin === 'function') {
+            curLocal = window.getSavedFeederForAdmin();
+          } else {
+            try { curLocal = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
+          }
+        }
+
+        var localSavedTime = 0;
+        try {
+          var st = localStorage.getItem('sld_saved_time_' + getAdminKey()) || localStorage.getItem('sld_authoritative_save_time');
+          if (st) localSavedTime = parseInt(st, 10) || 0;
+        } catch (_) {}
+        if (!localSavedTime && curLocal) {
+          localSavedTime = curLocal.user_saved_at || curLocal.saved_at || curLocal.timestamp || 0;
+        }
+
+        // إذا كان المخطط المحلي محفوظاً بوقت أحدث أو مساوٍ، لا نسمح باستبداله أو حذفه
+        if (localSavedTime >= meta.timestamp) {
+          return;
+        }
+
         console.log('⚡ تحديث سحابي جديد على Firebase للإدارة [' + getAdminKey() + '] من:', meta.author, 'عدد العقد:', meta.nodesCount);
 
         var projRes = await fetch(adminUrl + '/project.json');
         if (projRes.ok) {
           var remoteProj = await projRes.json();
           if (remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
-            var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
-            if (!curLocal || !curLocal.nodes) {
-              if (typeof window.getSavedFeederForAdmin === 'function') {
-                curLocal = window.getSavedFeederForAdmin();
-              } else {
-                try { curLocal = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
-              }
-            }
             var mRes = smartMergeProjects(curLocal, remoteProj);
             var finalProj = mRes.merged;
 
@@ -963,7 +1022,7 @@
             if (window.renderNetwork) window.renderNetwork();
             if (window.fitToScreen) setTimeout(window.fitToScreen, 200);
 
-            showSyncToast('☁️ سحابة Firebase: تم استلام وتحديث الرسم لحظياً من ' + (meta.author || 'مهندس آخر'), 'success');
+            // تحديث شارة السحابة بهدوء دون إزعاج المستخدم برسائل
             updateBadgeUI('connected');
             setTimeout(function () {
               isApplyingRemote = false;
@@ -1182,7 +1241,18 @@
     }
   }
 
-  function showSyncToast(msg, type) {
+  var lastSyncToastMsg = '';
+  var lastSyncToastTime = 0;
+  function showSyncToast(msg, type, isForced) {
+    if (!msg) return;
+    var now = Date.now();
+    if (!isForced) {
+      if (now - lastSyncToastTime < 10000 || msg === lastSyncToastMsg) {
+        return;
+      }
+    }
+    lastSyncToastMsg = msg;
+    lastSyncToastTime = now;
     if (window.showToast) {
       window.showToast(msg, type || 'info');
     }
