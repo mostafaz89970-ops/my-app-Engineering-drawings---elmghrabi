@@ -658,6 +658,49 @@ function fitToScreen() {
   updateTransform();
 }
 
+// ─── توسيط وضبط الكانفاس على نود محدد وإبرازه فوراً (Center On Node) ───
+function centerOnNode(nodeId, shouldHighlight = true) {
+  const proj = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject || currentProject;
+  if (!proj || !proj.nodes) return false;
+  const node = proj.nodes.find(n => n.id === nodeId);
+  if (!node || typeof node.x !== 'number' || typeof node.y !== 'number') return false;
+
+  const viewport = document.getElementById("viewport");
+  const vpWidth = (viewport && viewport.clientWidth > 100) ? viewport.clientWidth : (window.innerWidth || 1200);
+  const vpHeight = (viewport && viewport.clientHeight > 100) ? viewport.clientHeight : (window.innerHeight ? window.innerHeight - 150 : 800);
+
+  // إذا كان مستوى التكبير بعيداً جداً، نكبر قليلاً لنرى النود ومحيطه بوضوح
+  if (canvasScale < 0.85) {
+    canvasScale = 0.95;
+  }
+
+  panX = (vpWidth / 2) - (node.x * canvasScale);
+  panY = (vpHeight / 2) - (node.y * canvasScale);
+  updateTransform();
+
+  // تحديد النود في المنظومة لفتح أشرطة الأدوات العائمة ومطابقة الحالة
+  selectElement("node", node.id, node.name || node.id);
+
+  if (shouldHighlight) {
+    triggerNodeSearchGlow(node.id);
+  }
+  return true;
+}
+
+function triggerNodeSearchGlow(nodeId) {
+  document.querySelectorAll(".sld-search-highlight").forEach(el => el.classList.remove("sld-search-highlight"));
+  const nodeGroup = document.getElementById("node-" + nodeId);
+  if (nodeGroup) {
+    nodeGroup.classList.add("sld-search-highlight");
+    setTimeout(() => {
+      nodeGroup.classList.remove("sld-search-highlight");
+    }, 4500);
+  }
+}
+
+window.centerOnNode = centerOnNode;
+window.triggerNodeSearchGlow = triggerNodeSearchGlow;
+
 function toggleGrid() {
   showGrid = !showGrid;
   const bgGrid = document.getElementById("bg-grid");

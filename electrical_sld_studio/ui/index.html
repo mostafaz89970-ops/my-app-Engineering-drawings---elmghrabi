@@ -244,6 +244,21 @@
         </div>
 
         <div class="cad-ribbon-sep"></div>
+
+        <!-- كبسولة البحث الفوري عن النود والمعدات في الرسم (Ctrl+F) -->
+        <div class="node-search-capsule" id="node-search-capsule" title="بحث فوري عن أي نود أو محول أو سكينة أو كشك في المخطط (اختصار: Ctrl+F)">
+          <span class="node-search-icon" onclick="focusNodeSearch()">🔍</span>
+          <input type="text" id="node-search-input" class="node-search-input" placeholder="بحث عن نود (ID أو اسم أو نوع)..." autocomplete="off" oninput="handleNodeSearchInput(this.value)" onkeydown="handleNodeSearchKeydown(event)" onfocus="handleNodeSearchFocus()">
+          <span id="node-search-counter" class="node-search-counter" style="display:none;"></span>
+          <button type="button" id="btn-node-search-prev" class="btn-node-search-nav" style="display:none;" onclick="navigateNodeSearch(-1)" title="العقدة السابقة (Shift+Enter)">▲</button>
+          <button type="button" id="btn-node-search-next" class="btn-node-search-nav" style="display:none;" onclick="navigateNodeSearch(1)" title="العقدة التالية (Enter)">▼</button>
+          <button type="button" id="btn-node-search-clear" class="btn-node-search-clear" style="display:none;" onclick="clearNodeSearch()" title="إلغاء ومسح البحث">✕</button>
+
+          <!-- القائمة المنسدلة للنتائج المقترحة -->
+          <div id="node-search-dropdown" class="node-search-dropdown hidden"></div>
+        </div>
+
+        <div class="cad-ribbon-sep"></div>
         <!-- مجموعة 1: الخطوط والكابلات -->
         <div class="cad-group">
           <span class="cad-group-tag">الخطوط والكابلات</span>
@@ -501,6 +516,7 @@
         <div class="floating-canvas-controls">
           <button class="ctrl-btn" onclick="zoomIn()" title="تكبير">+</button>
           <button class="ctrl-btn" onclick="zoomOut()" title="تصغير">-</button>
+          <button class="ctrl-btn" id="btn-float-search" onclick="focusNodeSearch()" title="بحث عن نود وتوسيعه على الشاشة (Ctrl+F)" style="background:rgba(14,165,233,0.25);border-color:#0284c7;color:#38bdf8;font-weight:bold;">🔍</button>
           <button class="ctrl-btn" id="btn-float-reconcile" onclick="reconcileAndSyncAllDevices()" title="مطابقة واستكمال الرسم الناقص من كافة الأجهزة فوراً" style="background:#059669;color:#fff;font-weight:bold;border-color:#34d399;">🔄</button>
           <button class="ctrl-btn" id="btn-float-dir" onclick="toggleDrawingDirection()" title="تبديل اتجاه الرسم (من أسفل لأعلى ⬆️ / من أعلى لأسفل ⬇️)">⬇️</button>
           <button class="ctrl-btn" id="btn-float-bg" onclick="toggleCanvasBackground()" title="تبديل لون خلفية الرسم (أبيض / داكن)">🎨</button>
@@ -2256,14 +2272,14 @@
   </div>
 
   <script src="js/jszip.min.js"></script>
-  <script src="js/default_projects.js?v=14.0"></script>
-  <script src="js/auth.js?v=14.0"></script>
-  <script src="js/realtime_sync.js?v=14.0"></script>
-  <script src="js/components.js?v=14.0"></script>
-  <script src="js/simulation.js?v=14.0"></script>
-  <script src="js/canvas.js?v=14.0"></script>
-  <script src="js/app.js?v=14.0"></script>
-  <script src="js/settings.js?v=14.0"></script>
+  <script src="js/default_projects.js?v=15.0"></script>
+  <script src="js/auth.js?v=15.0"></script>
+  <script src="js/realtime_sync.js?v=15.0"></script>
+  <script src="js/components.js?v=15.0"></script>
+  <script src="js/simulation.js?v=15.0"></script>
+  <script src="js/canvas.js?v=15.0"></script>
+  <script src="js/app.js?v=15.0"></script>
+  <script src="js/settings.js?v=15.0"></script>
 </body>
 </html>
 
