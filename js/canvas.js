@@ -593,6 +593,76 @@ function toggleSwitch(nodeId) {
   renderNetwork();
 }
 
+// ─── فتح جميع السكاكين الهوائية في المخطط (فصل الدوائر بالكامل 🔴) ───────────
+function openAllSwitches() {
+  if (!currentProject || !Array.isArray(currentProject.nodes)) {
+    if (window.showToast) window.showToast("⚠️ لا يوجد مخطط محمل حالياً!", "warning");
+    return;
+  }
+  const switches = currentProject.nodes.filter(n => n && n.type === "switch");
+  if (switches.length === 0) {
+    if (window.showToast) window.showToast("ℹ️ لا توجد سكاكين هوائية مضافة في هذا المخطط.", "info");
+    return;
+  }
+
+  switches.forEach(sw => {
+    sw.state = "open";
+  });
+
+  try {
+    localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
+  } catch(e) {}
+
+  if (window.showToast) {
+    window.showToast(`🔴 تم فتح وفصل جميع السكاكين (${switches.length} سكينة) وتحديث مسارات التغذية.`, "danger");
+  }
+
+  renderNetwork();
+}
+
+// ─── غلق وتوصيل جميع السكاكين الهوائية في المخطط (توصيل التيار بالكامل 🟢) ───────
+function closeAllSwitches() {
+  if (!currentProject || !Array.isArray(currentProject.nodes)) {
+    if (window.showToast) window.showToast("⚠️ لا يوجد مخطط محمل حالياً!", "warning");
+    return;
+  }
+  const switches = currentProject.nodes.filter(n => n && n.type === "switch");
+  if (switches.length === 0) {
+    if (window.showToast) window.showToast("ℹ️ لا توجد سكاكين هوائية مضافة في هذا المخطط.", "info");
+    return;
+  }
+
+  switches.forEach(sw => {
+    sw.state = "closed";
+  });
+
+  try {
+    localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
+  } catch(e) {}
+
+  if (window.showToast) {
+    window.showToast(`🟢 تم غلق وتوصيل جميع السكاكين (${switches.length} سكينة) وتغذية الشبكة بالكامل.`, "success");
+  }
+
+  renderNetwork();
+}
+
+// ─── زر تبديلي ذكي لجميع السكاكين (فتح أو غلق الكل) ─────────────────────────
+function toggleAllSwitches() {
+  if (!currentProject || !Array.isArray(currentProject.nodes)) return;
+  const switches = currentProject.nodes.filter(n => n && n.type === "switch");
+  if (switches.length === 0) {
+    if (window.showToast) window.showToast("ℹ️ لا توجد سكاكين في هذا المخطط.", "info");
+    return;
+  }
+  const openCount = switches.filter(n => n.state === "open").length;
+  if (openCount >= switches.length / 2) {
+    closeAllSwitches();
+  } else {
+    openAllSwitches();
+  }
+}
+
 // التفاعل مع العقد (المحولات، السكاكين، الأكشاك) بالنقر الفردي
 function handleNodeClick(e, nodeId) {
   if (e && typeof e.stopPropagation === "function") e.stopPropagation();
@@ -911,3 +981,6 @@ window.toggleTitleBlockMinimize = toggleTitleBlockMinimize;
 window.renderNetwork = renderNetwork;
 window.fitToScreen = fitToScreen;
 window.resetZoom = resetZoom;
+window.openAllSwitches = openAllSwitches;
+window.closeAllSwitches = closeAllSwitches;
+window.toggleAllSwitches = toggleAllSwitches;
