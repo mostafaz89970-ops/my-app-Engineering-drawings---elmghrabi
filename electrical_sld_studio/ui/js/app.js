@@ -4504,15 +4504,7 @@ function quickAddSwitch(direction = 'vertical') {
   const isHoriz = (direction === 'horizontal');
   const targetDir = isHoriz ? 'right' : ((window.drawingFlowDirection === 'up') ? 'up' : 'down');
 
-  // إذا كان هناك مقطع محدد: لحام مباشر وسريع
-  if (selectedElement && selectedElement.type === "section") {
-    if (typeof quickWeldSwitchOnSelectedSection === "function") {
-      quickWeldSwitchOnSelectedSection(targetDir);
-      return;
-    }
-  }
-
-  // فتح نافذة السكينة مع التوجيه المسبق
+  // فتح نافذة السكينة دائماً مع التوجيه المسبق
   openSwitchModal(targetDir);
 }
 
@@ -4520,12 +4512,6 @@ function quickAddSwitchPrompt() {
   if (window.hasPermission && window.currentUser && !window.hasPermission('btn_switch')) {
     if (window.showToast) showToast("⛔ ليس لديك صلاحية إضافة سكينة هوائية", "error");
     return;
-  }
-  if (selectedElement && selectedElement.type === "section") {
-    if (typeof quickWeldSwitchOnSelectedSection === "function") {
-      quickWeldSwitchOnSelectedSection();
-      return;
-    }
   }
   const targetDir = (window.drawingFlowDirection === 'up') ? 'up' : 'down';
   openSwitchModal(targetDir);
