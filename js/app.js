@@ -1802,7 +1802,7 @@ function submitLineBetweenNodesModal() {
       name: customName || (addSwitch ? `سكينة ${branchEndId}` : `نقطة ${branchEndId}`),
       x: branchEndX,
       y: branchEndY,
-      ...(addSwitch ? { direction: isHoriz ? "horizontal" : "vertical", state: "closed" } : {})
+      ...(addSwitch ? { direction: isHoriz ? "horizontal" : "vertical", dir: branchDir, state: "closed" } : {})
     };
     currentProject.nodes.push(branchEndNode);
 
@@ -2662,9 +2662,9 @@ function quickAddElement(type) {
   let newNode = { id: nextId, x: newX, y: newY };
 
   if (type === "switch_vert") {
-    newNode = { ...newNode, type: "switch", name: `سكينة ${nextId}`, direction: "vertical", state: "closed" };
+    newNode = { ...newNode, type: "switch", name: `سكينة ${nextId}`, direction: "vertical", dir: "down", state: "closed" };
   } else if (type === "switch_horiz") {
-    newNode = { ...newNode, type: "switch", name: `سكينة تفريعة ${nextId}`, direction: "horizontal", state: "closed" };
+    newNode = { ...newNode, type: "switch", name: `سكينة تفريعة ${nextId}`, direction: "horizontal", dir: "right", state: "closed" };
   } else if (type === "rmu") {
     newNode = { ...newNode, type: "rmu", name: `لوحة RMU ${nextId}`, switches_count: 3 };
   } else if (type === "substation") {
@@ -3551,6 +3551,7 @@ function openSwitchModal(suggestedDir = 'down') {
     alert("الرجاء إضافة محطة محولات أو خط أولاً.");
     return;
   }
+  window._lastSuggestedSwitchDir = suggestedDir;
   const modal = document.getElementById("switch-modal");
   populateNodeDropdowns();
 
@@ -3608,9 +3609,25 @@ function onSwitchMainNodeChange() {
     summaryEl.textContent = branchDescList.length > 0 ? `(المتصل: ${branchDescList.join(" | ")})` : "(نقطة طرفية)";
   }
 
-  // بناء الخيارات ديناميكياً حسب تفرعات هذا النود المختار
+  // بناء الخيارات ديناميكياً حسب تفرعات هذا النود المختار والاتجاه المطلوب
   let optionsHTML = "";
+  const sug = window._lastSuggestedSwitchDir || "down";
   let defaultAction = "same_node";
+
+  if (sug === "right" || sug === "horizontal") {
+    if (branches.right) defaultAction = "branch_right";
+    else defaultAction = "same_node";
+  } else if (sug === "left") {
+    if (branches.left) defaultAction = "branch_left";
+    else defaultAction = "same_node";
+  } else if (sug === "up") {
+    if (branches.up) defaultAction = "branch_up";
+    else defaultAction = "same_node";
+  } else {
+    if (branches.down) defaultAction = "branch_down";
+    else if (branches.right) defaultAction = "branch_right";
+    else defaultAction = "same_node";
+  }
 
   // خيار 1: تثبيت على نفس النود (دائماً متاح ومباشر)
   optionsHTML += `
@@ -3622,7 +3639,6 @@ function onSwitchMainNodeChange() {
 
   // إذا كان هناك تفرعات فعلية:
   if (branches.right) {
-    defaultAction = "branch_right";
     optionsHTML += `
       <label style="background:var(--bg-tertiary); padding:9px 12px; border-radius:6px; cursor:pointer; font-size:12.5px; border:1px solid var(--border-color); display:flex; align-items:center; gap:8px;">
         <input type="radio" name="sw-action" value="branch_right" onchange="onSwitchActionChange()">
@@ -3632,7 +3648,6 @@ function onSwitchMainNodeChange() {
   }
 
   if (branches.down) {
-    if (!branches.right) defaultAction = "branch_down";
     optionsHTML += `
       <label style="background:var(--bg-tertiary); padding:9px 12px; border-radius:6px; cursor:pointer; font-size:12.5px; border:1px solid var(--border-color); display:flex; align-items:center; gap:8px;">
         <input type="radio" name="sw-action" value="branch_down" onchange="onSwitchActionChange()">
@@ -3661,7 +3676,6 @@ function onSwitchMainNodeChange() {
 
   // خيار سكينتين مستقلتين إذا كان النود نقطة تفرع لكلا المسارين أو أكثر
   if (branches.right && branches.down) {
-    defaultAction = "branch_both";
     optionsHTML += `
       <label style="background:var(--bg-tertiary); padding:9px 12px; border-radius:6px; cursor:pointer; font-size:12.5px; border:1px solid var(--border-color); display:flex; align-items:center; gap:8px;">
         <input type="radio" name="sw-action" value="branch_both" onchange="onSwitchActionChange()">
@@ -3701,6 +3715,7 @@ function onSwitchActionChange() {
   const nameGroup = document.getElementById("sw-single-name-group");
   const nameInput = document.getElementById("sw-single-name");
   const nodeIdInput = document.getElementById("sw-single-node-id");
+  const dirSelect = document.getElementById("sw-single-dir");
   const fieldsDual = document.getElementById("sw-fields-dual");
   const fieldsNewLine = document.getElementById("sw-fields-new-line");
   const submitBtn = document.getElementById("sw-submit-btn");
@@ -3708,6 +3723,8 @@ function onSwitchActionChange() {
   // توليد أرقام نود فريدة تلقائية
   let nextNum = currentProject.nodes.length + 1;
   while (currentProject.nodes.some(n => n.id === "N" + nextNum)) nextNum++;
+
+  const sug = window._lastSuggestedSwitchDir;
 
   if (action === "same_node") {
     // تثبيت على نفس النود
@@ -3717,6 +3734,12 @@ function onSwitchActionChange() {
     if (nameInput) nameInput.value = (sourceNode.name && !sourceNode.name.startsWith("نقطة")) ? sourceNode.name : ("سكينة " + sourceNode.id);
     if (fieldsDual) fieldsDual.classList.add("hidden");
     if (fieldsNewLine) fieldsNewLine.classList.add("hidden");
+    if (dirSelect) {
+      if (sug === "right" || sug === "horizontal") dirSelect.value = "right";
+      else if (sug === "left") dirSelect.value = "left";
+      else if (sug === "up") dirSelect.value = "up";
+      else if (sug === "down") dirSelect.value = "down";
+    }
     if (submitBtn) submitBtn.innerHTML = `<span>📌 تثبيت السكينة على النود [${sourceNode.id}] فوراً ➔</span>`;
   } else if (action === "branch_both") {
     // سكينتان مستقلتان
@@ -3738,6 +3761,11 @@ function onSwitchActionChange() {
     if (nameInput) nameInput.value = "سكينة " + ("N" + nextNum);
     if (fieldsDual) fieldsDual.classList.add("hidden");
     if (fieldsNewLine) fieldsNewLine.classList.remove("hidden");
+
+    const targetLineDir = (sug === "right" || sug === "horizontal") ? "right" : (sug === "left" ? "left" : (sug === "up" ? "up" : "down"));
+    const lineRadio = document.querySelector(`input[name="sw-line-dir"][value="${targetLineDir}"]`);
+    if (lineRadio) lineRadio.checked = true;
+
     if (submitBtn) submitBtn.innerHTML = `<span>➕ مد الخط وإضافة السكينة ➔</span>`;
   } else {
     // سكينة على تفريعة واحدة (يمين أو أسفل أو شمال أو أعلى)
@@ -3747,7 +3775,6 @@ function onSwitchActionChange() {
     if (nodeIdInput) nodeIdInput.value = "N" + nextNum;
 
     let branchTitle = "سكينة تفريعة";
-    const dirSelect = document.getElementById("sw-single-dir");
     if (action === "branch_right") {
       branchTitle = "سكينة تفريعة يمين";
       if (dirSelect) dirSelect.value = "right";
@@ -4053,12 +4080,13 @@ function submitSwitchModal() {
   if (swChoiceDir && swChoiceDir !== "auto" && ["left", "right", "down", "up"].includes(swChoiceDir)) {
     targetDir = swChoiceDir;
   }
+  const isFinalHoriz = (targetDir === "right" || targetDir === "left");
 
   currentProject.nodes.push({
     id: swNodeId,
     type: "switch",
     name: swName,
-    direction: isHoriz ? "horizontal" : "vertical",
+    direction: isFinalHoriz ? "horizontal" : "vertical",
     dir: targetDir,
     state: swState,
     x: swX,

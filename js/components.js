@@ -53,9 +53,24 @@ const Components = {
     }
     // إذا كان نوع الاتجاه مسجلاً كأفقي
     if (node.direction === "horizontal") {
-      if (typeof currentProject !== "undefined" && currentProject && currentProject.sections) {
-        const sec = currentProject.sections.find(s => s.from_node === node.id || s.to_node === node.id);
-        if (sec && (sec.direction === "left" || sec.direction === "right")) return sec.direction;
+      if (typeof currentProject !== "undefined" && currentProject) {
+        // فحص العقد المتصلة هندسياً بالسكينة: تحديد الاتجاه الفعلي بحسب إحداثيات العقد
+        if (currentProject.sections && currentProject.nodes) {
+          const connectedSecs = currentProject.sections.filter(s => s.from_node === node.id || s.to_node === node.id);
+          for (const s of connectedSecs) {
+            const otherId = (s.from_node === node.id) ? s.to_node : s.from_node;
+            const otherNode = currentProject.nodes.find(n => n.id === otherId);
+            if (otherNode) {
+              const dx = otherNode.x - node.x;
+              const dy = otherNode.y - node.y;
+              if (Math.abs(dx) >= Math.abs(dy)) {
+                if (dx > 10) return "right";
+                if (dx < -10) return "left";
+              }
+            }
+            if (s.direction === "right" || s.direction === "left") return s.direction;
+          }
+        }
       }
       return "right";
     }
@@ -96,7 +111,7 @@ const Components = {
   },
 
   // رسم السكينة الهوائية: تبدأ من الخط المستقيم تماماً بدون قطعه أو قسمه
-  // مع استمرار الخط الرأسي سليماً ومباشراً للأسفل
+  // مع إضافة وصلة أمان لمنع التصاق نقطة الدليل بالخط القائم الرأسي
   renderSwitch(node, isEnergized = true, isSelected = false, isSimulationMode = false) {
     const x = node.x;
     const y = node.y;
@@ -107,44 +122,46 @@ const Components = {
     const selClass = isSelected ? "sld-selected" : "";
     const simClass = isSimulationMode ? "sim-switch-interactive" : "";
 
-    const SW_LEN = 32; // طول سيف السكينة بالبيكسل
+    const SW_OFFSET = 14; // مسافة أمان هندسية تبعد نقطة الدليل (Hinge) عن الخط القائم الرأسي
+    const SW_LEN = 30;    // طول سيف السكينة بالبيكسل
     let bladeMarkup = "";
+    let leadMarkup = "";
     let p1x = 0, p1y = 0, p2x = 0, p2y = 0;
 
     if (dir === "left") {
-      // السكينة تبدأ من الخط المستقيم تماماً عند (0, 0) وتمتد يساراً نحو (-32, 0)
-      // بدون أي بروز لليمين، ليبقى الخط الرأسي مستقيماً وسليماً 100%
-      p1x = 0; p1y = 0;
-      p2x = -SW_LEN; p2y = 0;
+      // وصلة تفرع أنيقة من الخط الرأسي (0,0) إلى نقطة الدليل (-14,0)
+      leadMarkup = `<line x1="0" y1="0" x2="-${SW_OFFSET}" y2="0" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round" />`;
+      p1x = -SW_OFFSET; p1y = 0;
+      p2x = -(SW_OFFSET + SW_LEN); p2y = 0;
       if (isClosed) {
         bladeMarkup = `
-          <line x1="0" y1="0" x2="-${SW_LEN}" y2="0" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
-          <line x1="-${SW_LEN}" y1="0" x2="-${SW_LEN - 5}" y2="-6" stroke="${strokeColor}" stroke-width="2.2" stroke-linecap="round" />
+          <line x1="${p1x}" y1="0" x2="${p2x}" y2="0" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
+          <line x1="${p2x}" y1="0" x2="${p2x + 5}" y2="-6" stroke="${strokeColor}" stroke-width="2.2" stroke-linecap="round" />
         `;
       } else {
         bladeMarkup = `
-          <line x1="0" y1="0" x2="-22" y2="-15" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
-          <circle cx="-22" cy="-15" r="2.2" fill="${strokeColor}" />
+          <line x1="${p1x}" y1="0" x2="${p1x - 20}" y2="-14" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
+          <circle cx="${p1x - 20}" cy="-14" r="2.2" fill="${strokeColor}" />
         `;
       }
     } else if (dir === "right") {
-      // السكينة تبدأ من الخط المستقيم تماماً عند (0, 0) وتمتد يميناً نحو (+32, 0)
-      // بدون أي بروز لليسار، ليبقى الخط الرأسي مستقيماً وسليماً 100%
-      p1x = 0; p1y = 0;
-      p2x = SW_LEN; p2y = 0;
+      // وصلة تفرع أنيقة من الخط الرأسي (0,0) إلى نقطة الدليل (+14,0) لتبتعد تماماً عن الخط القائم
+      leadMarkup = `<line x1="0" y1="0" x2="${SW_OFFSET}" y2="0" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round" />`;
+      p1x = SW_OFFSET; p1y = 0;
+      p2x = SW_OFFSET + SW_LEN; p2y = 0;
       if (isClosed) {
         bladeMarkup = `
-          <line x1="0" y1="0" x2="${SW_LEN}" y2="0" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
-          <line x1="${SW_LEN}" y1="0" x2="${SW_LEN - 5}" y2="-6" stroke="${strokeColor}" stroke-width="2.2" stroke-linecap="round" />
+          <line x1="${p1x}" y1="0" x2="${p2x}" y2="0" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
+          <line x1="${p2x}" y1="0" x2="${p2x - 5}" y2="-6" stroke="${strokeColor}" stroke-width="2.2" stroke-linecap="round" />
         `;
       } else {
         bladeMarkup = `
-          <line x1="0" y1="0" x2="22" y2="-15" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
-          <circle cx="22" cy="-15" r="2.2" fill="${strokeColor}" />
+          <line x1="${p1x}" y1="0" x2="${p1x + 20}" y2="-14" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
+          <circle cx="${p1x + 20}" cy="-14" r="2.2" fill="${strokeColor}" />
         `;
       }
     } else if (dir === "up") {
-      // السكينة تبدأ من الخط المستقيم تماماً عند (0, 0) وتمتد لأعلى نحو (0, -32)
+      // السكينة تبدأ من الخط المستقيم تماماً عند (0, 0) وتمتد لأعلى نحو (0, -30)
       p1x = 0; p1y = 0;
       p2x = 0; p2y = -SW_LEN;
       if (isClosed) {
@@ -154,12 +171,12 @@ const Components = {
         `;
       } else {
         bladeMarkup = `
-          <line x1="0" y1="0" x2="15" y2="-22" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
-          <circle cx="15" cy="-22" r="2.2" fill="${strokeColor}" />
+          <line x1="0" y1="0" x2="15" y2="-20" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
+          <circle cx="15" cy="-20" r="2.2" fill="${strokeColor}" />
         `;
       }
     } else { // "down"
-      // السكينة تبدأ من الخط المستقيم تماماً عند (0, 0) وتمتد لأسفل نحو (0, +32)
+      // السكينة تبدأ من الخط المستقيم تماماً عند (0, 0) وتمتد لأسفل نحو (0, +30)
       p1x = 0; p1y = 0;
       p2x = 0; p2y = SW_LEN;
       if (isClosed) {
@@ -169,8 +186,8 @@ const Components = {
         `;
       } else {
         bladeMarkup = `
-          <line x1="0" y1="0" x2="15" y2="22" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
-          <circle cx="15" cy="22" r="2.2" fill="${strokeColor}" />
+          <line x1="0" y1="0" x2="15" y2="20" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
+          <circle cx="15" cy="20" r="2.2" fill="${strokeColor}" />
         `;
       }
     }
@@ -262,7 +279,10 @@ const Components = {
         <!-- تظليل وضع المحاكاة -->
         ${simHighlightMarkup}
 
-        <!-- قطبي التلامس الدائريين: القطب الأول يبدأ من الخط المستقيم مباشرة (0, 0) والطرف الثاني عند نهاية السيف -->
+        <!-- وصلة تفرع الخط المباشرة من الخط القائم للسكينة لمنع التصاق نقطة الدليل -->
+        ${leadMarkup}
+
+        <!-- قطبي التلامس الدائريين: القطب الأول يبدأ بعد مسافة الأمان عن الخط القائم، والطرف الثاني عند نهاية السيف -->
         <circle cx="${p1x}" cy="${p1y}" r="3.5" fill="#FFFFFF" stroke="${strokeColor}" stroke-width="2" />
         <circle cx="${p2x}" cy="${p2y}" r="3.5" fill="#FFFFFF" stroke="${strokeColor}" stroke-width="2" />
 
@@ -874,13 +894,14 @@ const Components = {
     if (node.type === "switch") {
       const dir = this.getSwitchDirection(node);
       const isHorizSw = (dir === "left" || dir === "right");
-      const SW_LEN = 32;
+      const SW_OFFSET = 14;
+      const SW_LEN = 30;
 
       // طرف بداية السكينة (على الخط المستقيم تماماً) والطرف الخارجي
       const pBase = { x: node.x, y: node.y };
       let pOut = { x: node.x, y: node.y };
-      if (dir === "left") pOut = { x: node.x - SW_LEN, y: node.y };
-      else if (dir === "right") pOut = { x: node.x + SW_LEN, y: node.y };
+      if (dir === "left") pOut = { x: node.x - (SW_OFFSET + SW_LEN), y: node.y };
+      else if (dir === "right") pOut = { x: node.x + (SW_OFFSET + SW_LEN), y: node.y };
       else if (dir === "up") pOut = { x: node.x, y: node.y - SW_LEN };
       else pOut = { x: node.x, y: node.y + SW_LEN };
 
