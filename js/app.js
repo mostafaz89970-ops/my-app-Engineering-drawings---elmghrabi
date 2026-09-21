@@ -3834,6 +3834,14 @@ function openSwitchModal(suggestedDir = 'down') {
 
   onSwitchNewLineTypeChange();
   onSwitchMainNodeChange();
+
+  const cleanDir = (suggestedDir === "horizontal" || suggestedDir === "right") ? "right" : 
+                   ((suggestedDir === "up") ? "up" : "down");
+  const swSingleDir = document.getElementById("sw-single-dir");
+  if (swSingleDir) swSingleDir.value = cleanDir;
+  const lineDirRadio = document.querySelector(`input[name="sw-line-dir"][value="${cleanDir}"]`);
+  if (lineDirRadio) lineDirRadio.checked = true;
+
   modal.classList.remove("hidden");
   modal.style.display = "flex";
 }
@@ -4108,6 +4116,8 @@ function submitSwitchModal() {
     alert("الرجاء اختيار النود المستهدف.");
     return;
   }
+
+  const action = document.querySelector('input[name="sw-action"]:checked')?.value || "same_node";
 
   // --- الحالة 0: لحام وتركيب السكينة بين نقطتين متقاطعتين أو متصلتين ---
   if (action === "between_nodes") {
@@ -4469,7 +4479,18 @@ function quickAddSwitch(direction = 'vertical') {
   const isHoriz = (direction === 'horizontal');
   const targetDir = isHoriz ? 'right' : ((window.drawingFlowDirection === 'up') ? 'up' : 'down');
 
-  // إذا كان هناك مقطع محدد: لحام مباشر وسريع
+  // 1. إذا كان العنصر المحدد في الرسم سكينة: تغيير اتجاهها فوراً بنقرة واحدة (أفقي / رأسي)
+  if (selectedElement && selectedElement.type === "node") {
+    const selNode = (currentProject?.nodes || []).find(n => n.id === selectedElement.id);
+    if (selNode && selNode.type === "switch") {
+      if (typeof quickSetSelectedSwitchDirection === "function") {
+        quickSetSelectedSwitchDirection(targetDir);
+        return;
+      }
+    }
+  }
+
+  // 2. إذا كان هناك مقطع / خط محدد: لحام مباشر وسريع للسكينة بالاتجاه المطلوب
   if (selectedElement && selectedElement.type === "section") {
     if (typeof quickWeldSwitchOnSelectedSection === "function") {
       quickWeldSwitchOnSelectedSection(targetDir);
@@ -4477,7 +4498,7 @@ function quickAddSwitch(direction = 'vertical') {
     }
   }
 
-  // فتح نافذة السكينة مع التوجيه المسبق
+  // 3. فتح نافذة السكينة مع التوجيه المسبق المطلوب
   openSwitchModal(targetDir);
 }
 
