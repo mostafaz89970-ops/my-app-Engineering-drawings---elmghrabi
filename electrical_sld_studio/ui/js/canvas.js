@@ -560,12 +560,12 @@ function toggleSimulationMode() {
   if (isSimulationActive) {
     btn.classList.add("btn-primary");
     btn.classList.remove("btn-outline");
-    banner.classList.remove("hidden");
+    if (banner) banner.classList.add("hidden");
     showToast("⚡ تم تفعيل وضع محاكاة السكاكين والفصل والتوصيل", "warning");
   } else {
     btn.classList.remove("btn-primary");
     btn.classList.add("btn-outline");
-    banner.classList.add("hidden");
+    if (banner) banner.classList.add("hidden");
     showToast("تم إيقاف وضع المحاكاة والعودة لوضع التصميم", "info");
   }
   renderNetwork();
