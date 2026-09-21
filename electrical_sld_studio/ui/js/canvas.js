@@ -591,6 +591,9 @@ function toggleSwitch(nodeId) {
   );
 
   renderNetwork();
+  if (window.broadcastProjectUpdate) {
+    window.broadcastProjectUpdate(isOpen ? "switch_opened" : "switch_closed");
+  }
 }
 
 // ─── فتح جميع السكاكين الهوائية في المخطط (فصل الدوائر بالكامل 🔴) ───────────
@@ -618,6 +621,9 @@ function openAllSwitches() {
   }
 
   renderNetwork();
+  if (window.broadcastProjectUpdate) {
+    window.broadcastProjectUpdate("all_switches_opened");
+  }
 }
 
 // ─── غلق وتوصيل جميع السكاكين الهوائية في المخطط (توصيل التيار بالكامل 🟢) ───────
@@ -645,6 +651,9 @@ function closeAllSwitches() {
   }
 
   renderNetwork();
+  if (window.broadcastProjectUpdate) {
+    window.broadcastProjectUpdate("all_switches_closed");
+  }
 }
 
 // ─── زر تبديلي ذكي لجميع السكاكين (فتح أو غلق الكل) ─────────────────────────
@@ -801,9 +810,15 @@ function quickSetSelectedSwitchDirection(newDir) {
   if (!node || node.type !== "switch") return;
   saveHistoryState();
   node.dir = newDir;
-  node.direction = (newDir === "left" || newDir === "right") ? "horizontal" : "vertical";
+  node.direction = newDir;
+  try {
+    localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
+  } catch (_) {}
   renderNetwork();
   updateSwitchFloatingToolbar();
+  if (window.broadcastProjectUpdate) {
+    window.broadcastProjectUpdate("switch_direction_" + newDir);
+  }
   showToast(`⚡ تم ضبط اتجاه ${node.name || node.id} إلى (${newDir === 'right' ? 'أفقي يمين ➡️' : newDir === 'left' ? 'أفقي شمال ⬅️' : newDir === 'down' ? 'رأسي لأسفل ⬇️' : 'رأسي لأعلى ⬆️'}) بنجاح`, "success");
 }
 window.quickSetSelectedSwitchDirection = quickSetSelectedSwitchDirection;

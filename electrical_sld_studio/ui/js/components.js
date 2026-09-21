@@ -48,13 +48,30 @@ const Components = {
 
   // دالة مساعدة لحساب اتجاه السكينة بدقة هندسية ومطابقة مسار الخط (يسار، يمين، أسفل، أعلى)
   getSwitchDirection(node) {
+    if (!node) return "down";
+
     // 1. إذا كان الاتجاه محدداً صراحة على السكينة: يعتمد مباشرة وبدون أي تردد
     if (node.dir && ["left", "right", "down", "up"].includes(node.dir)) {
       return node.dir;
     }
 
+    // 2. إذا كانت الخاصية direction تحمل اتجاهاً صريحاً
+    if (node.direction && ["left", "right", "down", "up"].includes(node.direction)) {
+      return node.direction;
+    }
+
+    // 3. إذا كان نوع الاتجاه مسجلاً كأفقي (horizontal) فالافتراضي هو يمين
+    if (node.direction === "horizontal") {
+      return "right";
+    }
+
+    // 4. إذا كان نوع الاتجاه مسجلاً كرأسي (vertical) فالافتراضي هو أسفل
+    if (node.direction === "vertical") {
+      return "down";
+    }
+
     if (typeof currentProject !== "undefined" && currentProject && currentProject.sections && currentProject.nodes) {
-      // 2. فحص الخط الخارج من السكينة أولاً (المسار المحكوم بالسكينة)
+      // 5. فحص الخط الخارج من السكينة (المسار المحكوم بالسكينة)
       const outgoingSec = currentProject.sections.find(s => s.from_node === node.id);
       if (outgoingSec) {
         if (outgoingSec.direction && ["left", "right", "down", "up"].includes(outgoingSec.direction)) {
@@ -72,12 +89,12 @@ const Components = {
         }
       }
 
-      // 3. فحص الخط الداخل إلى السكينة (اتجاه الحركة إلى الأمام: من العقدة السابقة نحو السكينة)
+      // 6. فحص الخط الداخل إلى السكينة (اتجاه الحركة إلى الأمام: من العقدة السابقة نحو السكينة)
       const incomingSec = currentProject.sections.find(s => s.to_node === node.id);
       if (incomingSec) {
         const fromNode = currentProject.nodes.find(n => n.id === incomingSec.from_node);
         if (fromNode) {
-          const dx = node.x - fromNode.x; // اتجاه التدفق للأمام
+          const dx = node.x - fromNode.x;
           const dy = node.y - fromNode.y;
           if (Math.abs(dx) >= Math.abs(dy)) {
             return dx < 0 ? "left" : "right";
@@ -89,11 +106,6 @@ const Components = {
           return incomingSec.direction;
         }
       }
-    }
-
-    // 4. إذا كان نوع الاتجاه مسجلاً كأفقي
-    if (node.direction === "horizontal") {
-      return "right";
     }
 
     return "down";
@@ -929,6 +941,12 @@ const Components = {
 
         // المسار المحكوم بسيف السكينة
         if (isSource) {
+          if (dir === "right" && otherNode && otherNode.x < node.x) {
+            return pBase;
+          }
+          if (dir === "left" && otherNode && otherNode.x > node.x) {
+            return pBase;
+          }
           return pOut;
         } else {
           if ((dir === "left" && otherNode && otherNode.x < node.x) ||
@@ -952,6 +970,12 @@ const Components = {
         }
 
         if (isSource) {
+          if (dir === "down" && otherNode && otherNode.y < node.y) {
+            return pBase;
+          }
+          if (dir === "up" && otherNode && otherNode.y > node.y) {
+            return pBase;
+          }
           return pOut;
         } else {
           if ((dir === "down" && otherNode && otherNode.y > node.y) ||
@@ -1007,8 +1031,8 @@ const Components = {
 
     const absDx = Math.abs(dx);
     const absDy = Math.abs(dy);
-    const isOrthogonalCable = (isCable || fromNode.type === "kiosk" || toNode.type === "kiosk" || sec.corner_style === "hv" || sec.corner_style === "vh") && 
-                              (absDx > 12 && absDy > 12) && !sec.is_slanted;
+    const isOrthogonalCable = (isCable || fromNode.type === "kiosk" || toNode.type === "kiosk" || fromNode.type === "switch" || toNode.type === "switch" || sec.corner_style === "hv" || sec.corner_style === "vh") && 
+                              (absDx > 8 && absDy > 8) && !sec.is_slanted;
 
     let pathD = "";
     let handleX = (x1 + x2) / 2;
@@ -1079,6 +1103,23 @@ const Components = {
               }
             } else {
               useVH = true;
+            }
+          }
+          // د) خط متصل بسكينة هوائية: مسار متعامد بحرف L حسب اتجاه السكينة
+          else if (fromNode.type === "switch") {
+            const swDir = this.getSwitchDirection(fromNode);
+            if (swDir === "right" || swDir === "left") {
+              useHV = true; // خروج أفقي أولاً بمحاذاة السكينة ثم انعطاف رأسي
+            } else {
+              useVH = true; // خروج رأسي أولاً بمحاذاة السكينة ثم انعطاف أفقي
+            }
+          }
+          else if (toNode.type === "switch") {
+            const swDir = this.getSwitchDirection(toNode);
+            if (swDir === "right" || swDir === "left") {
+              useVH = true; // اقتراب رأسي أولاً ثم دخول أفقي للسكينة
+            } else {
+              useHV = true; // اقتراب أفقي أولاً ثم دخول رأسي للسكينة
             }
           } else {
             // مسار كابل متعامد عام حسب الامتداد الأكبر
