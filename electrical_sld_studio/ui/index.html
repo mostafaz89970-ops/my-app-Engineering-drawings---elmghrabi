@@ -274,6 +274,9 @@
           <button class="cad-tool-btn" data-perm="btn_switch" onclick="quickAddSwitchPrompt()" title="إضافة سكينة هوائية مفصلية">
             <span>⚡ سكينة</span>
           </button>
+          <button class="cad-tool-btn" onclick="toggleAllSwitches()" title="تبديل حالة جميع السكاكين دفعة واحدة (فتح أو غلق الكل)" style="background: rgba(245, 158, 11, 0.15); border-color: #f59e0b; color: #fbbf24; font-weight: bold;">
+            <span>⚡ فتح/غلق الكل</span>
+          </button>
         </div>
       </div>
 
@@ -327,6 +330,12 @@
           <button id="btn-sim-mode" class="cad-tool-btn btn-outline" data-perm="btn_simulation" onclick="toggleSimulationMode()" title="تشغيل وضع محاكاة الفصل والتوصيل وتلوين الخطوط المكهربة">
             <span id="sim-icon">⚡</span>
             <span>محاكاة</span>
+          </button>
+          <button id="btn-open-all-switches" class="cad-tool-btn" onclick="openAllSwitches()" title="فتح وفصل جميع السكاكين الهوائية في المخطط بالكامل دفعة واحدة (🔴 دوائر مفصولة)" style="border-color: #ef4444; color: #f87171; font-weight: bold;">
+            <span>🔴 فتح كل السكاكين</span>
+          </button>
+          <button id="btn-close-all-switches" class="cad-tool-btn" onclick="closeAllSwitches()" title="غلق وتوصيل جميع السكاكين الهوائية في المخطط بالكامل دفعة واحدة (🟢 تغذية كاملة)" style="border-color: #10b981; color: #34d399; font-weight: bold;">
+            <span>🟢 غلق كل السكاكين</span>
           </button>
           <button class="cad-tool-btn" data-perm="btn_calculations" onclick="openCalculationsModal()" title="عرض جدول الحسابات وهبوط الجهد">
             <span>📊 الحسابات</span>
@@ -390,6 +399,11 @@
           <div class="palette-item" data-perm="btn_switch" onclick="quickAddSwitch('horizontal')" title="سكينة هوائية مفصلية أفقية">
             <div class="item-icon">➖</div>
             <span class="item-name">سكينة أفقية</span>
+          </div>
+
+          <div class="palette-item" data-perm="btn_switch" onclick="toggleAllSwitches()" title="فتح أو غلق جميع السكاكين الهوائية في المخطط بالكامل" style="background: rgba(245, 158, 11, 0.12); border: 1px solid #f59e0b;">
+            <div class="item-icon">⚡</div>
+            <span class="item-name">فتح/غلق كل السكاكين</span>
           </div>
 
           <div class="palette-item" data-perm="btn_trans" onclick="openTransformerDialog('transformer')" title="محول معلق مع القدرة والتحميل">
@@ -517,8 +531,12 @@
         </div>
 
         <!-- مؤشر وضع المحاكاة -->
-        <div id="sim-banner" class="sim-banner hidden">
+        <div id="sim-banner" class="sim-banner hidden" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
           <span>⚡ محاكاة السكاكين نشطة: انقر فوق أي سكينة لفتحها أو إغلاقها وتتبع مسار التغذية</span>
+          <div style="display:flex; gap:6px;">
+            <button type="button" class="btn btn-sm" onclick="openAllSwitches()" style="background:#dc2626; color:#fff; border:none; border-radius:4px; padding:3px 10px; font-weight:bold; cursor:pointer;">🔴 فتح جميع السكاكين</button>
+            <button type="button" class="btn btn-sm" onclick="closeAllSwitches()" style="background:#16a34a; color:#fff; border:none; border-radius:4px; padding:3px 10px; font-weight:bold; cursor:pointer;">🟢 غلق جميع السكاكين</button>
+          </div>
         </div>
 
         <!-- لوحة SVG المتجهة اللانهائية -->
@@ -2204,14 +2222,14 @@
   </div>
 
   <script src="js/jszip.min.js"></script>
-  <script src="js/default_projects.js?v=9.0"></script>
-  <script src="js/auth.js?v=9.0"></script>
-  <script src="js/realtime_sync.js?v=9.0"></script>
-  <script src="js/components.js?v=9.0"></script>
-  <script src="js/simulation.js?v=9.0"></script>
-  <script src="js/canvas.js?v=9.0"></script>
-  <script src="js/app.js?v=9.0"></script>
-  <script src="js/settings.js?v=9.0"></script>
+  <script src="js/default_projects.js?v=10.0"></script>
+  <script src="js/auth.js?v=10.0"></script>
+  <script src="js/realtime_sync.js?v=10.0"></script>
+  <script src="js/components.js?v=10.0"></script>
+  <script src="js/simulation.js?v=10.0"></script>
+  <script src="js/canvas.js?v=10.0"></script>
+  <script src="js/app.js?v=10.0"></script>
+  <script src="js/settings.js?v=10.0"></script>
 </body>
 </html>
 
