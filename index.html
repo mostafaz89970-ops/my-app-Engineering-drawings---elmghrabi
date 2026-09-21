@@ -524,6 +524,7 @@
             <button type="button" class="btn-sec-tool" onclick="quickOrientSelectedSection('right')" title="توجيه الكابل 90° لليمين">➡️ يمين</button>
             <button type="button" class="btn-sec-tool" onclick="quickOrientSelectedSection('left')" title="توجيه الكابل 90° لشمال">⬅️ شمال</button>
             <div class="sec-tool-divider"></div>
+            <button type="button" class="btn-sec-tool" style="background:#d97706; border-color:#f59e0b; color:#fff; font-weight:bold;" onclick="quickWeldSwitchOnSelectedSection()" title="لحام وتركيب سكينة هوائية تلقائياً في منتصف هذا الخط بين النقطتين">⚡ لحام سكينة</button>
             <button type="button" class="btn-sec-tool" onclick="quickResetSelectedSectionDeflect()" title="إعادة المسار مستقيماً بدون انحراف">↺ مستقيم</button>
             <button type="button" class="btn-sec-tool btn-sec-edit" onclick="quickEditSelectedSection()" title="فتح نافذة الخصائص وتعديل المقطع والطول">✏️ خصائص</button>
             <button type="button" class="btn-sec-tool btn-sec-close" onclick="clearSelection()" title="إلغاء التحديد">✕</button>
@@ -1245,6 +1246,24 @@
         </div>
 
         <!-- 3. الحقول الديناميكية (تظهر فقط ما يحتاجه الخيار المختار) -->
+
+        <!-- جـ) حقول لحام السكينة بين نقطتين متقاطعتين أو متصلتين -->
+        <div id="sw-fields-between" class="hidden" style="background:rgba(245, 158, 11, 0.08); border:1px solid #f59e0b; border-radius:8px; padding:12px; margin-bottom:10px;">
+          <div style="font-size:12.5px; font-weight:bold; color:#fbbf24; margin-bottom:8px;">🔗 تحديد النقطتين للحام السكينة بينهما تلقائياً:</div>
+          <div class="form-grid-2" style="margin-bottom:8px;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label style="color:#cbd5e1;">من النقطة الأولى [A]:</label>
+              <select id="sw-between-node-a" class="form-control" onchange="onSwitchBetweenNodeAChange()"></select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label style="color:#cbd5e1;">إلى النقطة الثانية [B]:</label>
+              <select id="sw-between-node-b" class="form-control"></select>
+            </div>
+          </div>
+          <small style="color:#94a3b8; font-size:11px; display:block; margin-top:4px;">
+            ⚡ سيتم تثبيت السكينة في منتصف المسافة ولحام الطرفين بها تلقائياً بالاتجاه المناسب (أفقي أو رأسي).
+          </small>
+        </div>
 
         <!-- أ) حقول السكينة المفردة (تثبيت على نفس النود أو سكينة فرع واحدة) -->
         <div id="sw-fields-single" style="background:var(--bg-tertiary); border:1px solid var(--border-color); border-radius:8px; padding:12px; margin-bottom:10px;">
@@ -2237,14 +2256,14 @@
   </div>
 
   <script src="js/jszip.min.js"></script>
-  <script src="js/default_projects.js?v=13.0"></script>
-  <script src="js/auth.js?v=13.0"></script>
-  <script src="js/realtime_sync.js?v=13.0"></script>
-  <script src="js/components.js?v=13.0"></script>
-  <script src="js/simulation.js?v=13.0"></script>
-  <script src="js/canvas.js?v=13.0"></script>
-  <script src="js/app.js?v=13.0"></script>
-  <script src="js/settings.js?v=13.0"></script>
+  <script src="js/default_projects.js?v=14.0"></script>
+  <script src="js/auth.js?v=14.0"></script>
+  <script src="js/realtime_sync.js?v=14.0"></script>
+  <script src="js/components.js?v=14.0"></script>
+  <script src="js/simulation.js?v=14.0"></script>
+  <script src="js/canvas.js?v=14.0"></script>
+  <script src="js/app.js?v=14.0"></script>
+  <script src="js/settings.js?v=14.0"></script>
 </body>
 </html>
 
