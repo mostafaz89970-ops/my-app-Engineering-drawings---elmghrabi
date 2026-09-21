@@ -3951,12 +3951,8 @@ function onSwitchMainNodeChange() {
     <label style="background:var(--bg-tertiary); padding:9px 12px; border-radius:6px; cursor:pointer; font-size:12.5px; border:1px solid var(--border-color); display:flex; align-items:center; gap:8px;">
       <input type="radio" name="sw-action" value="same_node" onchange="onSwitchActionChange()">
       <span>📌 <b>تثبيت على نفس النود [${sourceNode.id}]</b> (يتحول النود نفسه إلى سكينة دون إنشاء نود جديد)</span>
-    </label>
-    <label style="background:linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.08)); padding:10px 12px; border-radius:6px; cursor:pointer; font-size:12.5px; border:1px solid #f59e0b; display:flex; align-items:center; gap:8px;">
-      <input type="radio" name="sw-action" value="between_nodes" onchange="onSwitchActionChange()">
-      <span style="color:#fbbf24;">🔗 <b>لحام وتركيب السكينة بين نقطتين متقاطعتين أو متصلتين</b> (توصيل وشطر المسار تلقائياً بأي اتجاه)</span>
-    </label>
   `;
+
 
   // إذا كان هناك تفرعات فعلية:
   if (branches.right) {
@@ -4048,24 +4044,7 @@ function onSwitchActionChange() {
   let nextNum = currentProject.nodes.length + 1;
   while (currentProject.nodes.some(n => n.id === "N" + nextNum)) nextNum++;
 
-  const fieldsBetween = document.getElementById("sw-fields-between");
-  if (fieldsBetween) {
-    if (action === "between_nodes") fieldsBetween.classList.remove("hidden");
-    else fieldsBetween.classList.add("hidden");
-  }
-
-  if (action === "between_nodes") {
-    // لحام السكينة بين نقطتين
-    if (fieldsSingle) fieldsSingle.classList.remove("hidden");
-    if (nodeIdGroup) nodeIdGroup.classList.add("hidden");
-    if (nameGroup) nameGroup.style.gridColumn = "span 2";
-    if (nameInput) nameInput.value = "سكينة " + ("N" + nextNum);
-    if (fieldsDual) fieldsDual.classList.add("hidden");
-    if (fieldsNewLine) fieldsNewLine.classList.add("hidden");
-    populateSwitchBetweenNodesDropdowns(sourceNode.id);
-    if (dirSelect) dirSelect.value = "auto";
-    if (submitBtn) submitBtn.innerHTML = `<span>🔗 لحام السكينة بين النقطتين فوراً ➔</span>`;
-  } else if (action === "same_node") {
+  if (action === "same_node") {
     // تثبيت على نفس النود
     if (fieldsSingle) fieldsSingle.classList.remove("hidden");
     if (nodeIdGroup) nodeIdGroup.classList.add("hidden"); // لا نحتاج نود جديد
@@ -4169,28 +4148,6 @@ function submitSwitchModal() {
   }
 
   const action = document.querySelector('input[name="sw-action"]:checked')?.value || "same_node";
-
-  // --- الحالة 0: لحام وتركيب السكينة بين نقطتين متقاطعتين أو متصلتين ---
-  if (action === "between_nodes") {
-    const nodeAId = document.getElementById("sw-between-node-a")?.value || sourceId;
-    const nodeBId = document.getElementById("sw-between-node-b")?.value;
-    if (!nodeBId || nodeAId === nodeBId) {
-      alert("الرجاء اختيار نقطتين مختلفتين للحام السكينة بينهما.");
-      return;
-    }
-    const swName = document.getElementById("sw-single-name")?.value.trim() || undefined;
-    const swState = document.getElementById("sw-single-state")?.value || "closed";
-    const swChoiceDir = document.getElementById("sw-single-dir")?.value || "auto";
-
-    weldSwitchBetweenNodes(nodeAId, nodeBId, {
-      name: swName,
-      state: swState,
-      dir: (swChoiceDir !== "auto") ? swChoiceDir : undefined
-    });
-
-    closeSwitchModal();
-    return;
-  }
 
   // --- الحالة 1: تثبيت على نفس النود مباشرة ---
   if (action === "same_node") {
