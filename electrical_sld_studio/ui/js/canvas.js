@@ -1221,9 +1221,17 @@ function renderNetwork() {
   updateLiveMetrics();
 
   // حفظ فوري في التخزين المحلي لضمان استرجاع المخطط بدقة عند عمل F5 أو إعادة تحميل الصفحة
+  window._lastLocalEditTime = Date.now();
   if (currentProject && currentProject.nodes && currentProject.nodes.length > 0) {
+    const now = Date.now();
+    currentProject.updated_at = now;
+    if (!currentProject.saved_at) currentProject.saved_at = now;
+    if (!currentProject.user_saved_at) currentProject.user_saved_at = now;
     try {
       localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
+      if (typeof window.saveFeederForAdmin === "function") {
+        window.saveFeederForAdmin(currentProject);
+      }
     } catch(e) {}
   }
   if (window.broadcastProjectUpdate) {

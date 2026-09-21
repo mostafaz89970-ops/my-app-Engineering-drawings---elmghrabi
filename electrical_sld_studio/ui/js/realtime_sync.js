@@ -266,6 +266,12 @@
     var remoteDelSecs = Array.isArray(remoteProj.deleted_sec_ids) ? remoteProj.deleted_sec_ids : [];
     var delSecsSet = new Set(localDelSecs.concat(remoteDelSecs));
 
+    // إذا كانت العقدة أو المقطع موجوداً ومحفوظاً محلياً، لا يجوز حذفها بواسطة deleted_node_ids
+    var activeLocalNodeIds = new Set((localProj.nodes || []).map(function(n) { return n && n.id; }).filter(Boolean));
+    var activeLocalSecIds = new Set((localProj.sections || []).map(function(s) { return s && s.id; }).filter(Boolean));
+    delNodesSet = new Set(Array.from(delNodesSet).filter(function(id) { return !activeLocalNodeIds.has(id); }));
+    delSecsSet = new Set(Array.from(delSecsSet).filter(function(id) { return !activeLocalSecIds.has(id); }));
+
     merged.deleted_node_ids = Array.from(delNodesSet);
     merged.deleted_sec_ids = Array.from(delSecsSet);
 
@@ -425,6 +431,13 @@
       if (msgTime && msgTime < lastDrawingUpdateTimestamp) return;
       if (msgTime) lastDrawingUpdateTimestamp = msgTime;
 
+      // إذا كان المهندس يقوم بالرسم أو التعديل محلياً حالياً (خلال آخر 25 ثانية)، نحمي الرسم ولا نسمح باستبداله
+      var lastEdit = window._lastLocalEditTime || 0;
+      if (Date.now() - lastEdit < 25000) {
+        console.log('⏳ المستخدم يقوم بالرسم محلياً حالياً، تأجيل التحديث السحابي لحماية الرسم الجاري');
+        return;
+      }
+
       var currentLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
       if (!currentLocal || !currentLocal.nodes || currentLocal.nodes.length === 0) {
         if (typeof window.getSavedFeederForAdmin === 'function') {
@@ -456,7 +469,6 @@
 
       if (window.updateFeederInputs) window.updateFeederInputs();
       if (window.renderNetwork) window.renderNetwork();
-      if (window.fitToScreen) window.fitToScreen();
 
       // تحديث شارة البث السحابي الهادئة دون إزعاج المستخدم برسائل متكررة
       updateBadgeUI('syncing', author);
@@ -474,6 +486,11 @@
     } else if (type === 'DRAWING_CHUNK') {
       var chunkData = data;
       if (!chunkData || (!chunkData.nodes && !chunkData.sections)) return;
+
+      var lastEdit = window._lastLocalEditTime || 0;
+      if (Date.now() - lastEdit < 25000) {
+        return;
+      }
 
       var curProj = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
       if (!curProj || !curProj.nodes) {
@@ -517,7 +534,6 @@
 
       if (window.updateFeederInputs) window.updateFeederInputs();
       if (window.renderNetwork) window.renderNetwork();
-      if (window.fitToScreen) window.fitToScreen();
 
       // بدون رسائل مزعجة للقطع، فقط تحديث الشارة الهادئة
       updateBadgeUI('syncing', author);
@@ -918,6 +934,8 @@
         }
       }
 
+      lastFirebaseTimestamp = remoteSavedTime || Date.now();
+
       // جلب كتالوج الإدارة
       fetch(adminUrl + '/catalog.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (cat) {
         if (Array.isArray(cat) && cat.length > 0 && window.applySyncedCatalog) window.applySyncedCatalog(cat);
@@ -1000,6 +1018,11 @@
   async function pollFirebaseHeartbeat() {
     try {
       if (isApplyingRemote) return;
+
+      // إذا كان المستخدم يرسم أو يعدل محلياً حالياً (خلال آخر 25 ثانية)، لا نسمح بتحديث الكانفاس من السحابة
+      var lastEdit = window._lastLocalEditTime || 0;
+      if (Date.now() - lastEdit < 25000) return;
+
       var adminUrl = getAdminFirebaseUrl();
       var res = await fetch(adminUrl + '/meta.json');
       if (!res.ok) return;
@@ -1058,7 +1081,6 @@
 
             if (window.updateFeederInputs) window.updateFeederInputs();
             if (window.renderNetwork) window.renderNetwork();
-            if (window.fitToScreen) setTimeout(window.fitToScreen, 200);
 
             // تحديث شارة السحابة بهدوء دون إزعاج المستخدم برسائل
             updateBadgeUI('connected');
@@ -1201,30 +1223,8 @@
         // إرسال فوري ومباشر إلى سحابة Firebase Realtime Database
         syncProjectDirectToFirebase(cleanProj, reason || 'drawing_edit');
 
-        // إذا كان المخطط صغيراً (15 عقدة أو أقل) نبثه كدفعة واحدة
-        if (cleanProj.nodes.length <= 15 && cleanProj.sections.length <= 15) {
-          postCloudEvent('DRAWING_UPDATE', { project: cleanProj }, reason || 'drawing_edit');
-        } else {
-          // للمخططات الكبيرة (مثل 64 عقدة و65 مقطع) نقسمها لدفعات خفيفة (<2KB) لتصل 100% بدون تحويل لملفات
-          var chunkSize = 15;
-          var maxLen = Math.max(cleanProj.nodes.length, cleanProj.sections.length);
-          var totalChunks = Math.ceil(maxLen / chunkSize);
-          for (var i = 0; i < maxLen; i += chunkSize) {
-            var chunkNodes = cleanProj.nodes.slice(i, i + chunkSize);
-            var chunkSecs = cleanProj.sections.slice(i, i + chunkSize);
-            var chunkPayload = {
-              index: Math.floor(i / chunkSize),
-              total: totalChunks,
-              nodes: chunkNodes,
-              sections: chunkSecs
-            };
-            (function (pld, delay) {
-              setTimeout(function () {
-                postCloudEvent('DRAWING_CHUNK', pld, 'drawing_chunk_' + pld.index);
-              }, delay);
-            })(chunkPayload, Math.floor(i / chunkSize) * 150);
-          }
-        }
+        // إرسال تحديث المخطط بالكامل كدفعة واحدة موحدة
+        postCloudEvent('DRAWING_UPDATE', { project: cleanProj }, reason || 'drawing_edit');
       } catch (e) {
         console.warn('Error broadcasting drawing:', e);
       }
