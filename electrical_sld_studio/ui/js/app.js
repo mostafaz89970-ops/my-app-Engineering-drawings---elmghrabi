@@ -1842,6 +1842,19 @@ function submitLineBetweenNodesModal() {
   const type = document.getElementById("lbn-type").value;
   const size = document.getElementById("lbn-size").value;
   const length = parseFloat(document.getElementById("lbn-length").value) || 1000;
+  const addSwitch = document.getElementById("lbn-add-switch")?.checked;
+
+  if (addSwitch) {
+    weldSwitchBetweenNodes(fromNodeId, toNodeId, {
+      name: customName ? `سكينة ${customName}` : undefined,
+      type: type,
+      size: size,
+      len1: Math.round(length / 2),
+      len2: Math.max(1, length - Math.round(length / 2))
+    });
+    closeLineBetweenNodesModal();
+    return;
+  }
 
   let nextSecNum = currentProject.sections.length + 1;
   while (currentProject.sections.some(s => s.id === "S" + nextSecNum)) nextSecNum++;
@@ -3545,6 +3558,189 @@ function getNodeBranches(sourceNode) {
   return branches;
 }
 
+// ─── لحام وتركيب سكينة هوائية تلقائياً بين نقطتين متقاطعتين أو متصلتين بأي اتجاه كان ───
+function weldSwitchBetweenNodes(nodeAId, nodeBId, options = {}) {
+  if (!currentProject || !currentProject.nodes) return null;
+  const nodeA = currentProject.nodes.find(n => n.id === nodeAId);
+  const nodeB = currentProject.nodes.find(n => n.id === nodeBId);
+  if (!nodeA || !nodeB) {
+    if (window.showToast) window.showToast("⚠️ تعذر العثور على النقطتين المطلوبتين!", "warning");
+    return null;
+  }
+
+  saveHistoryState();
+
+  // 1. حساب الاتجاه التلقائي الدقيق بين النقطتين (وعلى أي اتجاه كان)
+  const dx = nodeB.x - nodeA.x;
+  const dy = nodeB.y - nodeA.y;
+  let autoDir = "down";
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    autoDir = (dx >= 0) ? "right" : "left";
+  } else {
+    autoDir = (dy >= 0) ? "down" : "up";
+  }
+
+  const finalDir = (options.dir && ["right", "left", "down", "up"].includes(options.dir)) ? options.dir : autoDir;
+
+  // موضع السكينة في منتصف المسافة بالضبط بين النقطتين
+  const midX = Math.round((nodeA.x + nodeB.x) / 2);
+  const midY = Math.round((nodeA.y + nodeB.y) / 2);
+
+  // توليد رقم نود فريد للسكينة
+  let swNum = currentProject.nodes.length + 1;
+  while (currentProject.nodes.some(n => n.id === "N" + swNum)) swNum++;
+  const swNodeId = options.id || ("N" + swNum);
+  const swName = options.name || ("سكينة " + swNodeId);
+
+  const switchNode = {
+    id: swNodeId,
+    type: "switch",
+    name: swName,
+    direction: finalDir,
+    dir: finalDir,
+    state: options.state || "closed",
+    x: midX,
+    y: midY,
+    updated_at: Date.now()
+  };
+  currentProject.nodes.push(switchNode);
+
+  // 2. فحص ما إذا كان هناك خط قائم بالفعل بين النقطتين A و B
+  const existingSec = (currentProject.sections || []).find(s => 
+    (s.from_node === nodeAId && s.to_node === nodeBId) || 
+    (s.from_node === nodeBId && s.to_node === nodeAId)
+  );
+
+  let nextSecNum = currentProject.sections.length + 1;
+  while (currentProject.sections.some(s => s.id === "S" + nextSecNum)) nextSecNum++;
+
+  if (existingSec) {
+    // شطر الخط القائم إلى قسمين مع لحام السكينة بالمنتصف
+    const isForward = (existingSec.from_node === nodeAId);
+    const firstNode = isForward ? nodeAId : nodeBId;
+    const secondNode = isForward ? nodeBId : nodeAId;
+
+    const totalLen = parseFloat(existingSec.length) || 1000;
+    const len1 = options.len1 || Math.round(totalLen / 2);
+    const len2 = options.len2 || Math.max(1, totalLen - len1);
+
+    existingSec.from_node = firstNode;
+    existingSec.to_node = swNodeId;
+    existingSec.length = len1;
+    existingSec.direction = finalDir;
+
+    currentProject.sections.push({
+      id: "S" + nextSecNum,
+      name: existingSec.name ? `${existingSec.name} (تكملة)` : undefined,
+      from_node: swNodeId,
+      to_node: secondNode,
+      type: existingSec.type,
+      size: existingSec.size,
+      length: len2,
+      direction: finalDir,
+      corner_style: existingSec.corner_style,
+      status: existingSec.status
+    });
+  } else {
+    // لا يوجد خط قائم مسبقاً بين النقطتين: إنشاء خطين يربطان النقطتين عبر السكينة
+    const lineType = options.type || "هوائي";
+    const lineSize = options.size || (lineType === "كابل" ? "3*240" : "70/12");
+    const len1 = options.len1 || 500;
+    const len2 = options.len2 || 500;
+
+    currentProject.sections.push({
+      id: "S" + nextSecNum++,
+      from_node: nodeAId,
+      to_node: swNodeId,
+      type: lineType,
+      size: lineSize,
+      length: len1,
+      direction: finalDir
+    });
+
+    currentProject.sections.push({
+      id: "S" + nextSecNum,
+      from_node: swNodeId,
+      to_node: nodeBId,
+      type: lineType,
+      size: lineSize,
+      length: len2,
+      direction: finalDir
+    });
+  }
+
+  renderNetwork();
+  try {
+    localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
+  } catch (_) {}
+
+  if (window.broadcastProjectUpdate) {
+    window.broadcastProjectUpdate("switch_welded_between_nodes");
+  }
+
+  const dirArabic = (finalDir === "right") ? "يمين ➡️" : (finalDir === "left") ? "شمال ⬅️" : (finalDir === "down") ? "أسفل ⬇️" : "أعلى ⬆️";
+  if (window.showToast) {
+    window.showToast(`⚡ تم لحام ${swName} [${swNodeId}] بين النقطتين [${nodeAId}] و [${nodeBId}] بالاتجاه (${dirArabic}) بنجاح!`, "success");
+  }
+
+  return switchNode;
+}
+window.weldSwitchBetweenNodes = weldSwitchBetweenNodes;
+
+function populateSwitchBetweenNodesDropdowns(selectedAId, selectedBId) {
+  if (!currentProject || !currentProject.nodes) return;
+  const selectA = document.getElementById("sw-between-node-a");
+  const selectB = document.getElementById("sw-between-node-b");
+  if (!selectA || !selectB) return;
+
+  let optsA = "";
+  currentProject.nodes.forEach(n => {
+    optsA += `<option value="${n.id}">[${n.id}] ${n.name || n.type}</option>`;
+  });
+  selectA.innerHTML = optsA;
+
+  const nodeA = selectedAId || selectA.value;
+  selectA.value = nodeA;
+
+  updateSwitchBetweenNodeBDropdown(nodeA, selectedBId);
+}
+
+function updateSwitchBetweenNodeBDropdown(nodeAId, selectedBId) {
+  if (!currentProject || !currentProject.nodes) return;
+  const selectB = document.getElementById("sw-between-node-b");
+  if (!selectB) return;
+
+  const connectedNodeIds = new Set();
+  (currentProject.sections || []).forEach(s => {
+    if (s.from_node === nodeAId) connectedNodeIds.add(s.to_node);
+    if (s.to_node === nodeAId) connectedNodeIds.add(s.from_node);
+  });
+
+  let optsB = "";
+  currentProject.nodes.forEach(n => {
+    if (n.id === nodeAId) return;
+    const isConn = connectedNodeIds.has(n.id);
+    const star = isConn ? "⚡ (متصل بـ A) " : "";
+    optsB += `<option value="${n.id}">${star}[${n.id}] ${n.name || n.type}</option>`;
+  });
+  selectB.innerHTML = optsB;
+
+  if (selectedBId && selectB.querySelector(`option[value="${selectedBId}"]`)) {
+    selectB.value = selectedBId;
+  } else if (connectedNodeIds.size > 0) {
+    const firstConn = Array.from(connectedNodeIds)[0];
+    if (selectB.querySelector(`option[value="${firstConn}"]`)) {
+      selectB.value = firstConn;
+    }
+  }
+}
+
+function onSwitchBetweenNodeAChange() {
+  const nodeAId = document.getElementById("sw-between-node-a")?.value;
+  updateSwitchBetweenNodeBDropdown(nodeAId);
+}
+window.onSwitchBetweenNodeAChange = onSwitchBetweenNodeAChange;
+
 // --- السكاكين الهوائية المفصلية المعتمدة - واجهة ديناميكية ذكية وسلسة ---
 function openSwitchModal(suggestedDir = 'down') {
   if (!currentProject || currentProject.nodes.length === 0) {
@@ -3635,6 +3831,10 @@ function onSwitchMainNodeChange() {
       <input type="radio" name="sw-action" value="same_node" onchange="onSwitchActionChange()">
       <span>📌 <b>تثبيت على نفس النود [${sourceNode.id}]</b> (يتحول النود نفسه إلى سكينة دون إنشاء نود جديد)</span>
     </label>
+    <label style="background:linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.08)); padding:10px 12px; border-radius:6px; cursor:pointer; font-size:12.5px; border:1px solid #f59e0b; display:flex; align-items:center; gap:8px;">
+      <input type="radio" name="sw-action" value="between_nodes" onchange="onSwitchActionChange()">
+      <span style="color:#fbbf24;">🔗 <b>لحام وتركيب السكينة بين نقطتين متقاطعتين أو متصلتين</b> (توصيل وشطر المسار تلقائياً بأي اتجاه)</span>
+    </label>
   `;
 
   // إذا كان هناك تفرعات فعلية:
@@ -3724,9 +3924,24 @@ function onSwitchActionChange() {
   let nextNum = currentProject.nodes.length + 1;
   while (currentProject.nodes.some(n => n.id === "N" + nextNum)) nextNum++;
 
-  const sug = window._lastSuggestedSwitchDir;
+  const fieldsBetween = document.getElementById("sw-fields-between");
+  if (fieldsBetween) {
+    if (action === "between_nodes") fieldsBetween.classList.remove("hidden");
+    else fieldsBetween.classList.add("hidden");
+  }
 
-  if (action === "same_node") {
+  if (action === "between_nodes") {
+    // لحام السكينة بين نقطتين
+    if (fieldsSingle) fieldsSingle.classList.remove("hidden");
+    if (nodeIdGroup) nodeIdGroup.classList.add("hidden");
+    if (nameGroup) nameGroup.style.gridColumn = "span 2";
+    if (nameInput) nameInput.value = "سكينة " + ("N" + nextNum);
+    if (fieldsDual) fieldsDual.classList.add("hidden");
+    if (fieldsNewLine) fieldsNewLine.classList.add("hidden");
+    populateSwitchBetweenNodesDropdowns(sourceNode.id);
+    if (dirSelect) dirSelect.value = "auto";
+    if (submitBtn) submitBtn.innerHTML = `<span>🔗 لحام السكينة بين النقطتين فوراً ➔</span>`;
+  } else if (action === "same_node") {
     // تثبيت على نفس النود
     if (fieldsSingle) fieldsSingle.classList.remove("hidden");
     if (nodeIdGroup) nodeIdGroup.classList.add("hidden"); // لا نحتاج نود جديد
@@ -3829,7 +4044,27 @@ function submitSwitchModal() {
     return;
   }
 
-  const action = document.querySelector('input[name="sw-action"]:checked')?.value || "same_node";
+  // --- الحالة 0: لحام وتركيب السكينة بين نقطتين متقاطعتين أو متصلتين ---
+  if (action === "between_nodes") {
+    const nodeAId = document.getElementById("sw-between-node-a")?.value || sourceId;
+    const nodeBId = document.getElementById("sw-between-node-b")?.value;
+    if (!nodeBId || nodeAId === nodeBId) {
+      alert("الرجاء اختيار نقطتين مختلفتين للحام السكينة بينهما.");
+      return;
+    }
+    const swName = document.getElementById("sw-single-name")?.value.trim() || undefined;
+    const swState = document.getElementById("sw-single-state")?.value || "closed";
+    const swChoiceDir = document.getElementById("sw-single-dir")?.value || "auto";
+
+    weldSwitchBetweenNodes(nodeAId, nodeBId, {
+      name: swName,
+      state: swState,
+      dir: (swChoiceDir !== "auto") ? swChoiceDir : undefined
+    });
+
+    closeSwitchModal();
+    return;
+  }
 
   // --- الحالة 1: تثبيت على نفس النود مباشرة ---
   if (action === "same_node") {
@@ -4166,6 +4401,10 @@ function quickAddSwitch(direction = 'vertical') {
     showToast("⛔ ليس لديك صلاحية إضافة سكينة هوائية", "error");
     return;
   }
+  if (selectedElement && selectedElement.type === "section") {
+    quickWeldSwitchOnSelectedSection(direction === 'horizontal' ? 'right' : 'down');
+    return;
+  }
   const vertDir = (window.drawingFlowDirection === 'up') ? 'up' : 'down';
   openSwitchModal(direction === 'horizontal' ? 'right' : vertDir);
 }
@@ -4173,6 +4412,10 @@ function quickAddSwitch(direction = 'vertical') {
 function quickAddSwitchPrompt() {
   if (window.hasPermission && !window.hasPermission('btn_switch')) {
     showToast("⛔ ليس لديك صلاحية إضافة سكينة هوائية", "error");
+    return;
+  }
+  if (selectedElement && selectedElement.type === "section") {
+    quickWeldSwitchOnSelectedSection();
     return;
   }
   openSwitchModal(window.drawingFlowDirection === 'up' ? 'up' : 'down');

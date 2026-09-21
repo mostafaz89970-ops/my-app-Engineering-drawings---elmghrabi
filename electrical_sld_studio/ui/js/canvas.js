@@ -248,16 +248,24 @@ function finishNodeDrag(e) {
 
   if (didDrag) {
     lastDragEndTime = Date.now();
+    let welded = false;
     if (currentProject && currentProject.nodes) {
       const draggedNode = currentProject.nodes.find(n => n.id === targetNodeId);
-      if (draggedNode) draggedNode.updated_at = Date.now();
+      if (draggedNode) {
+        draggedNode.updated_at = Date.now();
+        if (draggedNode.type === "switch") {
+          welded = checkAndWeldSwitchOnDrop(draggedNode);
+        }
+      }
     }
     if (typeof saveHistoryState === "function") saveHistoryState();
     if (typeof updateLiveMetrics === "function") updateLiveMetrics();
-    if (incomingSection) {
-      showToast(`📍 تم ضبط موضع الخط بنجاح (مع الحفاظ على طول الخط: ${incomingSection.length} م)`, "info");
-    } else {
-      showToast("📍 تم تعديل موضع العنصر بنجاح", "info");
+    if (!welded) {
+      if (incomingSection) {
+        showToast(`📍 تم ضبط موضع الخط بنجاح (مع الحفاظ على طول الخط: ${incomingSection.length} م)`, "info");
+      } else {
+        showToast("📍 تم تعديل موضع العنصر بنجاح", "info");
+      }
     }
   } else if (targetNodeId) {
     handleNodeClick(e, targetNodeId);
@@ -265,6 +273,117 @@ function finishNodeDrag(e) {
 
   incomingSection = null;
 }
+
+// ─── فحص ولحام السكينة تلقائياً بين نقطتين عند السحب والإفلات على أي خط أو مسار ───
+function checkAndWeldSwitchOnDrop(swNode) {
+  if (!currentProject || !currentProject.sections || !currentProject.nodes) return false;
+
+  let bestSec = null;
+  let minDistance = 35; // مسافة التقاط بكسل
+  let bestProj = null;
+
+  currentProject.sections.forEach(sec => {
+    // تجاهل الخطوط المتصلة أصلاً بهذه السكينة
+    if (sec.from_node === swNode.id || sec.to_node === swNode.id) return;
+
+    const fromNode = currentProject.nodes.find(n => n.id === sec.from_node);
+    const toNode = currentProject.nodes.find(n => n.id === sec.to_node);
+    if (!fromNode || !toNode) return;
+
+    const x1 = fromNode.x, y1 = fromNode.y;
+    const x2 = toNode.x, y2 = toNode.y;
+    const l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+    if (l2 < 400) return;
+
+    let t = ((swNode.x - x1) * (x2 - x1) + (swNode.y - y1) * (y2 - y1)) / l2;
+    if (t > 0.08 && t < 0.92) {
+      const projX = x1 + t * (x2 - x1);
+      const projY = y1 + t * (y2 - y1);
+      const dist = Math.hypot(swNode.x - projX, swNode.y - projY);
+      if (dist < minDistance) {
+        minDistance = dist;
+        bestSec = sec;
+        bestProj = { projX, projY, t, fromNode, toNode };
+      }
+    }
+  });
+
+  if (bestSec && bestProj) {
+    const { projX, projY, t, fromNode, toNode } = bestProj;
+    swNode.x = Math.round(projX);
+    swNode.y = Math.round(projY);
+
+    // حساب الاتجاه تلقائياً حسب مسار الخط بين النقطتين (وعلى أي اتجاه كان)
+    const dx = toNode.x - fromNode.x;
+    const dy = toNode.y - fromNode.y;
+    let autoDir = "down";
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      autoDir = (dx >= 0) ? "right" : "left";
+    } else {
+      autoDir = (dy >= 0) ? "down" : "up";
+    }
+
+    swNode.dir = autoDir;
+    swNode.direction = autoDir;
+
+    // لحام وشطر الخط بين النقطتين عبر السكينة
+    const origToNodeId = bestSec.to_node;
+    const origLen = parseFloat(bestSec.length) || 1000;
+    const len1 = Math.max(1, Math.round(origLen * t));
+    const len2 = Math.max(1, Math.round(origLen - len1));
+
+    bestSec.to_node = swNode.id;
+    bestSec.length = len1;
+    bestSec.direction = autoDir;
+
+    let nextSecNum = currentProject.sections.length + 1;
+    while (currentProject.sections.some(s => s.id === "S" + nextSecNum)) nextSecNum++;
+
+    const newSec = {
+      id: "S" + nextSecNum,
+      name: bestSec.name ? `${bestSec.name} (تكملة)` : undefined,
+      from_node: swNode.id,
+      to_node: origToNodeId,
+      type: bestSec.type,
+      size: bestSec.size,
+      length: len2,
+      direction: autoDir,
+      corner_style: bestSec.corner_style,
+      status: bestSec.status
+    };
+    currentProject.sections.push(newSec);
+
+    renderNetwork();
+    try {
+      localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
+    } catch (_) {}
+
+    if (window.broadcastProjectUpdate) {
+      window.broadcastProjectUpdate("switch_auto_welded_on_drop");
+    }
+
+    const dirArabic = (autoDir === "right") ? "يمين ➡️" : (autoDir === "left") ? "شمال ⬅️" : (autoDir === "down") ? "أسفل ⬇️" : "أعلى ⬆️";
+    showToast(`⚡ تم لحام السكينة (${swNode.name || swNode.id}) تلقائياً بين النقطتين [${fromNode.id}] و [${origToNodeId}] بالاتجاه (${dirArabic})`, "success");
+    return true;
+  }
+  return false;
+}
+window.checkAndWeldSwitchOnDrop = checkAndWeldSwitchOnDrop;
+
+// لحام سكينة هوائية تلقائياً على الخط المحدد بين النقطتين
+function quickWeldSwitchOnSelectedSection(preferredDir) {
+  if (!currentProject || !selectedElement || selectedElement.type !== "section") {
+    if (window.showToast) window.showToast("⚠️ يرجى تحديد الخط المراد لحام السكينة عليه أولاً!", "warning");
+    return;
+  }
+  const sec = (currentProject.sections || []).find(s => s.id === selectedElement.id);
+  if (!sec) return;
+
+  if (typeof window.weldSwitchBetweenNodes === "function") {
+    window.weldSwitchBetweenNodes(sec.from_node, sec.to_node, { dir: preferredDir });
+  }
+}
+window.quickWeldSwitchOnSelectedSection = quickWeldSwitchOnSelectedSection;
 
 // ─── سحب وانحراف مسار الخطوط لأعلى أو لأسفل (Section Deflection / Jog Dragging) ───
 let isDraggingDeflect = false;
