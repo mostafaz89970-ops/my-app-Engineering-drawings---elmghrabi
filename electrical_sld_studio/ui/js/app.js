@@ -3652,7 +3652,7 @@ function weldSwitchBetweenNodes(nodeAId, nodeBId, options = {}) {
     id: swNodeId,
     type: "switch",
     name: swName,
-    direction: finalDir,
+    direction: (finalDir === "right" || finalDir === "left") ? "horizontal" : "vertical",
     dir: finalDir,
     state: options.state || "closed",
     x: midX,
@@ -3799,11 +3799,19 @@ window.onSwitchBetweenNodeAChange = onSwitchBetweenNodeAChange;
 
 // --- السكاكين الهوائية المفصلية المعتمدة - واجهة ديناميكية ذكية وسلسة ---
 function openSwitchModal(suggestedDir = 'down') {
-  if (!currentProject || !currentProject.nodes || currentProject.nodes.length === 0) {
-    if (window.showToast) window.showToast("⚠️ الرجاء إضافة محطة محولات أولاً لبدء تفريع الخطوط والسكاكين", "warning");
-    else alert("الرجاء إضافة محطة محولات أولاً.");
-    return;
+  // إذا لم يكن هناك مشروع، ننشئ مشروعاً جديداً تلقائياً
+  if (!currentProject) {
+    if (typeof createNewProjectDirectly === 'function') {
+      createNewProjectDirectly();
+    } else {
+      currentProject = { id: "feeder_" + Date.now(), name: "مخطط جديد", nodes: [], sections: [] };
+      window.currentProject = currentProject;
+    }
   }
+  // إذا لا توجد نودات، نفتح المودال بنود فارغة
+  if (!currentProject.nodes) currentProject.nodes = [];
+  if (!currentProject.sections) currentProject.sections = [];
+
   window._lastSuggestedSwitchDir = suggestedDir;
   const modal = document.getElementById("switch-modal");
   if (!modal) return;
@@ -3832,18 +3840,21 @@ function openSwitchModal(suggestedDir = 'down') {
     mainSelect.value = defaultTargetId;
   }
 
-  onSwitchNewLineTypeChange();
-  onSwitchMainNodeChange();
+  const titleEl = document.getElementById("switch-modal-title");
+  if (titleEl) {
+    if (suggestedDir === 'right' || suggestedDir === 'horizontal' || suggestedDir === 'left') {
+      titleEl.innerHTML = "➖ إضافة وضبط سكينة هوائية (أفقية)";
+    } else {
+      titleEl.innerHTML = "⚡ إضافة وضبط سكينة هوائية (رأسية)";
+    }
+  }
 
-  const cleanDir = (suggestedDir === "horizontal" || suggestedDir === "right") ? "right" : 
-                   ((suggestedDir === "up") ? "up" : "down");
-  const swSingleDir = document.getElementById("sw-single-dir");
-  if (swSingleDir) swSingleDir.value = cleanDir;
-  const lineDirRadio = document.querySelector(`input[name="sw-line-dir"][value="${cleanDir}"]`);
-  if (lineDirRadio) lineDirRadio.checked = true;
-
+  // فتح المودال أولاً لضمان الظهور حتى لو حدث خطأ في دوال التهيئة
   modal.classList.remove("hidden");
   modal.style.display = "flex";
+
+  try { onSwitchNewLineTypeChange(); } catch(e) { console.error("onSwitchNewLineTypeChange error:", e); }
+  try { onSwitchMainNodeChange(); } catch(e) { console.error("onSwitchMainNodeChange error:", e); }
 }
 
 function closeSwitchModal() {
@@ -3862,7 +3873,17 @@ function onSwitchMainNodeChange() {
   if (!currentProject) return;
   const nodeId = document.getElementById("sw-main-node")?.value;
   const sourceNode = currentProject.nodes.find(n => n.id === nodeId);
-  if (!sourceNode) return;
+  if (!sourceNode) {
+    // لا يوجد نود — نُظهر رسالة توجيهية
+    const container = document.getElementById("sw-dynamic-options");
+    if (container) {
+      container.innerHTML = `<div style="color:#fc8181; font-size:12px; padding:8px; background:rgba(252,129,129,0.1); border:1px solid #fc8181; border-radius:6px;">
+        ⚠️ لا يوجد نود في المشروع الحالي. يرجى إضافة محطة أو كشك أو نقطة ربط أولاً.
+      </div>`;
+    }
+    return;
+  }
+
 
   const branches = getNodeBranches(sourceNode);
   const container = document.getElementById("sw-dynamic-options");
@@ -3885,7 +3906,7 @@ function onSwitchMainNodeChange() {
 
   if (sug === "right" || sug === "horizontal") {
     if (branches.right) defaultAction = "branch_right";
-    else defaultAction = "new_line";
+    else defaultAction = "new_line"; // مد خط جديد أفقي
   } else if (sug === "left") {
     if (branches.left) defaultAction = "branch_left";
     else defaultAction = "new_line";
@@ -3893,9 +3914,9 @@ function onSwitchMainNodeChange() {
     if (branches.up) defaultAction = "branch_up";
     else defaultAction = "new_line";
   } else {
+    // اتجاه رأسي (down)
     if (branches.down) defaultAction = "branch_down";
-    else if (branches.right) defaultAction = "branch_right";
-    else defaultAction = "new_line";
+    else defaultAction = "new_line"; // مد خط جديد رأسي
   }
 
   // خيار 1: تثبيت على نفس النود (دائماً متاح ومباشر)
@@ -3968,8 +3989,10 @@ function onSwitchMainNodeChange() {
   if (container) container.innerHTML = optionsHTML;
 
   // اختيار الخيار الافتراضي
-  const radioToSelect = container.querySelector(`input[name="sw-action"][value="${defaultAction}"]`) || container.querySelector('input[name="sw-action"]');
-  if (radioToSelect) radioToSelect.checked = true;
+  if (container) {
+    const radioToSelect = container.querySelector(`input[name="sw-action"][value="${defaultAction}"]`) || container.querySelector('input[name="sw-action"]');
+    if (radioToSelect) radioToSelect.checked = true;
+  }
 
   onSwitchActionChange();
 }
@@ -3981,6 +4004,7 @@ function onSwitchActionChange() {
   const sourceNode = currentProject.nodes.find(n => n.id === nodeId);
   if (!sourceNode) return;
 
+  const sug = window._lastSuggestedSwitchDir || "down";
   const action = document.querySelector('input[name="sw-action"]:checked')?.value || "same_node";
 
   const fieldsSingle = document.getElementById("sw-fields-single");
@@ -4472,25 +4496,15 @@ function submitSwitchModal() {
 }
 
 function quickAddSwitch(direction = 'vertical') {
-  if (window.hasPermission && !window.hasPermission('btn_switch')) {
+  // تحقق من الصلاحية فقط إذا كان المستخدم مسجل دخوله فعلاً
+  if (window.hasPermission && window.currentUser && !window.hasPermission('btn_switch')) {
     if (window.showToast) showToast("⛔ ليس لديك صلاحية إضافة سكينة هوائية", "error");
     return;
   }
   const isHoriz = (direction === 'horizontal');
   const targetDir = isHoriz ? 'right' : ((window.drawingFlowDirection === 'up') ? 'up' : 'down');
 
-  // 1. إذا كان العنصر المحدد في الرسم سكينة: تغيير اتجاهها فوراً بنقرة واحدة (أفقي / رأسي)
-  if (selectedElement && selectedElement.type === "node") {
-    const selNode = (currentProject?.nodes || []).find(n => n.id === selectedElement.id);
-    if (selNode && selNode.type === "switch") {
-      if (typeof quickSetSelectedSwitchDirection === "function") {
-        quickSetSelectedSwitchDirection(targetDir);
-        return;
-      }
-    }
-  }
-
-  // 2. إذا كان هناك مقطع / خط محدد: لحام مباشر وسريع للسكينة بالاتجاه المطلوب
+  // إذا كان هناك مقطع محدد: لحام مباشر وسريع
   if (selectedElement && selectedElement.type === "section") {
     if (typeof quickWeldSwitchOnSelectedSection === "function") {
       quickWeldSwitchOnSelectedSection(targetDir);
@@ -4498,12 +4512,12 @@ function quickAddSwitch(direction = 'vertical') {
     }
   }
 
-  // 3. فتح نافذة السكينة مع التوجيه المسبق المطلوب
+  // فتح نافذة السكينة مع التوجيه المسبق
   openSwitchModal(targetDir);
 }
 
 function quickAddSwitchPrompt() {
-  if (window.hasPermission && !window.hasPermission('btn_switch')) {
+  if (window.hasPermission && window.currentUser && !window.hasPermission('btn_switch')) {
     if (window.showToast) showToast("⛔ ليس لديك صلاحية إضافة سكينة هوائية", "error");
     return;
   }

@@ -74,7 +74,10 @@ def serve_css(filepath):
 
 @app.route('/js/<filepath:path>')
 def serve_js(filepath):
-    return static_file(filepath, root=os.path.join(UI_DIR, "js"))
+    resp = static_file(filepath, root=os.path.join(UI_DIR, "js"))
+    resp.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+    resp.set_header('Pragma', 'no-cache')
+    return resp
 
 
 # ==================== AUTH ====================
