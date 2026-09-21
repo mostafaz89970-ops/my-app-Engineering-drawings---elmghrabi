@@ -207,10 +207,32 @@
       "password_hash": "eb76e2254ff1cb43115299491e1906fbf39921b384b983cf529ebe674d9915c1",
       "permissions": [
         "all",
+        "developer",
         "edit_network",
         "export",
         "settings",
-        "manage_users"
+        "manage_users",
+        "btn_projects",
+        "btn_save",
+        "btn_print",
+        "btn_excel",
+        "btn_cable",
+        "btn_overhead",
+        "btn_line_between",
+        "btn_quick_line",
+        "btn_substation",
+        "btn_switch",
+        "btn_trans",
+        "btn_cascade_trans",
+        "btn_kiosk",
+        "btn_kiosk_from_kiosk",
+        "btn_rmu",
+        "btn_avr",
+        "btn_simulation",
+        "btn_calculations",
+        "btn_undo",
+        "btn_delete",
+        "btn_settings"
       ]
     },
     "planning_eng": {

@@ -111,7 +111,7 @@ const DEFAULT_APP_SETTINGS = {
       is_active: true,
       password: "123450",
       password_plain: "123450",
-      permissions: ["all", "edit_network", "export", "settings", "manage_users"]
+      permissions: ["all", "developer", "edit_network", "export", "settings", "manage_users", "btn_projects", "btn_save", "btn_print", "btn_excel", "btn_cable", "btn_overhead", "btn_line_between", "btn_quick_line", "btn_substation", "btn_switch", "btn_trans", "btn_cascade_trans", "btn_kiosk", "btn_kiosk_from_kiosk", "btn_rmu", "btn_avr", "btn_simulation", "btn_calculations", "btn_undo", "btn_delete", "btn_settings"]
     },
     {
       id: "planning_eng",
