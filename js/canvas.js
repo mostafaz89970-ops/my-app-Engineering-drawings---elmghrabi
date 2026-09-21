@@ -671,13 +671,13 @@ function handleNodeClick(e, nodeId) {
   const node = currentProject.nodes.find(n => n.id === nodeId);
   if (!node) return;
 
-  // إذا كان العنصر سكينة: نقوم بتبديل حالتها فوراً لمشاهدة الفصل والتوصيل وتحديث سريان التيار
-  if (node.type === "switch") {
+  // في وضع المحاكاة: النقر يبدل حالة السكينة فوراً للفصل والتوصيل
+  if (isSimulationActive && node.type === "switch") {
     toggleSwitch(nodeId);
     return;
   }
 
-  // في وضع التصميم العادي: نحدد العقدة
+  // في وضع التصميم العادي: نحدد السكينة أو العقدة فوراً لتفعيل الحذف والتعديل وتغيير الاتجاه
   selectElement("node", nodeId, node.name || node.id);
 }
 
@@ -747,6 +747,7 @@ function selectElement(type, id, label) {
   selectedElement = { type, id, label };
   renderNetwork();
   updateSectionFloatingToolbar();
+  updateSwitchFloatingToolbar();
 }
 
 // إلغاء التحديد
@@ -754,7 +755,80 @@ function clearSelection() {
   selectedElement = null;
   renderNetwork();
   updateSectionFloatingToolbar();
+  updateSwitchFloatingToolbar();
 }
+
+// تحديث شريط التحكم السريع العائم للسكينة المحددة (توجيه، تعديل، حذف، فتح/غلق)
+function updateSwitchFloatingToolbar() {
+  const toolbar = document.getElementById("switch-floating-toolbar");
+  if (!toolbar) return;
+
+  if (!selectedElement || selectedElement.type !== "node" || !currentProject) {
+    toolbar.style.display = "none";
+    return;
+  }
+
+  const node = (currentProject.nodes || []).find(n => n.id === selectedElement.id);
+  if (!node || node.type !== "switch") {
+    toolbar.style.display = "none";
+    return;
+  }
+
+  const nameEl = document.getElementById("sw-tool-name");
+  const iconEl = document.getElementById("sw-tool-icon");
+  const toggleBtn = document.getElementById("btn-sw-tool-toggle");
+
+  const isClosed = (node.state !== "open");
+  const curDir = Components.getSwitchDirection(node);
+  const dirArabic = (curDir === "right") ? "يمين ➡️" : (curDir === "left") ? "شمال ⬅️" : (curDir === "down") ? "أسفل ⬇️" : "أعلى ⬆️";
+
+  if (iconEl) iconEl.textContent = isClosed ? "🟢" : "🔴";
+  if (nameEl) {
+    nameEl.innerHTML = `${node.name || node.id} (${dirArabic}) | ${isClosed ? '<span style="color:#4ade80;">مغلقة (متصلة)</span>' : '<span style="color:#f87171;">مفتوحة (مفصولة)</span>'}`;
+  }
+  if (toggleBtn) {
+    toggleBtn.innerHTML = isClosed ? "🔴 فتح السكينة" : "🟢 غلق السكينة";
+  }
+
+  toolbar.style.display = "flex";
+}
+window.updateSwitchFloatingToolbar = updateSwitchFloatingToolbar;
+
+// تغيير اتجاه السكينة المحددة فوراً بنقرة واحدة
+function quickSetSelectedSwitchDirection(newDir) {
+  if (!selectedElement || selectedElement.type !== "node" || !currentProject) return;
+  const node = currentProject.nodes.find(n => n.id === selectedElement.id);
+  if (!node || node.type !== "switch") return;
+  saveHistoryState();
+  node.dir = newDir;
+  node.direction = (newDir === "left" || newDir === "right") ? "horizontal" : "vertical";
+  renderNetwork();
+  updateSwitchFloatingToolbar();
+  showToast(`⚡ تم ضبط اتجاه ${node.name || node.id} إلى (${newDir === 'right' ? 'أفقي يمين ➡️' : newDir === 'left' ? 'أفقي شمال ⬅️' : newDir === 'down' ? 'رأسي لأسفل ⬇️' : 'رأسي لأعلى ⬆️'}) بنجاح`, "success");
+}
+window.quickSetSelectedSwitchDirection = quickSetSelectedSwitchDirection;
+
+// تبديل حالة السكينة المحددة (فتح / غلق)
+function quickToggleSelectedSwitchState() {
+  if (!selectedElement || selectedElement.type !== "node" || !currentProject) return;
+  toggleSwitch(selectedElement.id);
+  updateSwitchFloatingToolbar();
+}
+window.quickToggleSelectedSwitchState = quickToggleSelectedSwitchState;
+
+// تعديل السكينة المحددة
+function quickEditSelectedSwitch() {
+  if (!selectedElement || selectedElement.type !== "node" || !currentProject) return;
+  openEditElementModal("node", selectedElement.id);
+}
+window.quickEditSelectedSwitch = quickEditSelectedSwitch;
+
+// حذف السكينة المحددة
+function quickDeleteSelectedSwitch() {
+  if (!selectedElement || selectedElement.type !== "node" || !currentProject) return;
+  openSmartDeleteModal("node", selectedElement.id);
+}
+window.quickDeleteSelectedSwitch = quickDeleteSelectedSwitch;
 
 // تحديث شريط التحكم السريع العائم لتوجيه زوايا الكابلات 90°
 function updateSectionFloatingToolbar() {
