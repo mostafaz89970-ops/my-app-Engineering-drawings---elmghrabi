@@ -3743,12 +3743,14 @@ window.onSwitchBetweenNodeAChange = onSwitchBetweenNodeAChange;
 
 // --- السكاكين الهوائية المفصلية المعتمدة - واجهة ديناميكية ذكية وسلسة ---
 function openSwitchModal(suggestedDir = 'down') {
-  if (!currentProject || currentProject.nodes.length === 0) {
-    alert("الرجاء إضافة محطة محولات أو خط أولاً.");
+  if (!currentProject || !currentProject.nodes || currentProject.nodes.length === 0) {
+    if (window.showToast) window.showToast("⚠️ الرجاء إضافة محطة محولات أولاً لبدء تفريع الخطوط والسكاكين", "warning");
+    else alert("الرجاء إضافة محطة محولات أولاً.");
     return;
   }
   window._lastSuggestedSwitchDir = suggestedDir;
   const modal = document.getElementById("switch-modal");
+  if (!modal) return;
   populateNodeDropdowns();
 
   // تعبئة قائمة النود المستهدف
@@ -3777,12 +3779,19 @@ function openSwitchModal(suggestedDir = 'down') {
   onSwitchNewLineTypeChange();
   onSwitchMainNodeChange();
   modal.classList.remove("hidden");
+  modal.style.display = "flex";
 }
 
 function closeSwitchModal() {
   const modal = document.getElementById("switch-modal");
-  if (modal) modal.classList.add("hidden");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.style.display = "none";
+  }
 }
+
+window.openSwitchModal = openSwitchModal;
+window.closeSwitchModal = closeSwitchModal;
 
 // عند تغيير النود المختار: نقوم فوراً بفحص تفرعاته وتحديث الخيارات ديناميكياً
 function onSwitchMainNodeChange() {
@@ -3808,21 +3817,21 @@ function onSwitchMainNodeChange() {
   // بناء الخيارات ديناميكياً حسب تفرعات هذا النود المختار والاتجاه المطلوب
   let optionsHTML = "";
   const sug = window._lastSuggestedSwitchDir || "down";
-  let defaultAction = "same_node";
+  let defaultAction = "new_line";
 
   if (sug === "right" || sug === "horizontal") {
     if (branches.right) defaultAction = "branch_right";
-    else defaultAction = "same_node";
+    else defaultAction = "new_line";
   } else if (sug === "left") {
     if (branches.left) defaultAction = "branch_left";
-    else defaultAction = "same_node";
+    else defaultAction = "new_line";
   } else if (sug === "up") {
     if (branches.up) defaultAction = "branch_up";
-    else defaultAction = "same_node";
+    else defaultAction = "new_line";
   } else {
     if (branches.down) defaultAction = "branch_down";
     else if (branches.right) defaultAction = "branch_right";
-    else defaultAction = "same_node";
+    else defaultAction = "new_line";
   }
 
   // خيار 1: تثبيت على نفس النود (دائماً متاح ومباشر)
@@ -4398,28 +4407,41 @@ function submitSwitchModal() {
 
 function quickAddSwitch(direction = 'vertical') {
   if (window.hasPermission && !window.hasPermission('btn_switch')) {
-    showToast("⛔ ليس لديك صلاحية إضافة سكينة هوائية", "error");
+    if (window.showToast) showToast("⛔ ليس لديك صلاحية إضافة سكينة هوائية", "error");
     return;
   }
+  const isHoriz = (direction === 'horizontal');
+  const targetDir = isHoriz ? 'right' : ((window.drawingFlowDirection === 'up') ? 'up' : 'down');
+
+  // إذا كان هناك مقطع محدد: لحام مباشر وسريع
   if (selectedElement && selectedElement.type === "section") {
-    quickWeldSwitchOnSelectedSection(direction === 'horizontal' ? 'right' : 'down');
-    return;
+    if (typeof quickWeldSwitchOnSelectedSection === "function") {
+      quickWeldSwitchOnSelectedSection(targetDir);
+      return;
+    }
   }
-  const vertDir = (window.drawingFlowDirection === 'up') ? 'up' : 'down';
-  openSwitchModal(direction === 'horizontal' ? 'right' : vertDir);
+
+  // فتح نافذة السكينة مع التوجيه المسبق
+  openSwitchModal(targetDir);
 }
 
 function quickAddSwitchPrompt() {
   if (window.hasPermission && !window.hasPermission('btn_switch')) {
-    showToast("⛔ ليس لديك صلاحية إضافة سكينة هوائية", "error");
+    if (window.showToast) showToast("⛔ ليس لديك صلاحية إضافة سكينة هوائية", "error");
     return;
   }
   if (selectedElement && selectedElement.type === "section") {
-    quickWeldSwitchOnSelectedSection();
-    return;
+    if (typeof quickWeldSwitchOnSelectedSection === "function") {
+      quickWeldSwitchOnSelectedSection();
+      return;
+    }
   }
-  openSwitchModal(window.drawingFlowDirection === 'up' ? 'up' : 'down');
+  const targetDir = (window.drawingFlowDirection === 'up') ? 'up' : 'down';
+  openSwitchModal(targetDir);
 }
+
+window.quickAddSwitch = quickAddSwitch;
+window.quickAddSwitchPrompt = quickAddSwitchPrompt;
 
 // --- وحدة الربط الحلقي RMU (بدون كابلات، وتوصيل حسب الاتجاه فقط) ---
 function openRMUModal() {
@@ -4586,19 +4608,173 @@ function submitAVRModal() {
 
 // ==================== محرك إدارة وتخزين المشاريع (محلي + سحابي + خادم) ====================
 
-// استرجاع الفهرس المحلي للمشاريع من التخزين
-function getLocalProjectsCatalog() {
-  let catalog = [];
-  try {
-    const raw = localStorage.getItem("sld_projects_catalog");
-    if (raw) catalog = JSON.parse(raw);
-  } catch(e) {
-    catalog = [];
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🏛️ عزل وفصل بيانات ومشاريع كل إدارة على حدة (Administration Data Isolation)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function getCurrentAdminName() {
+  if (window.currentUser && window.currentUser.administration && window.currentUser.administration !== "all") {
+    return window.currentUser.administration;
   }
+  const savedUser = sessionStorage.getItem("sld_user");
+  if (savedUser) {
+    try {
+      const u = JSON.parse(savedUser);
+      if (u && u.administration && u.administration !== "all") return u.administration;
+    } catch (_) {}
+  }
+  return localStorage.getItem("sld_current_admin") || "بني مزار شرق";
+}
+
+function getCurrentAdminKey() {
+  return getCurrentAdminName().trim().replace(/\s+/g, '_');
+}
+
+window.getCurrentAdminName = getCurrentAdminName;
+window.getCurrentAdminKey = getCurrentAdminKey;
+
+function getSavedFeederForAdmin(adminName = null) {
+  const aName = adminName || getCurrentAdminName();
+  const aKey = aName.trim().replace(/\s+/g, '_');
+  const key = "sld_feeder_" + aKey;
+  let data = localStorage.getItem(key);
+  if (!data) {
+    // ترحيل المخطط الأصلي لـ بني مزار شرق
+    const legacy = localStorage.getItem("sld_saved_feeder");
+    if (legacy && (aKey === "بني_مزار_شرق" || !localStorage.getItem("sld_feeder_بني_مزار_شرق"))) {
+      localStorage.setItem("sld_feeder_بني_مزار_شرق", legacy);
+      if (aKey === "بني_مزار_شرق") {
+        data = legacy;
+      }
+    }
+  }
+  try {
+    return data ? JSON.parse(data) : null;
+  } catch(e) {
+    return null;
+  }
+}
+
+function saveFeederForAdmin(project, adminName = null) {
+  if (!project) return;
+  const aName = adminName || getCurrentAdminName();
+  const aKey = aName.trim().replace(/\s+/g, '_');
+  const key = "sld_feeder_" + aKey;
+  try {
+    localStorage.setItem(key, JSON.stringify(project));
+    if (aKey === "بني_مزار_شرق") {
+      localStorage.setItem("sld_saved_feeder", JSON.stringify(project));
+    }
+  } catch(e) {}
+}
+
+function getCatalogForAdmin(adminName = null) {
+  const aName = adminName || getCurrentAdminName();
+  const aKey = aName.trim().replace(/\s+/g, '_');
+  const key = "sld_catalog_" + aKey;
+  let raw = localStorage.getItem(key);
+  if (!raw) {
+    const legacy = localStorage.getItem("sld_projects_catalog");
+    if (legacy && (aKey === "بني_مزار_شرق" || !localStorage.getItem("sld_catalog_بني_مزار_شرق"))) {
+      localStorage.setItem("sld_catalog_بني_مزار_شرق", legacy);
+      if (aKey === "بني_مزار_شرق") raw = legacy;
+    }
+  }
+  try {
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) {
+    return [];
+  }
+}
+
+function saveCatalogForAdmin(catalog, adminName = null) {
+  const aName = adminName || getCurrentAdminName();
+  const aKey = aName.trim().replace(/\s+/g, '_');
+  const key = "sld_catalog_" + aKey;
+  try {
+    localStorage.setItem(key, JSON.stringify(catalog));
+    if (aKey === "بني_مزار_شرق") {
+      localStorage.setItem("sld_projects_catalog", JSON.stringify(catalog));
+    }
+  } catch(e) {}
+}
+
+function initAdminDefaultProject(adminName) {
+  const pId = "feeder_" + Date.now();
+  return {
+    id: pId,
+    name: "مغذي " + adminName + " 1",
+    substation: "محطة محولات " + adminName,
+    voltage_kv: 11,
+    nodes: [
+      {
+        id: "N1",
+        type: "substation",
+        name: "محطة محولات " + adminName,
+        x: 400,
+        y: 80,
+        subType: "substation"
+      }
+    ],
+    sections: []
+  };
+}
+
+function loadAdminWorkspace(adminName) {
+  if (!adminName) adminName = getCurrentAdminName();
+  localStorage.setItem("sld_current_admin", adminName);
+
+  if (window.currentUser) {
+    window.currentUser.administration = adminName;
+    try { sessionStorage.setItem("sld_user", JSON.stringify(window.currentUser)); } catch(_) {}
+  }
+
+  // تحديث الترويسة في القائمة الجانبية
+  const sidebarTitle = document.getElementById("sidebar-brand-title");
+  if (sidebarTitle) sidebarTitle.textContent = "هندسة كهرباء " + adminName;
+
+  const mainTitle = document.getElementById("main-system-title");
+  if (mainTitle) mainTitle.textContent = "هندسة كهرباء " + adminName;
+
+  let proj = getSavedFeederForAdmin(adminName);
+  if (!proj || !proj.nodes || proj.nodes.length === 0) {
+    if (adminName === "بني مزار شرق" && window.DEFAULT_BUNDLED_PROJECTS && window.DEFAULT_BUNDLED_PROJECTS.length > 0) {
+      proj = JSON.parse(JSON.stringify(window.DEFAULT_BUNDLED_PROJECTS[0]));
+    } else {
+      proj = initAdminDefaultProject(adminName);
+    }
+    saveFeederForAdmin(proj, adminName);
+  }
+
+  currentProject = proj;
+  window.currentProject = proj;
+
+  if (typeof updateFeederInputs === "function") updateFeederInputs();
+  if (typeof renderNetwork === "function") renderNetwork();
+  if (typeof fitToScreen === "function") fitToScreen();
+
+  if (window.reconnectFirebaseForAdmin) {
+    window.reconnectFirebaseForAdmin(adminName);
+  }
+
+  if (window.showToast) {
+    window.showToast(`🏛️ تم فتح مساحة عمل ومخططات [هندسة كهرباء ${adminName}]`, "info");
+  }
+}
+
+window.loadAdminWorkspace = loadAdminWorkspace;
+window.getSavedFeederForAdmin = getSavedFeederForAdmin;
+window.saveFeederForAdmin = saveFeederForAdmin;
+window.getCatalogForAdmin = getCatalogForAdmin;
+window.saveCatalogForAdmin = saveCatalogForAdmin;
+
+// استرجاع الفهرس المحلي للمشاريع من التخزين (مخصص للإدارة الحالية)
+function getLocalProjectsCatalog() {
+  let catalog = getCatalogForAdmin();
   if (!Array.isArray(catalog)) catalog = [];
 
-  // دمج المشاريع المدمجة الافتراضية (مثل خط المعصرة) في الفهرس
-  if (window.DEFAULT_BUNDLED_PROJECTS && Array.isArray(window.DEFAULT_BUNDLED_PROJECTS)) {
+  // دمج المشاريع المدمجة الافتراضية إذا كانت الإدارة بني مزار شرق
+  if (getCurrentAdminKey() === "بني_مزار_شرق" && window.DEFAULT_BUNDLED_PROJECTS && Array.isArray(window.DEFAULT_BUNDLED_PROJECTS)) {
     window.DEFAULT_BUNDLED_PROJECTS.forEach(bp => {
       const exists = catalog.some(p => p.id === bp.id || p.name === bp.name);
       if (!exists) {
@@ -4618,9 +4794,7 @@ function getLocalProjectsCatalog() {
         } catch(e) {}
       }
     });
-    try {
-      localStorage.setItem("sld_projects_catalog", JSON.stringify(catalog));
-    } catch(e) {}
+    saveCatalogForAdmin(catalog);
   }
   return catalog;
 }
@@ -4633,17 +4807,12 @@ async function saveProjectToStorage(project) {
   const nowStr = new Date().toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' });
   project.updated_at = nowStr;
 
-  // 1. التخزين المحلي في المتصفح
+  // 1. التخزين المحلي المخصص للإدارة
   try {
-    localStorage.setItem("sld_saved_feeder", JSON.stringify(project));
+    saveFeederForAdmin(project);
     localStorage.setItem("sld_proj_" + pId, JSON.stringify(project));
 
-    let catalog = [];
-    try {
-      catalog = JSON.parse(localStorage.getItem("sld_projects_catalog") || "[]");
-    } catch(e) { catalog = []; }
-    if (!Array.isArray(catalog)) catalog = [];
-
+    let catalog = getCatalogForAdmin();
     const meta = {
       id: pId,
       name: project.name || "مخطط شبكة توزيع",
@@ -4660,7 +4829,7 @@ async function saveProjectToStorage(project) {
     } else {
       catalog.unshift(meta);
     }
-    localStorage.setItem("sld_projects_catalog", JSON.stringify(catalog));
+    saveCatalogForAdmin(catalog);
   } catch(e) {
     console.warn("LocalStorage save warning:", e);
   }
@@ -4810,9 +4979,29 @@ function renderProjectsTable(projects, isServerOnline) {
         <span>🟢 التخزين المحلي والسحابي نشط (جاهز للعمل والمزامنة)</span>
        </span>`;
 
+  const curAdmin = getCurrentAdminName();
+  const adminList = [
+    "بني مزار شرق",
+    "بني مزار غرب",
+    "مغاغة",
+    "العدوة",
+    "مطاي",
+    "سمالوط شرق",
+    "سمالوط غرب"
+  ];
+  const adminOptions = adminList.map(adm => `<option value="${adm}" ${adm === curAdmin ? "selected" : ""}>هندسة كهرباء ${adm}</option>`).join("");
+
   let html = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
-      ${statusBadge}
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        ${statusBadge}
+        <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(45, 55, 72, 0.7); padding:4px 10px; border-radius:8px; border:1px solid var(--border-color);">
+          <span style="font-size:12px; color:#ecc94b; font-weight:bold;">🏛️ الإدارة:</span>
+          <select id="projects-admin-switcher" style="background:#1a202c; color:#fff; border:1px solid #4a5568; border-radius:6px; padding:3px 8px; font-size:12px; font-weight:600; cursor:pointer;" onchange="switchAdminWorkspace(this.value)">
+            ${adminOptions}
+          </select>
+        </div>
+      </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <button class="btn btn-outline btn-sm" onclick="triggerSLDFileImport()" style="border-color:#38b2ac; color:#4fd1c5; font-size:11.5px; padding:5px 10px;">
           <span>📥 استيراد ملف مشروع .sld</span>
@@ -4895,6 +5084,13 @@ function renderProjectsTable(projects, isServerOnline) {
   container.innerHTML = html;
 }
 
+function switchAdminWorkspace(adminName) {
+  if (!adminName) return;
+  loadAdminWorkspace(adminName);
+  openProjectsManager();
+}
+window.switchAdminWorkspace = switchAdminWorkspace;
+
 function closeProjectsManager() {
   const modal = document.getElementById("projects-manager-modal");
   if (modal) modal.classList.add("hidden");
@@ -4913,6 +5109,7 @@ async function loadProjectFromManager(p_id) {
   currentProject = projectData;
   window.currentProject = projectData;
   try {
+    saveFeederForAdmin(currentProject);
     localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
     localStorage.setItem("sld_proj_" + currentProject.id, JSON.stringify(currentProject));
   } catch(e) {}
@@ -5461,6 +5658,7 @@ function applySyncedProject(project, catalog) {
   if (project && project.id) {
     try {
       localStorage.setItem("sld_proj_" + project.id, JSON.stringify(project));
+      saveFeederForAdmin(project);
       localStorage.setItem("sld_saved_feeder", JSON.stringify(project));
       currentProject = project;
       window.currentProject = project;
@@ -5472,6 +5670,7 @@ function applySyncedProject(project, catalog) {
   }
   if (Array.isArray(catalog)) {
     try {
+      saveCatalogForAdmin(catalog);
       localStorage.setItem("sld_projects_catalog", JSON.stringify(catalog));
       const modal = document.getElementById("projects-manager-modal");
       if (modal && !modal.classList.contains("hidden") && typeof renderProjectsManagerList === "function") {
@@ -5484,6 +5683,7 @@ function applySyncedProject(project, catalog) {
 function applySyncedCatalog(catalog) {
   if (Array.isArray(catalog)) {
     try {
+      saveCatalogForAdmin(catalog);
       localStorage.setItem("sld_projects_catalog", JSON.stringify(catalog));
       const modal = document.getElementById("projects-manager-modal");
       if (modal && !modal.classList.contains("hidden") && typeof renderProjectsManagerList === "function") {

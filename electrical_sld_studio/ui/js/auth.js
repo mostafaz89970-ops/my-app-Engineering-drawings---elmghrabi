@@ -445,45 +445,26 @@ async function handleLogin(e) {
     try { window.initCanvas(); } catch(e) { console.warn("initCanvas error:", e); }
   }
 
-  // استعادة المخطط أو إنشاء مخطط جديد
-  const savedLocal = localStorage.getItem("sld_saved_feeder");
-  let restored = false;
-  if (savedLocal) {
-    try {
-      const parsed = JSON.parse(savedLocal);
-      if (parsed && parsed.nodes && parsed.nodes.length > 0) {
-        if (typeof currentProject !== "undefined") {
-          currentProject = parsed;
-        }
-        window.currentProject = parsed;
-        if (window.updateFeederInputs) window.updateFeederInputs();
-        if (window.renderNetwork) window.renderNetwork();
-        if (window.fitToScreen) window.fitToScreen();
-        if (window.showToast) window.showToast(`📂 تم فتح المخطط النشط [${parsed.name || 'المخطط'}] بنجاح!`, "info");
-        restored = true;
-      }
-    } catch(e) {
-      console.error("Restore local project error:", e);
-    }
-  }
+  // استعادة المخطط المخصص للإدارة المسجلة
+  const adminName = currentUser.administration || "بني مزار شرق";
+  localStorage.setItem("sld_current_admin", adminName);
 
-  if (!restored) {
-    if (window.DEFAULT_BUNDLED_PROJECTS && window.DEFAULT_BUNDLED_PROJECTS.length > 0) {
-      const defaultProj = JSON.parse(JSON.stringify(window.DEFAULT_BUNDLED_PROJECTS[0]));
-      if (typeof currentProject !== "undefined") {
-        currentProject = defaultProj;
-      }
-      window.currentProject = defaultProj;
+  if (window.loadAdminWorkspace) {
+    window.loadAdminWorkspace(adminName);
+  } else {
+    const key = "sld_feeder_" + adminName.trim().replace(/\s+/g, '_');
+    const savedLocal = localStorage.getItem(key) || localStorage.getItem("sld_saved_feeder");
+    if (savedLocal) {
       try {
-        localStorage.setItem("sld_saved_feeder", JSON.stringify(defaultProj));
-        localStorage.setItem("sld_proj_" + defaultProj.id, JSON.stringify(defaultProj));
+        const parsed = JSON.parse(savedLocal);
+        if (parsed && parsed.nodes && parsed.nodes.length > 0) {
+          if (typeof currentProject !== "undefined") currentProject = parsed;
+          window.currentProject = parsed;
+          if (window.updateFeederInputs) window.updateFeederInputs();
+          if (window.renderNetwork) window.renderNetwork();
+          if (window.fitToScreen) window.fitToScreen();
+        }
       } catch(e) {}
-      if (window.updateFeederInputs) window.updateFeederInputs();
-      if (window.renderNetwork) window.renderNetwork();
-      if (window.fitToScreen) window.fitToScreen();
-      if (window.showToast) window.showToast(`📂 تم استرجاع مخطط [${defaultProj.name}] بنجاح!`, "success");
-    } else if (window.createNewProjectDirectly) {
-      window.createNewProjectDirectly();
     } else if (window.loadDemoVideoProject) {
       window.loadDemoVideoProject();
     }
@@ -696,39 +677,25 @@ window.addEventListener("DOMContentLoaded", async () => {
     applyUserPermissions();
     if (window.initCanvas) window.initCanvas();
     
-    // استعادة المخطط الجاري العمل عليه محلياً عند الضغط على F5 أو تحديث المتصفح
-    const savedLocal = localStorage.getItem("sld_saved_feeder");
-    let restored = false;
-    if (savedLocal) {
-      try {
-        const parsed = JSON.parse(savedLocal);
-        if (parsed && parsed.nodes && parsed.nodes.length > 0) {
-          currentProject = parsed;
-          window.currentProject = parsed;
-          if (window.updateFeederInputs) window.updateFeederInputs();
-          if (window.renderNetwork) window.renderNetwork();
-          if (window.fitToScreen) window.fitToScreen();
-          restored = true;
-        }
-      } catch(e) {
-        console.error("Restore local project error on F5:", e);
-      }
-    }
-    if (!restored) {
-      if (window.DEFAULT_BUNDLED_PROJECTS && window.DEFAULT_BUNDLED_PROJECTS.length > 0) {
-        const defaultProj = JSON.parse(JSON.stringify(window.DEFAULT_BUNDLED_PROJECTS[0]));
-        currentProject = defaultProj;
-        window.currentProject = defaultProj;
+    // استعادة المخطط الجاري العمل عليه محلياً للإدارة الحالية
+    const adminName = (currentUser && currentUser.administration) ? currentUser.administration : "بني مزار شرق";
+    localStorage.setItem("sld_current_admin", adminName);
+    if (window.loadAdminWorkspace) {
+      window.loadAdminWorkspace(adminName);
+    } else {
+      const key = "sld_feeder_" + adminName.trim().replace(/\s+/g, '_');
+      const savedLocal = localStorage.getItem(key) || localStorage.getItem("sld_saved_feeder");
+      if (savedLocal) {
         try {
-          localStorage.setItem("sld_saved_feeder", JSON.stringify(defaultProj));
-          localStorage.setItem("sld_proj_" + defaultProj.id, JSON.stringify(defaultProj));
+          const parsed = JSON.parse(savedLocal);
+          if (parsed && parsed.nodes && parsed.nodes.length > 0) {
+            currentProject = parsed;
+            window.currentProject = parsed;
+            if (window.updateFeederInputs) window.updateFeederInputs();
+            if (window.renderNetwork) window.renderNetwork();
+            if (window.fitToScreen) window.fitToScreen();
+          }
         } catch(e) {}
-        if (window.updateFeederInputs) window.updateFeederInputs();
-        if (window.renderNetwork) window.renderNetwork();
-        if (window.fitToScreen) window.fitToScreen();
-        restored = true;
-      } else if (window.createNewProjectDirectly) {
-        window.createNewProjectDirectly();
       }
     }
   }
@@ -940,6 +907,26 @@ window.SECTORS_MAP = SECTORS_MAP;
 window.onLoginSectorChange = onLoginSectorChange;
 window.onLoginAdminChange = onLoginAdminChange;
 window.onLoginUserChange = onLoginUserChange;
+function getCurrentAdminName() {
+  if (window.currentUser && window.currentUser.administration && window.currentUser.administration !== "all") {
+    return window.currentUser.administration;
+  }
+  const savedUser = sessionStorage.getItem("sld_user");
+  if (savedUser) {
+    try {
+      const u = JSON.parse(savedUser);
+      if (u && u.administration && u.administration !== "all") return u.administration;
+    } catch (_) {}
+  }
+  return localStorage.getItem("sld_current_admin") || "بني مزار شرق";
+}
+
+function getCurrentAdminKey() {
+  return getCurrentAdminName().trim().replace(/\s+/g, '_');
+}
+
+window.getCurrentAdminName = getCurrentAdminName;
+window.getCurrentAdminKey = getCurrentAdminKey;
 window.loadInitialUsers = loadInitialUsers;
 window.isDeveloperUser = isDeveloperUser;
 window.isMaintenanceModeActive = isMaintenanceModeActive;
