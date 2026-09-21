@@ -353,6 +353,47 @@
         }
       }, 800);
 
+    } else if (type === 'DRAWING_CHUNK') {
+      var chunkData = data;
+      if (!chunkData || (!chunkData.nodes && !chunkData.sections)) return;
+
+      var curProj = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+      if (!curProj || !curProj.nodes) {
+        try { curProj = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
+      }
+      var partial = {
+        id: (curProj && curProj.id) ? curProj.id : 'feeder_1789823077015',
+        name: (curProj && curProj.name) ? curProj.name : 'خط المعصرة',
+        nodes: chunkData.nodes || [],
+        sections: chunkData.sections || []
+      };
+      var mergeRes = smartMergeProjects(curProj, partial);
+      var updatedProj = mergeRes.merged;
+
+      isApplyingRemote = true;
+      if (window.setCurrentProject) {
+        window.setCurrentProject(updatedProj);
+      } else {
+        window.currentProject = updatedProj;
+      }
+      try {
+        localStorage.setItem('sld_saved_feeder', JSON.stringify(updatedProj));
+      } catch (e) {}
+
+      if (window.updateFeederInputs) window.updateFeederInputs();
+      if (window.renderNetwork) window.renderNetwork();
+      if (window.fitToScreen) window.fitToScreen();
+
+      var chunkIdx = (chunkData.index || 0) + 1;
+      var totalC = chunkData.total || 1;
+      showSyncToast('⚡ استلام ومطابقة دفعة رسم [' + chunkIdx + '/' + totalC + '] (الإجمالي: ' + updatedProj.nodes.length + ' عقدة و ' + updatedProj.sections.length + ' مقطع)', 'info');
+      updateBadgeUI('syncing', author);
+
+      setTimeout(function () {
+        isApplyingRemote = false;
+        updateBadgeUI('connected');
+      }, 600);
+
     } else if (type === 'PROJECT_SAVED') {
       if (data.project && window.applySyncedProject) {
         if (msgTime) lastDrawingUpdateTimestamp = msgTime;
@@ -626,7 +667,30 @@
         if (hash === lastBroadcastHash) return;
         lastBroadcastHash = hash;
 
-        postCloudEvent('DRAWING_UPDATE', { project: cleanProj }, reason || 'drawing_edit');
+        // إذا كان المخطط صغيراً (15 عقدة أو أقل) نبثه كدفعة واحدة
+        if (cleanProj.nodes.length <= 15 && cleanProj.sections.length <= 15) {
+          postCloudEvent('DRAWING_UPDATE', { project: cleanProj }, reason || 'drawing_edit');
+        } else {
+          // للمخططات الكبيرة (مثل 64 عقدة و65 مقطع) نقسمها لدفعات خفيفة (<2KB) لتصل 100% بدون تحويل لملفات
+          var chunkSize = 15;
+          var maxLen = Math.max(cleanProj.nodes.length, cleanProj.sections.length);
+          var totalChunks = Math.ceil(maxLen / chunkSize);
+          for (var i = 0; i < maxLen; i += chunkSize) {
+            var chunkNodes = cleanProj.nodes.slice(i, i + chunkSize);
+            var chunkSecs = cleanProj.sections.slice(i, i + chunkSize);
+            var chunkPayload = {
+              index: Math.floor(i / chunkSize),
+              total: totalChunks,
+              nodes: chunkNodes,
+              sections: chunkSecs
+            };
+            (function (pld, delay) {
+              setTimeout(function () {
+                postCloudEvent('DRAWING_CHUNK', pld, 'drawing_chunk_' + pld.index);
+              }, delay);
+            })(chunkPayload, Math.floor(i / chunkSize) * 150);
+          }
+        }
       } catch (e) {
         console.warn('Error broadcasting drawing:', e);
       }
@@ -705,7 +769,19 @@
               '</div>' +
               '<small style="color: #94a3b8; display: block; margin-top: 4px;">للعمل في غرفة خاصة أو مغذي مستقل، أدخل اسماً موحداً بين أجهزتك.</small>' +
             '</div>' +
-            '<div style="display: flex; flex-direction: column; gap: 10px; margin-top: 18px;">' +
+            '<div style="background: rgba(30, 58, 138, 0.2); border: 1px solid #3b82f6; border-radius: 8px; padding: 12px; margin-top: 14px;">' +
+              '<strong style="display:block; color: #93c5fd; font-size: 13px; margin-bottom: 6px;">📋 جسر النقل الفوري المباشر (100% مضمون لأي متصفح):</strong>' +
+              '<div style="display: flex; gap: 8px;">' +
+                '<button type="button" class="btn" onclick="window.copyDrawingCodeToClipboard()" style="flex: 1; padding: 9px; font-weight: bold; background: #0284c7; border: none; color: #fff; border-radius: 6px; cursor: pointer;">' +
+                  '📋 نسخ كود الرسم' +
+                '</button>' +
+                '<button type="button" class="btn" onclick="window.pasteDrawingCodeFromClipboard(); window.closeSyncModal();" style="flex: 1; padding: 9px; font-weight: bold; background: #9333ea; border: none; color: #fff; border-radius: 6px; cursor: pointer;">' +
+                  '📥 لصق كود الرسم' +
+                '</button>' +
+              '</div>' +
+              '<small style="color: #94a3b8; display: block; margin-top: 5px; font-size: 11px;">اضغط نسخ في متصفحك الأول، ثم افتح المتصفح الآخر واضغط لصق ليظهر الرسم فوراً في 1 ثانية.</small>' +
+            '</div>' +
+            '<div style="display: flex; flex-direction: column; gap: 10px; margin-top: 14px;">' +
               '<button class="btn btn-warning" onclick="window.reconcileAndSyncAllDevices(); window.closeSyncModal();" style="width: 100%; padding: 11px; font-weight: bold; background: linear-gradient(135deg, #0d9488, #059669); border: none; color: #fff; border-radius: 6px; cursor: pointer;">' +
                 '🔄 مطابقة واستكمال الرسم الناقص من كافة الأجهزة الآن' +
               '</button>' +
@@ -762,7 +838,28 @@
 
     if (curProj && curProj.nodes) {
       var cleanProj = compactProjectForCloud(curProj);
-      postCloudEvent('DRAWING_UPDATE', { project: cleanProj }, 'force_manual_sync');
+      if (cleanProj.nodes.length <= 15 && cleanProj.sections.length <= 15) {
+        postCloudEvent('DRAWING_UPDATE', { project: cleanProj }, 'force_manual_sync');
+      } else {
+        var chunkSize = 15;
+        var maxLen = Math.max(cleanProj.nodes.length, cleanProj.sections.length);
+        var totalChunks = Math.ceil(maxLen / chunkSize);
+        for (var i = 0; i < maxLen; i += chunkSize) {
+          var chunkNodes = cleanProj.nodes.slice(i, i + chunkSize);
+          var chunkSecs = cleanProj.sections.slice(i, i + chunkSize);
+          var chunkPayload = {
+            index: Math.floor(i / chunkSize),
+            total: totalChunks,
+            nodes: chunkNodes,
+            sections: chunkSecs
+          };
+          (function (pld, delay) {
+            setTimeout(function () {
+              postCloudEvent('DRAWING_CHUNK', pld, 'force_chunk_' + pld.index);
+            }, delay);
+          })(chunkPayload, Math.floor(i / chunkSize) * 150);
+        }
+      }
       broadcastProjectSaved(cleanProj, catalog);
     }
     if (users && users.length > 0) {
@@ -770,6 +867,136 @@
     }
     closeSyncModal();
     if (window.showToast) window.showToast('📡 تم بث كافة البيانات (المخطط، المشاريع، المستخدمين) لجميع الأجهزة بنجاح!', 'success');
+  }
+
+  // ─── وظائف الحافظة والنقل السريع للرسم (Instant Clipboard Bridge) ───────────────
+  function copyDrawingCodeToClipboard() {
+    var curProj = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+    if (!curProj || !curProj.nodes || curProj.nodes.length === 0) {
+      try { curProj = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
+    }
+    if (!curProj || !curProj.nodes || curProj.nodes.length === 0) {
+      showSyncToast('⚠️ لا يوجد رسم حالي لنسخه!', 'warning');
+      return;
+    }
+    var cleanProj = compactProjectForCloud(curProj);
+    var exportData = {
+      app: 'SLD_STUDIO_DRAWING',
+      version: '8.0',
+      exportedAt: Date.now(),
+      author: (window.currentUser && window.currentUser.name) || 'م. مصطفى المغربي',
+      nodesCount: (cleanProj.nodes || []).length,
+      sectionsCount: (cleanProj.sections || []).length,
+      project: cleanProj
+    };
+    var jsonStr = JSON.stringify(exportData);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(jsonStr).then(function () {
+        showSyncToast('📋 تم نسخ كود الرسم بالكامل (' + exportData.nodesCount + ' عقدة و ' + exportData.sectionsCount + ' مقطع)! يمكنك الآن لصقه في فايرفوكس أو أي متصفح آخر.', 'success');
+      }).catch(function () {
+        promptCopyFallback(jsonStr, exportData.nodesCount, exportData.sectionsCount);
+      });
+    } else {
+      promptCopyFallback(jsonStr, exportData.nodesCount, exportData.sectionsCount);
+    }
+  }
+
+  function promptCopyFallback(str, nC, sC) {
+    var modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.zIndex = '999999';
+    modal.innerHTML = 
+      '<div class="modal-dialog" style="max-width: 500px;">' +
+        '<div class="modal-header">' +
+          '<h3>📋 كود الرسم (' + nC + ' عقدة و ' + sC + ' مقطع)</h3>' +
+          '<button class="btn-close" onclick="this.closest(\'.modal-overlay\').remove()">✕</button>' +
+        '</div>' +
+        '<div class="modal-body" style="padding: 16px;">' +
+          '<p style="color: #cbd5e1; font-size: 13px; margin-bottom: 8px;">حدد الكود وانسخه بالكامل ثم الصقه في المتصفح الآخر:</p>' +
+          '<textarea id="txt-copy-drawing-code" style="width: 100%; height: 160px; background: #0f172a; color: #38bdf8; font-family: monospace; font-size: 11px; padding: 8px; border-radius: 6px; border: 1px solid #334155;" readonly>' + str + '</textarea>' +
+          '<button class="btn btn-primary" onclick="var t=document.getElementById(\'txt-copy-drawing-code\'); t.select(); document.execCommand(\'copy\'); alert(\'تم النسخ بنجاح!\'); this.closest(\'.modal-overlay\').remove();" style="width: 100%; margin-top: 10px; font-weight: bold;">نسخ الكود إلى الحافظة</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    modal.style.display = 'flex';
+  }
+
+  function pasteDrawingCodeFromClipboard() {
+    var modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.zIndex = '999999';
+    modal.innerHTML = 
+      '<div class="modal-dialog" style="max-width: 520px;">' +
+        '<div class="modal-header">' +
+          '<h3>📥 لصق واستيراد كود الرسم</h3>' +
+          '<button class="btn-close" onclick="this.closest(\'.modal-overlay\').remove()">✕</button>' +
+        '</div>' +
+        '<div class="modal-body" style="padding: 16px;">' +
+          '<p style="color: #cbd5e1; font-size: 13px; margin-bottom: 8px;">الصق كود الرسم المنسوخ من المتصفح الأول هنا (Ctrl+V) ليتم تحديث وتطابق كافة العقد والمقاطع فوراً:</p>' +
+          '<textarea id="txt-paste-drawing-code" placeholder="الصق كود الرسم المنسوخ هنا..." style="width: 100%; height: 150px; background: #0f172a; color: #38bdf8; font-family: monospace; font-size: 11px; padding: 8px; border-radius: 6px; border: 1px solid #334155;"></textarea>' +
+          '<div style="display: flex; gap: 8px; margin-top: 12px;">' +
+            '<button type="button" class="btn btn-success" onclick="window.executePasteDrawingImport()" style="flex: 1; font-weight: bold; background: linear-gradient(135deg, #10b981, #059669); border: none; padding: 10px; border-radius: 6px; color: #fff; cursor: pointer;">✅ استيراد ومطابقة الرسم فوراً</button>' +
+            '<button type="button" class="btn btn-secondary" onclick="this.closest(\'.modal-overlay\').remove()" style="padding: 10px 16px; border-radius: 6px;">إلغاء</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    modal.style.display = 'flex';
+
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      navigator.clipboard.readText().then(function (clipText) {
+        if (clipText && clipText.indexOf('SLD_STUDIO_DRAWING') !== -1) {
+          var ta = document.getElementById('txt-paste-drawing-code');
+          if (ta) ta.value = clipText;
+        }
+      }).catch(function () {});
+    }
+  }
+
+  function executePasteDrawingImport() {
+    var ta = document.getElementById('txt-paste-drawing-code');
+    if (!ta || !ta.value.trim()) {
+      alert('يرجى لصق كود الرسم أولاً!');
+      return;
+    }
+    try {
+      var raw = ta.value.trim();
+      var parsed = JSON.parse(raw);
+      var incomingProj = parsed.project || parsed;
+      if (!incomingProj || !incomingProj.nodes) {
+        alert('كود الرسم غير صالح أو لا يحتوي على عناصر!');
+        return;
+      }
+      var curProj = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+      if (!curProj || !curProj.nodes) {
+        try { curProj = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
+      }
+      var mergeRes = smartMergeProjects(curProj, incomingProj);
+      var finalProj = mergeRes.merged;
+
+      if (window.setCurrentProject) {
+        window.setCurrentProject(finalProj);
+      } else {
+        window.currentProject = finalProj;
+      }
+      localStorage.setItem('sld_saved_feeder', JSON.stringify(finalProj));
+
+      if (window.updateFeederInputs) window.updateFeederInputs();
+      if (window.renderNetwork) window.renderNetwork();
+      if (window.fitToScreen) window.fitToScreen();
+
+      var modal = ta.closest('.modal-overlay');
+      if (modal) modal.remove();
+
+      showSyncToast('🎉 تم استيراد ومطابقة الرسم بنجاح تام! (' + finalProj.nodes.length + ' عقدة و ' + finalProj.sections.length + ' مقطع)', 'success');
+
+      setTimeout(function () {
+        forceBroadcastProject();
+      }, 500);
+
+    } catch (e) {
+      alert('حدث خطأ أثناء معالجة كود الرسم: ' + e.message);
+    }
   }
 
   // دالة طلب مطابقة الرسم قسرياً واستدعاء البيانات واستكمال النواقص من كافة الأجهزة والخادم
@@ -901,6 +1128,9 @@
   window.reconcileAndSyncAllDevices = reconcileAndSyncAllDevices;
   window.smartMergeProjects = smartMergeProjects;
   window.compactProjectForCloud = compactProjectForCloud;
+  window.copyDrawingCodeToClipboard = copyDrawingCodeToClipboard;
+  window.pasteDrawingCodeFromClipboard = pasteDrawingCodeFromClipboard;
+  window.executePasteDrawingImport = executePasteDrawingImport;
 
   // ─── 13. تهيئة الاتصال والمزامنة عند تحميل الصفحة ─────────────────────────────
   function startSyncEngine() {
