@@ -9,8 +9,18 @@
 (function () {
   'use strict';
 
-  var DEFAULT_ROOM = 'mepco_elmghrabi_sync_v5';
-  var currentRoom = localStorage.getItem('sld_sync_room') || DEFAULT_ROOM;
+  var urlParams = new URLSearchParams(window.location.search);
+  var urlRoom = urlParams.get('room') || urlParams.get('live') || urlParams.get('channel');
+  var DEFAULT_ROOM = 'mepco_elmghrabi_sync_v6';
+  var currentRoom = urlRoom || localStorage.getItem('sld_sync_room') || DEFAULT_ROOM;
+  if (urlRoom) {
+    try { localStorage.setItem('sld_sync_room', currentRoom); } catch (_) {}
+  }
+
+  // خوادم البث السحابي المعتمدة فائقة السرعة وغير المحجوبة في مصر
+  var PRIMARY_CLOUD_HOST = 'https://ntfy.envs.net';
+  var BACKUP_CLOUD_HOST = 'https://ntfy.actiu.info';
+  var activeCloudHost = PRIMARY_CLOUD_HOST;
 
   var deviceId = sessionStorage.getItem('sld_device_id');
   if (!deviceId) {
@@ -103,11 +113,11 @@
         }
       }).catch(function (_) {});
 
-      // د) بث سحابي عبر ntfy.sh للأجهزة البعيدة عبر الإنترنت مع مهلة لحماية الاتصال
+      // د) بث سحابي سريع وغير محجوب للأجهزة البعيدة عبر الإنترنت
       try {
-        var targetUrl = 'https://ntfy.sh/' + encodeURIComponent(currentRoom);
+        var targetUrl = activeCloudHost + '/' + encodeURIComponent(currentRoom);
         var controller = new AbortController();
-        var to = setTimeout(function () { controller.abort(); }, 3500);
+        var to = setTimeout(function () { controller.abort(); }, 4000);
 
         fetch(targetUrl, {
           method: 'POST',
@@ -123,7 +133,16 @@
             updateBadgeUI('broadcast');
             setTimeout(function () { updateBadgeUI('connected'); }, 800);
           }
-        }).catch(function (_) {});
+        }).catch(function (_) {
+          // محاولة احتياطية على الخادم البديل
+          if (activeCloudHost === PRIMARY_CLOUD_HOST) {
+            fetch(BACKUP_CLOUD_HOST + '/' + encodeURIComponent(currentRoom), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            }).catch(function () {});
+          }
+        });
       } catch (_) {}
 
     } catch (e) {
@@ -131,12 +150,14 @@
     }
   }
 
-  // استخراج وتفسير رسائل السحابة (سواء نصية أو مرفق لملفات كبيرة)
+  // استخراج وتفسير رسائل السحابة (سواء كائن مباشر أو نصية أو مرفق لملفات كبيرة)
   async function parseCloudMessage(eventData) {
     if (!eventData) return null;
     try {
       var ntfyMsg = (typeof eventData === 'string') ? JSON.parse(eventData) : eventData;
       if (!ntfyMsg) return null;
+
+      if (ntfyMsg.type) return ntfyMsg;
 
       if (ntfyMsg.attachment && ntfyMsg.attachment.url) {
         try {
@@ -147,7 +168,9 @@
 
       if (ntfyMsg.message) {
         try {
-          return JSON.parse(ntfyMsg.message);
+          var inner = JSON.parse(ntfyMsg.message);
+          if (inner && inner.type) return inner;
+          return inner;
         } catch (_) {
           return ntfyMsg.message;
         }
@@ -586,7 +609,7 @@
 
   async function pollStartupCloudState() {
     try {
-      var pollUrl = 'https://ntfy.sh/' + encodeURIComponent(currentRoom) + '/json?poll=1&since=all';
+      var pollUrl = activeCloudHost + '/' + encodeURIComponent(currentRoom) + '/json?poll=1&since=all';
       var res = await fetch(pollUrl);
       if (res.ok) {
         var text = await res.text();
@@ -599,7 +622,7 @@
           }
         }
         if (window.fitToScreen) {
-          setTimeout(window.fitToScreen, 200);
+          setTimeout(window.fitToScreen, 300);
         }
       }
     } catch (e) {
@@ -616,14 +639,14 @@
       sseClient = null;
     }
 
-    var sseUrl = 'https://ntfy.sh/' + encodeURIComponent(currentRoom) + '/sse';
+    var sseUrl = activeCloudHost + '/' + encodeURIComponent(currentRoom) + '/sse';
     console.log('⚡ فتح قناة المزامنة اللحظية السحابية:', sseUrl);
 
     try {
       sseClient = new EventSource(sseUrl);
 
       sseClient.onopen = function () {
-        console.log('✅ تم الاتصال بقناة المزامنة السحابية اللحظية بنجاح [Room: ' + currentRoom + ']');
+        console.log('✅ تم الاتصال بقناة المزامنة السحابية اللحظية بنجاح [Host: ' + activeCloudHost + ' | Room: ' + currentRoom + ']');
         updateBadgeUI('connected');
       };
 
@@ -641,15 +664,42 @@
           try { sseClient.close(); } catch (_) {}
           sseClient = null;
         }
+        // التبديل التلقائي بين السيرفرين في حال حدوث مشكلة شبكة
+        activeCloudHost = (activeCloudHost === PRIMARY_CLOUD_HOST) ? BACKUP_CLOUD_HOST : PRIMARY_CLOUD_HOST;
         clearTimeout(reconnectTimer);
-        reconnectTimer = setTimeout(connectCloudSSE, 4000);
+        reconnectTimer = setTimeout(connectCloudSSE, 3500);
       };
     } catch (err) {
       console.error('Failed to connect SSE:', err);
       updateBadgeUI('offline');
       clearTimeout(reconnectTimer);
-      reconnectTimer = setTimeout(connectCloudSSE, 5000);
+      reconnectTimer = setTimeout(connectCloudSSE, 4000);
     }
+  }
+
+  // فحص سحابي سريع كل 5 ثوانٍ لضمان استلام كافة التعديلات حتى لو توقف SSE في بعض المتصفحات
+  async function pollRecentCloudUpdates() {
+    try {
+      if (isApplyingRemote) return;
+      var pollUrl = activeCloudHost + '/' + encodeURIComponent(currentRoom) + '/json?poll=1&since=15s';
+      var controller = new AbortController();
+      var to = setTimeout(function () { controller.abort(); }, 3000);
+      var res = await fetch(pollUrl, { signal: controller.signal });
+      clearTimeout(to);
+      if (res.ok) {
+        var text = await res.text();
+        if (text && text.trim()) {
+          var lines = text.trim().split(String.fromCharCode(10));
+          for (var i = 0; i < lines.length; i++) {
+            if (!lines[i].trim()) continue;
+            var parsed = await parseCloudMessage(lines[i]);
+            if (parsed && parsed.type && parsed.senderId !== deviceId) {
+              await handleIncomingCloudPayload(parsed);
+            }
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   // ─── 8. وظائف البث المحلية الموجهة للأجهزة الأخرى ─────────────────────────────
@@ -999,6 +1049,56 @@
     }
   }
 
+  // ─── مشاركة ونسخ رابط البث المباشر الفوري للرسم والمراجعة ──────────────────────
+  function copyLiveStreamLink() {
+    var shareUrl = window.location.origin + window.location.pathname + '?room=' + encodeURIComponent(currentRoom) + '&live=1';
+    
+    // إرسال وبث الرسم الحالي بالكامل للسحابة أولاً ليكون جاهزاً ومخزناً لمن يفتح الرابط
+    forceBroadcastProject();
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(shareUrl).then(function () {
+        showSyncToast('🔗 تم نسخ رابط البث المباشر! أرسله للمهندس المراجع ليفتح الرابط ويرى الرسم كاملاً ويتابع معك لحظياً.', 'success');
+      }).catch(function () {
+        promptShareLink(shareUrl);
+      });
+    } else {
+      promptShareLink(shareUrl);
+    }
+  }
+
+  function promptShareLink(url) {
+    var modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.zIndex = '999999';
+    modal.innerHTML = 
+      '<div class="modal-dialog" style="max-width: 500px;">' +
+        '<div class="modal-header">' +
+          '<h3>🔗 رابط البث المباشر للمراجعة</h3>' +
+          '<button class="btn-close" onclick="this.closest(\'.modal-overlay\').remove()">✕</button>' +
+        '</div>' +
+        '<div class="modal-body" style="padding: 16px;">' +
+          '<p style="color: #cbd5e1; font-size: 13px; margin-bottom: 8px;">انسخ هذا الرابط وأرسله لأي مهندس ليفتح المخطط ويتابع معك لحظياً أثناء الرسم:</p>' +
+          '<input type="text" id="txt-share-link" value="' + url + '" style="width: 100%; background: #0f172a; color: #38bdf8; font-family: monospace; font-size: 12px; padding: 10px; border-radius: 6px; border: 1px solid #334155;" readonly>' +
+          '<button type="button" class="btn btn-primary" onclick="var t=document.getElementById(\'txt-share-link\'); t.select(); document.execCommand(\'copy\'); alert(\'تم نسخ رابط البث المباشر!\'); this.closest(\'.modal-overlay\').remove();" style="width: 100%; margin-top: 12px; font-weight: bold; background: linear-gradient(135deg, #2563eb, #1d4ed8); border: none; padding: 10px; border-radius: 6px; color: #fff; cursor: pointer;">📋 نسخ الرابط إلى الحافظة</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    modal.style.display = 'flex';
+  }
+
+  function autoLoginViewerIfLiveUrl() {
+    if (urlRoom || urlParams.has('live') || urlParams.has('view')) {
+      if (!sessionStorage.getItem('sld_user')) {
+        setTimeout(function () {
+          if (window.quickViewerLogin) {
+            window.quickViewerLogin();
+          }
+        }, 300);
+      }
+    }
+  }
+
   // دالة طلب مطابقة الرسم قسرياً واستدعاء البيانات واستكمال النواقص من كافة الأجهزة والخادم
   async function reconcileAndSyncAllDevices() {
     showSyncToast('⏳ جاري فحص ومطابقة الرسم واستكمال أي أجزاء ناقصة بين كافة الأجهزة...', 'info');
@@ -1131,9 +1231,13 @@
   window.copyDrawingCodeToClipboard = copyDrawingCodeToClipboard;
   window.pasteDrawingCodeFromClipboard = pasteDrawingCodeFromClipboard;
   window.executePasteDrawingImport = executePasteDrawingImport;
+  window.copyLiveStreamLink = copyLiveStreamLink;
 
   // ─── 13. تهيئة الاتصال والمزامنة عند تحميل الصفحة ─────────────────────────────
   function startSyncEngine() {
+    // 0. تسجيل دخول فوري كمعاين ومراجع إذا تم فتح رابط البث المباشر
+    autoLoginViewerIfLiveUrl();
+
     // 1. مزامنة فورية مع الخادم المحلي (إن وُجد) لجلب المخطط والمستخدمين
     fetchServerState();
 
@@ -1143,15 +1247,18 @@
     // 3. حلقة المطابقة الذاتية التلقائية في الخلفية كل 2.5 ثانية (حل جذري بدون الحاجة لأزرار)
     setInterval(continuousBackgroundReconciliation, 2500);
 
-    // 4. ربط القناة السحابية ntfy.sh (للأجهزة البعيدة عبر الإنترنت)
+    // 4. ربط القناة السحابية فائقة السرعة (للأجهزة البعيدة عبر الإنترنت)
     connectCloudSSE();
     pollStartupCloudState();
+
+    // 5. فحص سحابي سريع كل 5 ثوانٍ لحماية البث وضمان وصول التعديلات بدون أي انقطاع
+    setInterval(pollRecentCloudUpdates, 5000);
 
     setInterval(function () {
       if (!sseClient || sseClient.readyState === 2) {
         connectCloudSSE();
       }
-    }, 50000);
+    }, 30000);
   }
 
   if (document.readyState === 'loading') {

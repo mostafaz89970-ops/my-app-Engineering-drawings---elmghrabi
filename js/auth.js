@@ -893,6 +893,44 @@ function openDeveloperLoginFromMaintenance() {
   }
 }
 
+function quickViewerLogin() {
+  const viewerUser = {
+    id: "viewer_" + Math.random().toString(36).substr(2, 6),
+    name: "مهندس مراجع (معاينة حية)",
+    role: "مراجع هندسي",
+    permissions: ["all"],
+    sector: "المنيا شمال",
+    administration: "بني مزار شرق"
+  };
+  currentUser = viewerUser;
+  window.currentUser = viewerUser;
+  sessionToken = "viewer_token_" + Date.now();
+  sessionStorage.setItem("sld_user", JSON.stringify(viewerUser));
+  sessionStorage.setItem("sld_token", sessionToken);
+
+  const loginModal = document.getElementById("login-modal");
+  if (loginModal) {
+    loginModal.classList.add("hidden");
+    loginModal.style.display = "none";
+  }
+  const appShell = document.getElementById("app-shell");
+  if (appShell) {
+    appShell.classList.remove("hidden");
+    appShell.style.display = "flex";
+  }
+
+  updateUserInfoUI();
+  applyUserPermissions();
+
+  if (window.initCanvas) {
+    try { window.initCanvas(); } catch(e) {}
+  }
+
+  if (window.reconcileAndSyncAllDevices) {
+    setTimeout(window.reconcileAndSyncAllDevices, 300);
+  }
+}
+
 window.hasPermission = hasPermission;
 window.applyUserPermissions = applyUserPermissions;
 window.updateDesignerName = updateDesignerName;
@@ -909,4 +947,5 @@ window.updateMaintenanceBtnUI = updateMaintenanceBtnUI;
 window.checkMaintenanceState = checkMaintenanceState;
 window.toggleMaintenanceMode = toggleMaintenanceMode;
 window.openDeveloperLoginFromMaintenance = openDeveloperLoginFromMaintenance;
+window.quickViewerLogin = quickViewerLogin;
 
