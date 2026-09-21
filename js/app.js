@@ -5496,5 +5496,356 @@ function applySyncedCatalog(catalog) {
 window.applySyncedProject = applySyncedProject;
 window.applySyncedCatalog = applySyncedCatalog;
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🔍 محرك البحث الفوري عن العقد والمعدات وتوسيطها في الرسم (Node Search Engine)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let nodeSearchResults = [];
+let nodeSearchCurrentIndex = -1;
+
+function normalizeArabicSearch(text) {
+  if (!text) return "";
+  return String(text)
+    .toLowerCase()
+    .trim()
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
+    .replace(/[\u064B-\u065F]/g, "");
+}
+
+function getNodeTypeArabicLabel(node) {
+  if (!node) return "عقدة";
+  switch (node.type) {
+    case "substation":
+      return (node.subType === "board" || (node.name && node.name.includes("لوحة"))) ? "لوحة توزيع" : "محطة محولات";
+    case "switch":
+      return `سكينة هوائية (${node.state === "open" ? "🔴 مفتوحة" : "🟢 مغلقة"})`;
+    case "transformer":
+      return `محول معلق (${node.rating || 300} ك.ف.أ)`;
+    case "kiosk":
+      return `كشك محولات (${node.rating || 500} ك.ف.أ)`;
+    case "rmu":
+      return "وحدة ربط RMU";
+    case "avr":
+      return "منظم جهد AVR";
+    default:
+      return "نقطة تفرع";
+  }
+}
+
+function getNodeIcon(node) {
+  if (!node) return "⭕";
+  switch (node.type) {
+    case "substation": return "🏭";
+    case "switch": return "⚡";
+    case "transformer": return "⚙️";
+    case "kiosk": return "🔺";
+    case "rmu": return "🔄";
+    case "avr": return "🔋";
+    default: return "⭕";
+  }
+}
+
+function handleNodeSearchInput(query) {
+  const clearBtn = document.getElementById("btn-node-search-clear");
+  const prevBtn = document.getElementById("btn-node-search-prev");
+  const nextBtn = document.getElementById("btn-node-search-next");
+  const counter = document.getElementById("node-search-counter");
+  const dropdown = document.getElementById("node-search-dropdown");
+
+  const cleanQ = normalizeArabicSearch(query);
+
+  if (!cleanQ) {
+    if (clearBtn) clearBtn.style.display = "none";
+    if (prevBtn) prevBtn.style.display = "none";
+    if (nextBtn) nextBtn.style.display = "none";
+    if (counter) counter.style.display = "none";
+    if (dropdown) dropdown.classList.add("hidden");
+    nodeSearchResults = [];
+    nodeSearchCurrentIndex = -1;
+    document.querySelectorAll(".sld-search-highlight").forEach(el => el.classList.remove("sld-search-highlight"));
+    return;
+  }
+
+  if (clearBtn) clearBtn.style.display = "inline-block";
+
+  const proj = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject || currentProject;
+  if (!proj || !proj.nodes || proj.nodes.length === 0) {
+    if (counter) {
+      counter.textContent = "0/0";
+      counter.style.display = "inline-block";
+    }
+    if (dropdown) {
+      dropdown.innerHTML = `<div class="node-search-empty">⚠️ لا توجد عقد في هذا المشروع</div>`;
+      dropdown.classList.remove("hidden");
+    }
+    return;
+  }
+
+  // تصفية وترتيب العقد بحسب التطابق
+  const matches = [];
+
+  proj.nodes.forEach(node => {
+    const idNorm = normalizeArabicSearch(node.id);
+    const nameNorm = normalizeArabicSearch(node.name || "");
+    const typeNorm = normalizeArabicSearch(node.type || "");
+    const ratingStr = node.rating ? String(node.rating) : "";
+
+    let score = 0;
+
+    // 1. تطابق تام للـ ID (مثل N14 أو 14)
+    if (idNorm === cleanQ || idNorm.replace("n", "") === cleanQ.replace("n", "")) {
+      score = 1000;
+    } else if (idNorm.startsWith(cleanQ) || idNorm.replace("n", "").startsWith(cleanQ)) {
+      score = 800;
+    } else if (nameNorm.startsWith(cleanQ)) {
+      score = 700;
+    } else if (idNorm.includes(cleanQ)) {
+      score = 600;
+    } else if (nameNorm.includes(cleanQ)) {
+      score = 500;
+    } else if (typeNorm.includes(cleanQ)) {
+      score = 400;
+    } else if (cleanQ === "كشك" && node.type === "kiosk") {
+      score = 450;
+    } else if (cleanQ.includes("محول") && (node.type === "transformer" || node.type === "kiosk")) {
+      score = 450;
+    } else if (cleanQ.includes("سكين") && node.type === "switch") {
+      score = 450;
+    } else if ((cleanQ.includes("محط") || cleanQ.includes("لوح")) && node.type === "substation") {
+      score = 450;
+    } else if (cleanQ.includes("ربط") && node.type === "rmu") {
+      score = 450;
+    } else if (cleanQ.includes("منظم") && node.type === "avr") {
+      score = 450;
+    } else if (ratingStr && ratingStr.includes(cleanQ)) {
+      score = 300;
+    }
+
+    if (score > 0) {
+      matches.push({ node, score });
+    }
+  });
+
+  matches.sort((a, b) => b.score - a.score);
+  nodeSearchResults = matches.map(m => m.node);
+
+  if (nodeSearchResults.length === 0) {
+    nodeSearchCurrentIndex = -1;
+    if (counter) {
+      counter.textContent = "0/0";
+      counter.style.display = "inline-block";
+    }
+    if (prevBtn) prevBtn.style.display = "none";
+    if (nextBtn) nextBtn.style.display = "none";
+    if (dropdown) {
+      dropdown.innerHTML = `<div class="node-search-empty">🔍 لا توجد عقدة تطابق "${query}"</div>`;
+      dropdown.classList.remove("hidden");
+    }
+    document.querySelectorAll(".sld-search-highlight").forEach(el => el.classList.remove("sld-search-highlight"));
+    return;
+  }
+
+  nodeSearchCurrentIndex = 0;
+  if (counter) {
+    counter.textContent = `${nodeSearchCurrentIndex + 1}/${nodeSearchResults.length}`;
+    counter.style.display = "inline-block";
+  }
+  if (prevBtn) prevBtn.style.display = "inline-flex";
+  if (nextBtn) nextBtn.style.display = "inline-flex";
+
+  renderNodeSearchDropdown();
+
+  // توسيط وتحديد أول نتيجة فوراً
+  const targetNode = nodeSearchResults[0];
+  if (window.centerOnNode) {
+    window.centerOnNode(targetNode.id, true);
+  }
+}
+
+function renderNodeSearchDropdown() {
+  const dropdown = document.getElementById("node-search-dropdown");
+  if (!dropdown) return;
+
+  if (nodeSearchResults.length === 0) {
+    dropdown.classList.add("hidden");
+    return;
+  }
+
+  let html = "";
+  const displayLimit = Math.min(nodeSearchResults.length, 30);
+
+  for (let i = 0; i < displayLimit; i++) {
+    const node = nodeSearchResults[i];
+    const icon = getNodeIcon(node);
+    const typeLabel = getNodeTypeArabicLabel(node);
+    const activeClass = (i === nodeSearchCurrentIndex) ? "active" : "";
+
+    html += `
+      <div class="node-search-item ${activeClass}" onclick="selectSearchedNode('${node.id}', ${i})">
+        <div class="node-search-item-info">
+          <span class="node-search-item-icon">${icon}</span>
+          <span class="node-search-item-id">[${node.id}]</span>
+          <span class="node-search-item-name" title="${node.name || ''}">${node.name || typeLabel}</span>
+        </div>
+        <span class="node-search-item-type">${typeLabel}</span>
+      </div>
+    `;
+  }
+
+  if (nodeSearchResults.length > displayLimit) {
+    html += `<div style="padding:6px 12px; font-size:10.5px; color:#64748b; text-align:center;">... والمزيد (${nodeSearchResults.length - displayLimit} عقدة إضافية)</div>`;
+  }
+
+  dropdown.innerHTML = html;
+  dropdown.classList.remove("hidden");
+}
+
+function selectSearchedNode(nodeId, index = -1) {
+  if (index >= 0) {
+    nodeSearchCurrentIndex = index;
+  } else {
+    nodeSearchCurrentIndex = nodeSearchResults.findIndex(n => n.id === nodeId);
+  }
+
+  const counter = document.getElementById("node-search-counter");
+  if (counter && nodeSearchResults.length > 0 && nodeSearchCurrentIndex >= 0) {
+    counter.textContent = `${nodeSearchCurrentIndex + 1}/${nodeSearchResults.length}`;
+  }
+
+  if (window.centerOnNode) {
+    window.centerOnNode(nodeId, true);
+  }
+
+  const dropdown = document.getElementById("node-search-dropdown");
+  if (dropdown) dropdown.classList.add("hidden");
+
+  // تحديث حالة العنصر النشط في القائمة
+  document.querySelectorAll(".node-search-item").forEach((el, idx) => {
+    if (idx === nodeSearchCurrentIndex) el.classList.add("active");
+    else el.classList.remove("active");
+  });
+}
+
+function navigateNodeSearch(direction) {
+  if (nodeSearchResults.length === 0) return;
+
+  nodeSearchCurrentIndex += direction;
+  if (nodeSearchCurrentIndex >= nodeSearchResults.length) {
+    nodeSearchCurrentIndex = 0;
+  } else if (nodeSearchCurrentIndex < 0) {
+    nodeSearchCurrentIndex = nodeSearchResults.length - 1;
+  }
+
+  const counter = document.getElementById("node-search-counter");
+  if (counter) {
+    counter.textContent = `${nodeSearchCurrentIndex + 1}/${nodeSearchResults.length}`;
+  }
+
+  const targetNode = nodeSearchResults[nodeSearchCurrentIndex];
+  if (targetNode && window.centerOnNode) {
+    window.centerOnNode(targetNode.id, true);
+  }
+
+  renderNodeSearchDropdown();
+
+  // تمرير القائمة المنسدلة إلى العنصر النشط
+  const dropdown = document.getElementById("node-search-dropdown");
+  const activeEl = dropdown?.querySelector(".node-search-item.active");
+  if (activeEl) {
+    activeEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+}
+
+function clearNodeSearch() {
+  const input = document.getElementById("node-search-input");
+  const clearBtn = document.getElementById("btn-node-search-clear");
+  const prevBtn = document.getElementById("btn-node-search-prev");
+  const nextBtn = document.getElementById("btn-node-search-next");
+  const counter = document.getElementById("node-search-counter");
+  const dropdown = document.getElementById("node-search-dropdown");
+
+  if (input) input.value = "";
+  if (clearBtn) clearBtn.style.display = "none";
+  if (prevBtn) prevBtn.style.display = "none";
+  if (nextBtn) nextBtn.style.display = "none";
+  if (counter) counter.style.display = "none";
+  if (dropdown) dropdown.classList.add("hidden");
+
+  nodeSearchResults = [];
+  nodeSearchCurrentIndex = -1;
+
+  document.querySelectorAll(".sld-search-highlight").forEach(el => el.classList.remove("sld-search-highlight"));
+}
+
+function focusNodeSearch() {
+  const input = document.getElementById("node-search-input");
+  if (input) {
+    input.focus();
+    input.select();
+    if (input.value.trim() && nodeSearchResults.length > 0) {
+      renderNodeSearchDropdown();
+    }
+  }
+}
+
+function handleNodeSearchFocus() {
+  const input = document.getElementById("node-search-input");
+  if (input && input.value.trim() && nodeSearchResults.length > 0) {
+    renderNodeSearchDropdown();
+  }
+}
+
+function handleNodeSearchKeydown(e) {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (e.shiftKey) {
+      navigateNodeSearch(-1);
+    } else {
+      navigateNodeSearch(1);
+    }
+  } else if (e.key === "Escape") {
+    const dropdown = document.getElementById("node-search-dropdown");
+    if (dropdown) dropdown.classList.add("hidden");
+    document.getElementById("node-search-input")?.blur();
+  } else if (e.key === "ArrowDown") {
+    e.preventDefault();
+    navigateNodeSearch(1);
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    navigateNodeSearch(-1);
+  }
+}
+
+// اختصار لوحة المفاتيح الفوري: Ctrl+F أو Ctrl+K لفتح البحث عن نود
+window.addEventListener("keydown", function(e) {
+  if ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F" || e.key === "k" || e.key === "K")) {
+    const activeModal = document.querySelector(".modal:not(.hidden), .settings-overlay:not(.hidden)");
+    if (!activeModal) {
+      e.preventDefault();
+      focusNodeSearch();
+    }
+  }
+});
+
+// إغلاق قائمة نتائج البحث عند النقر خارجها
+document.addEventListener("click", function(e) {
+  const capsule = document.getElementById("node-search-capsule");
+  const dropdown = document.getElementById("node-search-dropdown");
+  if (capsule && dropdown && !capsule.contains(e.target)) {
+    dropdown.classList.add("hidden");
+  }
+});
+
+window.handleNodeSearchInput = handleNodeSearchInput;
+window.handleNodeSearchKeydown = handleNodeSearchKeydown;
+window.handleNodeSearchFocus = handleNodeSearchFocus;
+window.navigateNodeSearch = navigateNodeSearch;
+window.clearNodeSearch = clearNodeSearch;
+window.focusNodeSearch = focusNodeSearch;
+window.selectSearchedNode = selectSearchedNode;
+
+
 
 

@@ -421,6 +421,185 @@ body {
   background-color: #2b384c;
 }
 
+/* ─── كبسولة البحث الفوري عن النود والمعدات (Node Search Capsule) ─── */
+.node-search-capsule {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background-color: #141b24;
+  border: 1px solid #0284c7;
+  border-radius: 6px;
+  height: 27px;
+  padding: 0 8px;
+  gap: 5px;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px rgba(14, 165, 233, 0.15);
+  transition: all 0.2s ease;
+}
+
+.node-search-capsule:focus-within {
+  border-color: #38bdf8;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+  background-color: #0f172a;
+}
+
+.node-search-icon {
+  font-size: 11.5px;
+  color: #38bdf8;
+  cursor: pointer;
+  user-select: none;
+}
+
+.node-search-input {
+  background: transparent;
+  border: none;
+  color: #f8fafc;
+  font-size: 11px;
+  font-weight: 600;
+  outline: none;
+  width: 170px;
+  padding: 0;
+  font-family: inherit;
+  transition: width 0.2s ease;
+}
+
+.node-search-input:focus {
+  width: 210px;
+}
+
+.node-search-input::placeholder {
+  color: #64748b;
+  font-size: 10.5px;
+}
+
+.node-search-counter {
+  font-size: 10px;
+  color: #38bdf8;
+  background: rgba(14, 165, 233, 0.15);
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  font-weight: bold;
+  font-family: monospace;
+}
+
+.btn-node-search-nav {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 9px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-node-search-nav:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #38bdf8;
+}
+
+.btn-node-search-clear {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0 3px;
+  line-height: 1;
+}
+
+.btn-node-search-clear:hover {
+  color: #f87171;
+}
+
+/* قائمة النتائج المقترحة الفورية المنسدلة */
+.node-search-dropdown {
+  position: absolute;
+  top: 32px;
+  right: 0;
+  width: 320px;
+  max-height: 380px;
+  overflow-y: auto;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 15px rgba(2, 132, 199, 0.25);
+  z-index: 3000;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.node-search-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.15s ease;
+  font-size: 12px;
+  color: #e2e8f0;
+}
+
+.node-search-item:last-child {
+  border-bottom: none;
+}
+
+.node-search-item:hover,
+.node-search-item.active {
+  background: rgba(14, 165, 233, 0.2);
+  color: #38bdf8;
+}
+
+.node-search-item-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.node-search-item-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.node-search-item-id {
+  font-family: monospace;
+  font-weight: bold;
+  color: #38bdf8;
+  background: rgba(14, 165, 233, 0.15);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.node-search-item-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.node-search-item-type {
+  font-size: 10.5px;
+  color: #94a3b8;
+  flex-shrink: 0;
+  margin-right: 6px;
+}
+
+.node-search-empty {
+  padding: 14px 16px;
+  text-align: center;
+  color: #64748b;
+  font-size: 12px;
+}
+
 /* أزرار إدارة المشاريع والنظام في الصف الأول مع الاحتواء التلقائي */
 .header-system-actions {
   display: flex;
