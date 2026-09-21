@@ -367,6 +367,27 @@
     }
 
     merged.sections = Array.from(secMap.values());
+
+    // 3. دمج كروت التنويهات والملاحظات الهندسية (Annotations)
+    var annoMap = new Map();
+    (localProj.annotations || []).forEach(function (a) {
+      if (a && a.id) annoMap.set(a.id, Object.assign({}, a));
+    });
+    (remoteProj.annotations || []).forEach(function (ra) {
+      if (!ra || !ra.id) return;
+      if (!annoMap.has(ra.id)) {
+        annoMap.set(ra.id, Object.assign({}, ra));
+      } else {
+        var la = annoMap.get(ra.id);
+        var rTs = ra.updated_at || ra.timestamp || 0;
+        var lTs = la.updated_at || la.timestamp || 0;
+        if (rTs >= lTs) {
+          annoMap.set(ra.id, Object.assign({}, la, ra));
+        }
+      }
+    });
+    merged.annotations = Array.from(annoMap.values());
+
     if (remoteProj.name && !localProj.name) {
       merged.name = remoteProj.name;
     }
@@ -603,12 +624,29 @@
         tap_side: s.tap_side
       };
     });
+    var cleanAnnos = (p.annotations || []).map(function (a) {
+      return {
+        id: a.id,
+        text: a.text,
+        badgeTitle: a.badgeTitle || '',
+        x: Math.round(a.x || 0),
+        y: Math.round(a.y || 0),
+        color: a.color || '#f59e0b',
+        bgColor: a.bgColor || 'rgba(15, 23, 42, 0.92)',
+        borderColor: a.borderColor || a.color || '#f59e0b',
+        textColor: a.textColor || '#ffffff',
+        borderStyle: a.borderStyle || 'solid',
+        fontSize: parseInt(a.fontSize, 10) || 13,
+        updated_at: a.updated_at || Date.now()
+      };
+    });
     return {
       id: p.id,
       name: p.name,
       voltage_kv: p.voltage_kv,
       nodes: cleanNodes,
       sections: cleanSecs,
+      annotations: cleanAnnos,
       deleted_node_ids: p.deleted_node_ids || [],
       deleted_sec_ids: p.deleted_sec_ids || []
     };
