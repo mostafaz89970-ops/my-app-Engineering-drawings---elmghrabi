@@ -17,7 +17,13 @@
     try { localStorage.setItem('sld_sync_room', currentRoom); } catch (_) {}
   }
 
-  // خوادم البث السحابي المعتمدة فائقة السرعة وغير المحجوبة في مصر
+  // قاعدة بيانات وسحابة Firebase Realtime Database المعتمدة لحفظ ومزامنة المخططات لحظياً
+  var FIREBASE_RTDB_URL = 'https://elmghrabyelectric-default-rtdb.firebaseio.com/sld_studio';
+  var lastFirebaseTimestamp = 0;
+  var firebaseEventSource = null;
+  var isFirebaseConnected = false;
+
+  // خوادم البث السحابي الاحتياطية
   var PRIMARY_CLOUD_HOST = 'https://ntfy.envs.net';
   var BACKUP_CLOUD_HOST = 'https://ntfy.actiu.info';
   var activeCloudHost = PRIMARY_CLOUD_HOST;
@@ -100,7 +106,41 @@
         localStorage.setItem('sld_sync_bus', JSON.stringify({ payload: payload, r: Math.random(), t: Date.now() }));
       } catch (_) {}
 
-      // ج) بث فوري إلى خادم المنظومة المحلي لكافة الأجهزة المتصلة على الشبكة (LAN)
+      // جـ1) بث فوري لسحابة Firebase Realtime Database (حفظ سحابي دائم 100% ومزامنة فورية لكافة الأجهزة)
+      try {
+        fetch(FIREBASE_RTDB_URL + '/live_event.json', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }).then(function (res) {
+          if (res.ok) {
+            updateBadgeUI('broadcast');
+            setTimeout(function () { updateBadgeUI('connected'); }, 800);
+          }
+        }).catch(function () {});
+
+        if (type === 'USERS_UPDATE' && Array.isArray(data.users)) {
+          fetch(FIREBASE_RTDB_URL + '/users.json', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data.users)
+          }).catch(function () {});
+        } else if (type === 'MAINTENANCE_UPDATE') {
+          fetch(FIREBASE_RTDB_URL + '/maintenance.json', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(!!data.isActive)
+          }).catch(function () {});
+        } else if (type === 'PROJECT_DELETED' && data.catalog) {
+          fetch(FIREBASE_RTDB_URL + '/catalog.json', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data.catalog)
+          }).catch(function () {});
+        }
+      } catch (_) {}
+
+      // جـ2) بث فوري إلى خادم المنظومة المحلي لكافة الأجهزة المتصلة على الشبكة (LAN)
       fetch('/api/sync/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -610,6 +650,233 @@
     }
   }
 
+  // ─── 7. التكامل الشامل مع سحابة Firebase Realtime Database ───────────────────────
+  // حفظ ومزامنة المخططات الهندسية سحابياً بحجم كامل دون أي اقتطاع أو قيود، مع دعم SSE اللحظي
+  async function syncProjectDirectToFirebase(proj, reason, authorName) {
+    if (!proj || !proj.nodes || proj.nodes.length === 0) return;
+    try {
+      var author = authorName || (window.currentUser && window.currentUser.name) || 'م. مصطفى المغربي';
+      var cleanProj = compactProjectForCloud(proj);
+      var meta = {
+        senderId: deviceId,
+        author: author,
+        timestamp: Date.now(),
+        nodesCount: cleanProj.nodes.length,
+        sectionsCount: cleanProj.sections.length,
+        projectName: cleanProj.name || 'خط المعصرة',
+        reason: reason || 'drawing_sync'
+      };
+
+      lastFirebaseTimestamp = meta.timestamp;
+
+      // 1. حفظ المخطط بالكامل في قاعدة بيانات Firebase Realtime
+      fetch(FIREBASE_RTDB_URL + '/project.json', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cleanProj)
+      }).catch(function () {});
+
+      // 2. تحديث بيانات الميتا لإشعار كافة المتصفحات والأجهزة
+      fetch(FIREBASE_RTDB_URL + '/meta.json', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(meta)
+      }).catch(function () {});
+
+      // 3. إرسال حدث مباشر عبر قناة live_event لمستمعي SSE
+      var livePayload = {
+        type: 'DRAWING_UPDATE',
+        senderId: deviceId,
+        author: author,
+        timestamp: meta.timestamp,
+        reason: reason || 'direct_firebase_push',
+        data: { project: cleanProj }
+      };
+      fetch(FIREBASE_RTDB_URL + '/live_event.json', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(livePayload)
+      }).catch(function () {});
+
+      console.log('☁️ تم إرسال المخطط إلى سحابة Firebase بنجاح (' + cleanProj.nodes.length + ' عقدة)');
+      updateBadgeUI('connected');
+    } catch (e) {
+      console.warn('Firebase direct push error:', e);
+    }
+  }
+
+  // استدعاء وفحص حالة سحابة Firebase فور فتح الصفحة
+  async function fetchFirebaseStartup() {
+    try {
+      var metaRes = await fetch(FIREBASE_RTDB_URL + '/meta.json');
+      var remoteMeta = metaRes.ok ? await metaRes.json() : null;
+
+      var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+      if (!curLocal || !curLocal.nodes || curLocal.nodes.length === 0) {
+        try { curLocal = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
+      }
+      var localNodesCount = (curLocal && Array.isArray(curLocal.nodes)) ? curLocal.nodes.length : 0;
+      var remoteNodesCount = (remoteMeta && remoteMeta.nodesCount) ? remoteMeta.nodesCount : 0;
+
+      console.log('☁️ فحص سحابة Firebase: محلي (' + localNodesCount + ' عقدة) | سحابي (' + remoteNodesCount + ' عقدة)');
+
+      // إذا كان الجهاز الحالي يمتلك عقداً أكثر أو مساوية للسحابة (مثل جوجل كروم 64 عقدة، وفايربيس خالية أو أقل)
+      if (localNodesCount > 0 && localNodesCount >= remoteNodesCount) {
+        console.log('☁️ رفع المخطط المحلي الأكبر (' + localNodesCount + ' عقدة) إلى سحابة Firebase لتستلمه باقي الأجهزة...');
+        await syncProjectDirectToFirebase(curLocal, 'auto_startup_push');
+      } else if (remoteNodesCount > 0) {
+        // إذا كانت السحابة تمتلك عناصر أكثر (مثلاً فايرفوكس به 19 والسحابة بها 64):
+        console.log('☁️ استلام المخطط الكامل (' + remoteNodesCount + ' عقدة) من سحابة Firebase...');
+        var projRes = await fetch(FIREBASE_RTDB_URL + '/project.json');
+        if (projRes.ok) {
+          var remoteProj = await projRes.json();
+          if (remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
+            var mRes = smartMergeProjects(curLocal, remoteProj);
+            var finalProj = mRes.merged;
+
+            isApplyingRemote = true;
+            if (window.setCurrentProject) window.setCurrentProject(finalProj);
+            else window.currentProject = finalProj;
+
+            try { localStorage.setItem('sld_saved_feeder', JSON.stringify(finalProj)); } catch (_) {}
+
+            if (window.updateFeederInputs) window.updateFeederInputs();
+            if (window.renderNetwork) window.renderNetwork();
+            if (window.fitToScreen) setTimeout(window.fitToScreen, 300);
+
+            showSyncToast('☁️ تم استلام ومزامنة الرسم كاملاً من سحابة Firebase (' + finalProj.nodes.length + ' عقدة و ' + (finalProj.sections || []).length + ' مقطع)', 'success');
+            setTimeout(function () { isApplyingRemote = false; }, 800);
+          }
+        }
+      }
+
+      // جلب المشاريع والمستخدمين والصيانة
+      fetch(FIREBASE_RTDB_URL + '/catalog.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (cat) {
+        if (Array.isArray(cat) && cat.length > 0 && window.applySyncedCatalog) window.applySyncedCatalog(cat);
+      }).catch(function () {});
+
+      fetch(FIREBASE_RTDB_URL + '/users.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (u) {
+        if (Array.isArray(u) && u.length > 0 && window.applySyncedUsers) window.applySyncedUsers(u);
+      }).catch(function () {});
+
+      fetch(FIREBASE_RTDB_URL + '/maintenance.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (m) {
+        if (typeof m === 'boolean') {
+          localStorage.setItem('sld_maintenance_mode', m ? 'true' : 'false');
+          if (window.checkMaintenanceState) window.checkMaintenanceState();
+        }
+      }).catch(function () {});
+
+      updateBadgeUI('connected');
+    } catch (e) {
+      console.warn('Firebase startup sync warning:', e);
+    }
+  }
+
+  // ربط قناة البث اللحظي السحابي عبر Firebase Realtime SSE
+  function connectFirebaseSSE() {
+    if (firebaseEventSource) {
+      try { firebaseEventSource.close(); } catch (_) {}
+      firebaseEventSource = null;
+    }
+
+    try {
+      firebaseEventSource = new EventSource(FIREBASE_RTDB_URL + '/live_event.json');
+
+      firebaseEventSource.onopen = function () {
+        console.log('✅ تم الاتصال بقناة Firebase Realtime Database SSE بنجاح');
+        isFirebaseConnected = true;
+        updateBadgeUI('connected');
+      };
+
+      function handleFirebaseSSEEvent(raw) {
+        if (!raw) return;
+        try {
+          var parsed = JSON.parse(raw);
+          var payload = (parsed && parsed.data !== undefined) ? parsed.data : parsed;
+          if (payload && payload.type && payload.senderId !== deviceId) {
+            handleIncomingCloudPayload(payload);
+          }
+        } catch (_) {}
+      }
+
+      firebaseEventSource.addEventListener('put', function (e) {
+        if (e && e.data) handleFirebaseSSEEvent(e.data);
+      });
+
+      firebaseEventSource.addEventListener('patch', function (e) {
+        if (e && e.data) handleFirebaseSSEEvent(e.data);
+      });
+
+      firebaseEventSource.onmessage = function (e) {
+        if (e && e.data) handleFirebaseSSEEvent(e.data);
+      };
+
+      firebaseEventSource.onerror = function () {
+        isFirebaseConnected = false;
+        if (firebaseEventSource) {
+          try { firebaseEventSource.close(); } catch (_) {}
+          firebaseEventSource = null;
+        }
+        setTimeout(connectFirebaseSSE, 5000);
+      };
+    } catch (err) {
+      console.warn('Error connecting Firebase SSE:', err);
+      setTimeout(connectFirebaseSSE, 6000);
+    }
+  }
+
+  // فحص نبض سحابة Firebase كل 3.5 ثانية لجلب أي تحديثات فورية
+  async function pollFirebaseHeartbeat() {
+    try {
+      if (isApplyingRemote) return;
+      var res = await fetch(FIREBASE_RTDB_URL + '/meta.json');
+      if (!res.ok) return;
+      var meta = await res.json();
+      if (!meta || !meta.timestamp) return;
+
+      if (meta.timestamp > lastFirebaseTimestamp && meta.senderId !== deviceId) {
+        lastFirebaseTimestamp = meta.timestamp;
+        console.log('⚡ تحديث سحابي جديد على Firebase من:', meta.author, 'عدد العقد:', meta.nodesCount);
+
+        var projRes = await fetch(FIREBASE_RTDB_URL + '/project.json');
+        if (projRes.ok) {
+          var remoteProj = await projRes.json();
+          if (remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
+            var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+            if (!curLocal || !curLocal.nodes) {
+              try { curLocal = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
+            }
+            var mRes = smartMergeProjects(curLocal, remoteProj);
+            var finalProj = mRes.merged;
+
+            var projStr = JSON.stringify(finalProj);
+            var hash = fastHash(projStr);
+            if (hash === lastBroadcastHash) return;
+            lastBroadcastHash = hash;
+
+            isApplyingRemote = true;
+            if (window.setCurrentProject) window.setCurrentProject(finalProj);
+            else window.currentProject = finalProj;
+            try { localStorage.setItem('sld_saved_feeder', projStr); } catch (_) {}
+
+            if (window.updateFeederInputs) window.updateFeederInputs();
+            if (window.renderNetwork) window.renderNetwork();
+            if (window.fitToScreen) setTimeout(window.fitToScreen, 200);
+
+            showSyncToast('☁️ سحابة Firebase: تم استلام وتحديث الرسم لحظياً من ' + (meta.author || 'مهندس آخر'), 'success');
+            updateBadgeUI('connected');
+            setTimeout(function () {
+              isApplyingRemote = false;
+              if (mRes.localHadExtra) {
+                syncProjectDirectToFirebase(finalProj, 'auto_reconcile_parity');
+              }
+            }, 800);
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   async function pollStartupCloudState() {
     try {
       var pollUrl = activeCloudHost + '/' + encodeURIComponent(currentRoom) + '/json?poll=1&since=all';
@@ -720,6 +987,9 @@
         if (hash === lastBroadcastHash) return;
         lastBroadcastHash = hash;
 
+        // إرسال فوري ومباشر إلى سحابة Firebase Realtime Database
+        syncProjectDirectToFirebase(cleanProj, reason || 'drawing_edit');
+
         // إذا كان المخطط صغيراً (15 عقدة أو أقل) نبثه كدفعة واحدة
         if (cleanProj.nodes.length <= 15 && cleanProj.sections.length <= 15) {
           postCloudEvent('DRAWING_UPDATE', { project: cleanProj }, reason || 'drawing_edit');
@@ -753,6 +1023,14 @@
   function broadcastProjectSaved(project, catalog) {
     if (!project) return;
     var cleanProj = compactProjectForCloud(project);
+    syncProjectDirectToFirebase(cleanProj, 'project_saved');
+    if (catalog) {
+      fetch(FIREBASE_RTDB_URL + '/catalog.json', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(catalog)
+      }).catch(function () {});
+    }
     postCloudEvent('PROJECT_SAVED', { project: cleanProj, catalog: catalog }, 'project_saved');
   }
 
@@ -775,17 +1053,17 @@
     if (!badge) return;
 
     if (status === 'connected') {
-      badge.innerHTML = '<span class="sync-dot green"></span> <span>مزامنة سحابية لحظية ⚡</span>';
+      badge.innerHTML = '<span class="sync-dot green"></span> <span>☁️ سحابة Firebase متصلة ⚡</span>';
       badge.className = 'sync-status-badge badge-connected';
-      badge.title = 'النظام متصل سحابياً - كافة التعديلات تسمع لحظياً على كل الأجهزة';
+      badge.title = 'النظام متصل بسحابة Firebase اللحظية - كافة التعديلات تسمع فوراً على كل الأجهزة';
     } else if (status === 'syncing') {
-      badge.innerHTML = '<span class="sync-dot blue pulse"></span> <span>تحديث وارد من ' + (info || 'جهاز') + '...</span>';
+      badge.innerHTML = '<span class="sync-dot blue pulse"></span> <span>تحديث سحابي وارد من ' + (info || 'جهاز') + '...</span>';
       badge.className = 'sync-status-badge badge-syncing';
     } else if (status === 'broadcast') {
-      badge.innerHTML = '<span class="sync-dot purple"></span> <span>جاري البث للأجهزة... 📡</span>';
+      badge.innerHTML = '<span class="sync-dot purple"></span> <span>جاري البث لسحابة Firebase... 📡</span>';
       badge.className = 'sync-status-badge badge-broadcast';
     } else {
-      badge.innerHTML = '<span class="sync-dot red"></span> <span>جاري إعادة الاتصال بالسحابة...</span>';
+      badge.innerHTML = '<span class="sync-dot red"></span> <span>جاري الاتصال بسحابة Firebase...</span>';
       badge.className = 'sync-status-badge badge-offline';
     }
   }
@@ -821,6 +1099,18 @@
                 '<button class="btn btn-primary" onclick="window.changeSyncRoom()" style="white-space: nowrap;">حفظ وتغيير</button>' +
               '</div>' +
               '<small style="color: #94a3b8; display: block; margin-top: 4px;">للعمل في غرفة خاصة أو مغذي مستقل، أدخل اسماً موحداً بين أجهزتك.</small>' +
+            '</div>' +
+            '<div style="background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; border-radius: 8px; padding: 12px; margin-top: 14px;">' +
+              '<strong style="display:block; color: #fbbf24; font-size: 13px; margin-bottom: 6px;">☁️ سحابة Firebase المباشرة (elmghrabyelectric):</strong>' +
+              '<div style="display: flex; gap: 8px;">' +
+                '<button type="button" class="btn" onclick="window.pushDrawingToFirebase((window.getCurrentProject?window.getCurrentProject():window.currentProject),\'manual_button\'); window.showToast(\'☁️ تم رفع الرسم إلى سحابة Firebase بنجاح!\',\'success\');" style="flex: 1; padding: 9px; font-weight: bold; background: #d97706; border: none; color: #fff; border-radius: 6px; cursor: pointer;">' +
+                  '☁️ رفع الرسم للسحابة' +
+                '</button>' +
+                '<button type="button" class="btn" onclick="window.pullDrawingFromFirebase(); window.closeSyncModal();" style="flex: 1; padding: 9px; font-weight: bold; background: #059669; border: none; color: #fff; border-radius: 6px; cursor: pointer;">' +
+                  '📥 جلب الرسم من السحابة' +
+                '</button>' +
+              '</div>' +
+              '<small style="color: #cbd5e1; display: block; margin-top: 5px; font-size: 11px;">مربوطة مباشرة بسحابة Firebase التابعة للشركة لتضمن وصول الرسم لكل متصفح وجهاز.</small>' +
             '</div>' +
             '<div style="background: rgba(30, 58, 138, 0.2); border: 1px solid #3b82f6; border-radius: 8px; padding: 12px; margin-top: 14px;">' +
               '<strong style="display:block; color: #93c5fd; font-size: 13px; margin-bottom: 6px;">📋 جسر النقل الفوري المباشر (100% مضمون لأي متصفح):</strong>' +
@@ -1235,33 +1525,43 @@
   window.pasteDrawingCodeFromClipboard = pasteDrawingCodeFromClipboard;
   window.executePasteDrawingImport = executePasteDrawingImport;
   window.copyLiveStreamLink = copyLiveStreamLink;
+  window.pushDrawingToFirebase = syncProjectDirectToFirebase;
+  window.pullDrawingFromFirebase = fetchFirebaseStartup;
 
   // ─── 13. تهيئة الاتصال والمزامنة عند تحميل الصفحة ─────────────────────────────
   function startSyncEngine() {
     // 0. تسجيل دخول فوري كمعاين ومراجع إذا تم فتح رابط البث المباشر
     autoLoginViewerIfLiveUrl();
 
-    // 1. مزامنة فورية مع الخادم المحلي (إن وُجد) لجلب المخطط والمستخدمين
+    // 1. مزامنة فورية مع سحابة Firebase Realtime Database عند فتح الصفحة
+    fetchFirebaseStartup();
+    connectFirebaseSSE();
+    setInterval(pollFirebaseHeartbeat, 3500);
+
+    // 2. مزامنة فورية مع الخادم المحلي (إن وُجد) لجلب المخطط والمستخدمين
     fetchServerState();
 
-    // 2. فحص الخادم المحلي كل 750 ملي ثانية لضمان سرعة فائقة بين كافة المتصفحات والأجهزة
+    // 3. فحص الخادم المحلي كل 750 ملي ثانية لضمان سرعة فائقة بين كافة المتصفحات والأجهزة
     setInterval(pollLocalServerEvents, 750);
 
-    // 3. حلقة المطابقة الذاتية التلقائية في الخلفية كل 2.5 ثانية (حل جذري بدون الحاجة لأزرار)
+    // 4. حلقة المطابقة الذاتية التلقائية في الخلفية كل 2.5 ثانية (حل جذري بدون الحاجة لأزرار)
     setInterval(continuousBackgroundReconciliation, 2500);
 
-    // 4. ربط القناة السحابية فائقة السرعة (للأجهزة البعيدة عبر الإنترنت)
+    // 5. ربط القناة السحابية الاحتياطية
     connectCloudSSE();
     pollStartupCloudState();
 
-    // 5. فحص سحابي سريع كل 5 ثوانٍ لحماية البث وضمان وصول التعديلات بدون أي انقطاع
+    // 6. فحص سحابي سريع كل 5 ثوانٍ لحماية البث وضمان وصول التعديلات بدون أي انقطاع
     setInterval(pollRecentCloudUpdates, 5000);
 
     setInterval(function () {
+      if (!firebaseEventSource || firebaseEventSource.readyState === 2) {
+        connectFirebaseSSE();
+      }
       if (!sseClient || sseClient.readyState === 2) {
         connectCloudSSE();
       }
-    }, 30000);
+    }, 25000);
   }
 
   if (document.readyState === 'loading') {
