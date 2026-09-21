@@ -610,6 +610,73 @@ def _get_server_sync_state():
     }
 
 
+def _merge_sld_projects(local_p, remote_p):
+    if not remote_p or not isinstance(remote_p, dict) or not remote_p.get("nodes"):
+        return local_p
+    if not local_p or not isinstance(local_p, dict) or not local_p.get("nodes"):
+        return remote_p
+
+    merged = dict(local_p)
+    del_nodes = set(local_p.get("deleted_node_ids", []) + remote_p.get("deleted_node_ids", []))
+    del_secs = set(local_p.get("deleted_sec_ids", []) + remote_p.get("deleted_sec_ids", []))
+    merged["deleted_node_ids"] = list(del_nodes)
+    merged["deleted_sec_ids"] = list(del_secs)
+
+    node_map = {n["id"]: dict(n) for n in local_p.get("nodes", []) if n.get("id") and n["id"] not in del_nodes}
+    for rn in remote_p.get("nodes", []):
+        rid = rn.get("id")
+        if not rid or rid in del_nodes:
+            continue
+        if rid not in node_map:
+            node_map[rid] = dict(rn)
+        else:
+            ln = node_map[rid]
+            r_ts = rn.get("updated_at") or rn.get("timestamp") or 0
+            l_ts = ln.get("updated_at") or ln.get("timestamp") or 0
+            if r_ts > l_ts:
+                node_map[rid] = {**ln, **rn}
+            else:
+                for k, v in rn.items():
+                    if k not in ln or ln[k] is None or ln[k] == "":
+                        ln[k] = v
+
+    merged["nodes"] = list(node_map.values())
+
+    sec_map = {}
+    conn_keys = set()
+    def make_conn_key(f, t):
+        return f"{f}__{t}" if f < t else f"{t}__{f}"
+
+    for s in local_p.get("sections", []):
+        sid = s.get("id")
+        if not sid or sid in del_secs:
+            continue
+        if s.get("from_node") in node_map and s.get("to_node") in node_map:
+            sec_map[sid] = dict(s)
+            conn_keys.add(make_conn_key(s["from_node"], s["to_node"]))
+
+    for rs in remote_p.get("sections", []):
+        sid = rs.get("id")
+        if not sid or sid in del_secs:
+            continue
+        fn, tn = rs.get("from_node"), rs.get("to_node")
+        if fn in node_map and tn in node_map:
+            ck = make_conn_key(fn, tn)
+            if sid not in sec_map and ck not in conn_keys:
+                sec_map[sid] = dict(rs)
+                conn_keys.add(ck)
+            elif sid in sec_map:
+                ls = sec_map[sid]
+                for k in ("corner_style", "deflection_offset", "is_slanted", "direction", "type", "size", "length"):
+                    if rs.get(k) is not None:
+                        ls[k] = rs[k]
+
+    merged["sections"] = list(sec_map.values())
+    if remote_p.get("name") and not local_p.get("name"):
+        merged["name"] = remote_p["name"]
+    return merged
+
+
 @app.route('/api/sync/state', method=['GET', 'OPTIONS'])
 def api_sync_state():
     enable_cors()
@@ -637,6 +704,19 @@ def api_sync_publish():
     if not ev_type:
         return {"success": False, "message": "Missing event type"}
 
+    # Automatic Smart Merge for project events before broadcasting
+    if ev_type in ('PROJECT_SAVED', 'DRAWING_UPDATE'):
+        incoming_proj = data.get("data", {}).get("project")
+        if incoming_proj and isinstance(incoming_proj, dict) and incoming_proj.get("nodes"):
+            try:
+                p_id = incoming_proj.get("id") or "feeder_1789823077015"
+                existing = load_project(p_id)
+                merged_proj = _merge_sld_projects(existing, incoming_proj) if existing else incoming_proj
+                save_project(p_id, merged_proj.get("name", "خط المعصرة"), merged_proj)
+                data["data"]["project"] = merged_proj
+            except Exception:
+                pass
+
     with SYNC_LOCK:
         _EVENT_COUNTER += 1
         event_record = {
@@ -651,16 +731,6 @@ def api_sync_publish():
         SYNC_EVENTS.append(event_record)
         if len(SYNC_EVENTS) > MAX_SYNC_EVENTS:
             SYNC_EVENTS.pop(0)
-
-    # Persist drawing automatically
-    if ev_type in ('PROJECT_SAVED', 'DRAWING_UPDATE'):
-        proj = data.get("data", {}).get("project")
-        if proj and isinstance(proj, dict) and proj.get("nodes"):
-            try:
-                p_id = proj.get("id") or "feeder_1789823077015"
-                save_project(p_id, proj.get("name", "خط المعصرة"), proj)
-            except Exception:
-                pass
 
     return {"success": True, "event_id": _EVENT_COUNTER}
 

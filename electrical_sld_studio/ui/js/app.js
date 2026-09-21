@@ -973,6 +973,18 @@ function executeSmartDelete(type, id, mode = "auto_adjust") {
   if (!currentProject) return;
   saveHistoryState();
 
+  if (!currentProject.deleted_node_ids) currentProject.deleted_node_ids = [];
+  if (!currentProject.deleted_sec_ids) currentProject.deleted_sec_ids = [];
+  if (type === "node") {
+    if (!currentProject.deleted_node_ids.includes(id)) currentProject.deleted_node_ids.push(id);
+  } else if (type === "section") {
+    if (!currentProject.deleted_sec_ids.includes(id)) currentProject.deleted_sec_ids.push(id);
+  }
+  if (window.currentProject) {
+    window.currentProject.deleted_node_ids = currentProject.deleted_node_ids;
+    window.currentProject.deleted_sec_ids = currentProject.deleted_sec_ids;
+  }
+
   if (type === "node") {
     const node = currentProject.nodes.find(n => n.id === id);
     if (!node) return;
