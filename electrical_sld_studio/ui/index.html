@@ -266,7 +266,7 @@
           <button class="cad-tool-btn" data-perm="btn_substation" onclick="openSubstationModal()" title="إضافة محطة محولات أو لوحة توزيع">
             <span>🏭 محطة / لوحة</span>
           </button>
-          <button class="cad-tool-btn" data-perm="btn_switch" onclick="quickAddSwitchPrompt()" title="إضافة سكينة هوائية مفصلية">
+          <button class="cad-tool-btn" onclick="openSwitchModal('down')" title="إضافة سكينة هوائية مفصلية">
             <span>⚡ سكينة</span>
           </button>
           <button class="cad-tool-btn" onclick="toggleAllSwitches()" title="تبديل حالة جميع السكاكين دفعة واحدة (فتح أو غلق الكل)" style="background: rgba(245, 158, 11, 0.15); border-color: #f59e0b; color: #fbbf24; font-weight: bold;">
@@ -396,12 +396,12 @@
             <span class="item-name">محطة / لوحة</span>
           </div>
 
-          <div class="palette-item" data-perm="btn_switch" onclick="quickAddSwitch('vertical')" title="سكينة هوائية مفصلية رأسية">
+          <div class="palette-item" onclick="openSwitchModal('down')" title="سكينة هوائية مفصلية رأسية">
             <div class="item-icon">⚡</div>
             <span class="item-name">سكينة رأسية</span>
           </div>
 
-          <div class="palette-item" data-perm="btn_switch" onclick="quickAddSwitch('horizontal')" title="سكينة هوائية مفصلية أفقية">
+          <div class="palette-item" onclick="openSwitchModal('right')" title="سكينة هوائية مفصلية أفقية">
             <div class="item-icon">➖</div>
             <span class="item-name">سكينة أفقية</span>
           </div>
@@ -2355,14 +2355,14 @@
   </div>
 
   <script src="js/jszip.min.js"></script>
-  <script src="js/default_projects.js?v=18.0"></script>
-  <script src="js/auth.js?v=18.0"></script>
-  <script src="js/realtime_sync.js?v=18.0"></script>
-  <script src="js/components.js?v=18.0"></script>
-  <script src="js/simulation.js?v=18.0"></script>
-  <script src="js/canvas.js?v=18.0"></script>
-  <script src="js/app.js?v=18.0"></script>
-  <script src="js/settings.js?v=18.0"></script>
+  <script src="js/default_projects.js?v=19.0"></script>
+  <script src="js/auth.js?v=19.0"></script>
+  <script src="js/realtime_sync.js?v=19.0"></script>
+  <script src="js/components.js?v=19.0"></script>
+  <script src="js/simulation.js?v=19.0"></script>
+  <script src="js/canvas.js?v=19.0"></script>
+  <script src="js/app.js?v=19.0"></script>
+  <script src="js/settings.js?v=19.0"></script>
 </body>
 </html>
 
