@@ -48,38 +48,18 @@ const Components = {
 
   // دالة مساعدة لحساب اتجاه السكينة بدقة هندسية ومطابقة مسار الخط (يسار، يمين، أسفل، أعلى)
   getSwitchDirection(node) {
+    // 1. إذا كان الاتجاه محدداً صراحة على السكينة: يعتمد مباشرة وبدون أي تردد
     if (node.dir && ["left", "right", "down", "up"].includes(node.dir)) {
       return node.dir;
     }
-    // إذا كان نوع الاتجاه مسجلاً كأفقي
-    if (node.direction === "horizontal") {
-      if (typeof currentProject !== "undefined" && currentProject) {
-        // فحص العقد المتصلة هندسياً بالسكينة: تحديد الاتجاه الفعلي بحسب إحداثيات العقد
-        if (currentProject.sections && currentProject.nodes) {
-          const connectedSecs = currentProject.sections.filter(s => s.from_node === node.id || s.to_node === node.id);
-          for (const s of connectedSecs) {
-            const otherId = (s.from_node === node.id) ? s.to_node : s.from_node;
-            const otherNode = currentProject.nodes.find(n => n.id === otherId);
-            if (otherNode) {
-              const dx = otherNode.x - node.x;
-              const dy = otherNode.y - node.y;
-              if (Math.abs(dx) >= Math.abs(dy)) {
-                if (dx > 10) return "right";
-                if (dx < -10) return "left";
-              }
-            }
-            if (s.direction === "right" || s.direction === "left") return s.direction;
-          }
-        }
-      }
-      return "right";
-    }
-    // فحص المقاطع المتصلة لتحديد الاتجاه التلقائي بدقة
-    if (typeof currentProject !== "undefined" && currentProject && currentProject.sections) {
-      // 1. فحص الخط الخارج من السكينة أولاً (المسار المحكوم بها)
+
+    if (typeof currentProject !== "undefined" && currentProject && currentProject.sections && currentProject.nodes) {
+      // 2. فحص الخط الخارج من السكينة أولاً (المسار المحكوم بالسكينة)
       const outgoingSec = currentProject.sections.find(s => s.from_node === node.id);
       if (outgoingSec) {
-        if (outgoingSec.direction) return outgoingSec.direction;
+        if (outgoingSec.direction && ["left", "right", "down", "up"].includes(outgoingSec.direction)) {
+          return outgoingSec.direction;
+        }
         const toNode = currentProject.nodes.find(n => n.id === outgoingSec.to_node);
         if (toNode) {
           const dx = toNode.x - node.x;
@@ -91,13 +71,13 @@ const Components = {
           }
         }
       }
-      // 2. فحص الخط الداخل إلى السكينة
+
+      // 3. فحص الخط الداخل إلى السكينة (اتجاه الحركة إلى الأمام: من العقدة السابقة نحو السكينة)
       const incomingSec = currentProject.sections.find(s => s.to_node === node.id);
       if (incomingSec) {
-        if (incomingSec.direction) return incomingSec.direction;
         const fromNode = currentProject.nodes.find(n => n.id === incomingSec.from_node);
         if (fromNode) {
-          const dx = node.x - fromNode.x;
+          const dx = node.x - fromNode.x; // اتجاه التدفق للأمام
           const dy = node.y - fromNode.y;
           if (Math.abs(dx) >= Math.abs(dy)) {
             return dx < 0 ? "left" : "right";
@@ -105,8 +85,17 @@ const Components = {
             return dy < 0 ? "up" : "down";
           }
         }
+        if (incomingSec.direction && ["left", "right", "down", "up"].includes(incomingSec.direction)) {
+          return incomingSec.direction;
+        }
       }
     }
+
+    // 4. إذا كان نوع الاتجاه مسجلاً كأفقي
+    if (node.direction === "horizontal") {
+      return "right";
+    }
+
     return "down";
   },
 
@@ -993,10 +982,10 @@ const Components = {
     let y2 = endPt.y;
 
     // استقامة هندسية للخطوط شبه الرأسية أو شبه الأفقية (مع السماح بالخطوط المائلة كرقم ٧)
-    if (Math.abs(x1 - x2) <= 15) {
+    if (Math.abs(x1 - x2) <= 8) {
       x2 = x1;
     }
-    if (Math.abs(y1 - y2) <= 15) {
+    if (Math.abs(y1 - y2) <= 8) {
       y2 = y1;
     }
 
