@@ -18,10 +18,31 @@
   }
 
   // قاعدة بيانات وسحابة Firebase Realtime Database المعتمدة لحفظ ومزامنة المخططات لحظياً
-  var FIREBASE_RTDB_URL = 'https://elmghrabyelectric-default-rtdb.firebaseio.com/sld_studio';
+  var FIREBASE_BASE_URL = 'https://elmghrabyelectric-default-rtdb.firebaseio.com/sld_studio';
+  var FIREBASE_RTDB_URL = FIREBASE_BASE_URL; // توافق خلفي
   var lastFirebaseTimestamp = 0;
   var firebaseEventSource = null;
   var isFirebaseConnected = false;
+
+  function getAdminKey() {
+    if (typeof window.getCurrentAdminKey === 'function') {
+      return window.getCurrentAdminKey();
+    }
+    var adminName = 'بني مزار شرق';
+    try {
+      if (window.currentUser && (window.currentUser.admin || window.currentUser.administration)) {
+        adminName = window.currentUser.admin || window.currentUser.administration;
+      } else {
+        var savedAdmin = localStorage.getItem('sld_current_admin');
+        if (savedAdmin) adminName = savedAdmin;
+      }
+    } catch (_) {}
+    return String(adminName).trim().replace(/\s+/g, '_');
+  }
+
+  function getAdminFirebaseUrl() {
+    return FIREBASE_BASE_URL + '/admins/' + encodeURIComponent(getAdminKey());
+  }
 
   // خوادم البث السحابي الاحتياطية
   var PRIMARY_CLOUD_HOST = 'https://ntfy.envs.net';
@@ -87,10 +108,15 @@
       var author = (window.currentUser && window.currentUser.name) ?
         window.currentUser.name : 'المهندس مصطفى المغربي';
 
+      var adminKey = getAdminKey();
+      var adminName = (typeof window.getCurrentAdminName === 'function') ? window.getCurrentAdminName() : 'بني مزار شرق';
+
       var payload = {
         type: type,
         senderId: deviceId,
         author: author,
+        adminKey: adminKey,
+        adminName: adminName,
         timestamp: Date.now(),
         reason: reason || '',
         data: data
@@ -106,9 +132,9 @@
         localStorage.setItem('sld_sync_bus', JSON.stringify({ payload: payload, r: Math.random(), t: Date.now() }));
       } catch (_) {}
 
-      // جـ1) بث فوري لسحابة Firebase Realtime Database (حفظ سحابي دائم 100% ومزامنة فورية لكافة الأجهزة)
+      // جـ1) بث فوري لسحابة Firebase Realtime Database (حفظ سحابي دائم ومزامنة فورية لكل إدارة)
       try {
-        fetch(FIREBASE_RTDB_URL + '/live_event.json', {
+        fetch(getAdminFirebaseUrl() + '/live_event.json', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -120,19 +146,19 @@
         }).catch(function () {});
 
         if (type === 'USERS_UPDATE' && Array.isArray(data.users)) {
-          fetch(FIREBASE_RTDB_URL + '/users.json', {
+          fetch(FIREBASE_BASE_URL + '/users.json', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data.users)
           }).catch(function () {});
         } else if (type === 'MAINTENANCE_UPDATE') {
-          fetch(FIREBASE_RTDB_URL + '/maintenance.json', {
+          fetch(FIREBASE_BASE_URL + '/maintenance.json', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(!!data.isActive)
           }).catch(function () {});
         } else if (type === 'PROJECT_DELETED' && data.catalog) {
-          fetch(FIREBASE_RTDB_URL + '/catalog.json', {
+          fetch(getAdminFirebaseUrl() + '/catalog.json', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data.catalog)
@@ -358,12 +384,20 @@
     if (!payload || !payload.type) return;
     if (payload.senderId === deviceId) return;
 
+    var currentAdminKey = getAdminKey();
+    if (payload.adminKey && payload.adminKey !== currentAdminKey) {
+      // الحدث وارد من إدارة هندسية أخرى، لا نطبقه على المخططات الحالية للإدارة
+      if (payload.type === 'DRAWING_UPDATE' || payload.type === 'DRAWING_CHUNK' || payload.type === 'PROJECT_SAVED' || payload.type === 'PROJECT_DELETED' || payload.type === 'CATALOG_SYNC') {
+        return;
+      }
+    }
+
     var author = payload.author || 'جهاز آخر';
     var type = payload.type;
     var data = payload.data || {};
     var msgTime = payload.timestamp || 0;
 
-    console.log('⚡ استلام حدث سحابي:', type, 'من:', author);
+    console.log('⚡ استلام حدث سحابي:', type, 'من:', author, 'للإدارة:', payload.adminName || currentAdminKey);
 
     if (type === 'DRAWING_UPDATE') {
       if (!data.project || !data.project.nodes) return;
@@ -372,7 +406,11 @@
 
       var currentLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
       if (!currentLocal || !currentLocal.nodes || currentLocal.nodes.length === 0) {
-        try { currentLocal = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
+        if (typeof window.getSavedFeederForAdmin === 'function') {
+          currentLocal = window.getSavedFeederForAdmin();
+        } else {
+          try { currentLocal = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
+        }
       }
 
       var mergeResult = smartMergeProjects(currentLocal, data.project);
@@ -389,9 +427,11 @@
       } else {
         window.currentProject = finalProj;
       }
-      try {
-        localStorage.setItem('sld_saved_feeder', projStr);
-      } catch (e) {}
+      if (typeof window.saveFeederForAdmin === 'function') {
+        window.saveFeederForAdmin(finalProj);
+      } else {
+        try { localStorage.setItem('sld_saved_feeder', projStr); } catch (e) {}
+      }
 
       if (window.updateFeederInputs) window.updateFeederInputs();
       if (window.renderNetwork) window.renderNetwork();
@@ -651,83 +691,126 @@
   }
 
   // ─── 7. التكامل الشامل مع سحابة Firebase Realtime Database ───────────────────────
-  // حفظ ومزامنة المخططات الهندسية سحابياً بحجم كامل دون أي اقتطاع أو قيود، مع دعم SSE اللحظي
+  // حفظ ومزامنة المخططات الهندسية سحابياً لكل إدارة هندسية بشكل معزول ومستقل، مع دعم SSE اللحظي
   async function syncProjectDirectToFirebase(proj, reason, authorName) {
     if (!proj || !proj.nodes || proj.nodes.length === 0) return;
     try {
       var author = authorName || (window.currentUser && window.currentUser.name) || 'م. مصطفى المغربي';
       var cleanProj = compactProjectForCloud(proj);
+      var adminKey = getAdminKey();
+      var adminName = (typeof window.getCurrentAdminName === 'function') ? window.getCurrentAdminName() : 'بني مزار شرق';
+      var adminUrl = getAdminFirebaseUrl();
+
       var meta = {
         senderId: deviceId,
         author: author,
+        adminKey: adminKey,
+        adminName: adminName,
         timestamp: Date.now(),
         nodesCount: cleanProj.nodes.length,
         sectionsCount: cleanProj.sections.length,
-        projectName: cleanProj.name || 'خط المعصرة',
+        projectName: cleanProj.name || 'مخطط الشبكة',
         reason: reason || 'drawing_sync'
       };
 
       lastFirebaseTimestamp = meta.timestamp;
 
-      // 1. حفظ المخطط بالكامل في قاعدة بيانات Firebase Realtime
-      fetch(FIREBASE_RTDB_URL + '/project.json', {
+      // 1. حفظ المخطط بالكامل في مسار الإدارة بقاعدة بيانات Firebase Realtime
+      fetch(adminUrl + '/project.json', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cleanProj)
       }).catch(function () {});
 
-      // 2. تحديث بيانات الميتا لإشعار كافة المتصفحات والأجهزة
-      fetch(FIREBASE_RTDB_URL + '/meta.json', {
+      // 2. تحديث بيانات الميتا لإشعار كافة متصفحات وأجهزة نفس الإدارة
+      fetch(adminUrl + '/meta.json', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(meta)
       }).catch(function () {});
 
-      // 3. إرسال حدث مباشر عبر قناة live_event لمستمعي SSE
+      // 3. إرسال حدث مباشر عبر قناة live_event الخاصة بالإدارة لمستمعي SSE
       var livePayload = {
         type: 'DRAWING_UPDATE',
         senderId: deviceId,
         author: author,
+        adminKey: adminKey,
+        adminName: adminName,
         timestamp: meta.timestamp,
         reason: reason || 'direct_firebase_push',
         data: { project: cleanProj }
       };
-      fetch(FIREBASE_RTDB_URL + '/live_event.json', {
+      fetch(adminUrl + '/live_event.json', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(livePayload)
       }).catch(function () {});
 
-      console.log('☁️ تم إرسال المخطط إلى سحابة Firebase بنجاح (' + cleanProj.nodes.length + ' عقدة)');
+      console.log('☁️ تم إرسال المخطط إلى سحابة Firebase بنجاح للإدارة [' + adminName + '] (' + cleanProj.nodes.length + ' عقدة)');
       updateBadgeUI('connected');
     } catch (e) {
       console.warn('Firebase direct push error:', e);
     }
   }
 
-  // استدعاء وفحص حالة سحابة Firebase فور فتح الصفحة
+  // استدعاء وفحص حالة سحابة Firebase فور فتح الصفحة أو التبديل للإدارة
   async function fetchFirebaseStartup() {
     try {
-      var metaRes = await fetch(FIREBASE_RTDB_URL + '/meta.json');
+      var adminUrl = getAdminFirebaseUrl();
+      var currentAdminKey = getAdminKey();
+      var metaRes = await fetch(adminUrl + '/meta.json');
       var remoteMeta = metaRes.ok ? await metaRes.json() : null;
+
+      // ترحيل تلقائي: إذا كانت الإدارة بني مزار شرق والمسار فارغ، نفحص إذا كان هناك مخطط في المسار القديم العام
+      if (!remoteMeta && (currentAdminKey === 'بني_مزار_شرق' || currentAdminKey === 'بني مزار شرق')) {
+        try {
+          var legacyMetaRes = await fetch(FIREBASE_BASE_URL + '/meta.json');
+          if (legacyMetaRes.ok) {
+            var legacyMeta = await legacyMetaRes.json();
+            if (legacyMeta) {
+              var legacyProjRes = await fetch(FIREBASE_BASE_URL + '/project.json');
+              if (legacyProjRes.ok) {
+                var legacyProj = await legacyProjRes.json();
+                if (legacyProj && legacyProj.nodes && legacyProj.nodes.length > 0) {
+                  remoteMeta = legacyMeta;
+                  await fetch(adminUrl + '/project.json', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(legacyProj)
+                  });
+                  await fetch(adminUrl + '/meta.json', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(legacyMeta)
+                  });
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
 
       var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
       if (!curLocal || !curLocal.nodes || curLocal.nodes.length === 0) {
-        try { curLocal = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
+        if (typeof window.getSavedFeederForAdmin === 'function') {
+          curLocal = window.getSavedFeederForAdmin();
+        } else {
+          try { curLocal = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
+        }
       }
       var localNodesCount = (curLocal && Array.isArray(curLocal.nodes)) ? curLocal.nodes.length : 0;
       var remoteNodesCount = (remoteMeta && remoteMeta.nodesCount) ? remoteMeta.nodesCount : 0;
 
-      console.log('☁️ فحص سحابة Firebase: محلي (' + localNodesCount + ' عقدة) | سحابي (' + remoteNodesCount + ' عقدة)');
+      console.log('☁️ فحص سحابة Firebase للإدارة [' + currentAdminKey + ']: محلي (' + localNodesCount + ' عقدة) | سحابي (' + remoteNodesCount + ' عقدة)');
 
-      // إذا كان الجهاز الحالي يمتلك عقداً أكثر أو مساوية للسحابة (مثل جوجل كروم 64 عقدة، وفايربيس خالية أو أقل)
+      // إذا كان الجهاز الحالي يمتلك عقداً أكثر أو مساوية للسحابة للإدارة
       if (localNodesCount > 0 && localNodesCount >= remoteNodesCount) {
-        console.log('☁️ رفع المخطط المحلي الأكبر (' + localNodesCount + ' عقدة) إلى سحابة Firebase لتستلمه باقي الأجهزة...');
+        console.log('☁️ رفع المخطط المحلي الأكبر (' + localNodesCount + ' عقدة) إلى سحابة Firebase للإدارة [' + currentAdminKey + ']...');
         await syncProjectDirectToFirebase(curLocal, 'auto_startup_push');
       } else if (remoteNodesCount > 0) {
-        // إذا كانت السحابة تمتلك عناصر أكثر (مثلاً فايرفوكس به 19 والسحابة بها 64):
-        console.log('☁️ استلام المخطط الكامل (' + remoteNodesCount + ' عقدة) من سحابة Firebase...');
-        var projRes = await fetch(FIREBASE_RTDB_URL + '/project.json');
+        // إذا كانت السحابة تمتلك عناصر أكثر للإدارة:
+        console.log('☁️ استلام المخطط الكامل (' + remoteNodesCount + ' عقدة) من سحابة Firebase للإدارة [' + currentAdminKey + ']...');
+        var projRes = await fetch(adminUrl + '/project.json');
         if (projRes.ok) {
           var remoteProj = await projRes.json();
           if (remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
@@ -738,28 +821,34 @@
             if (window.setCurrentProject) window.setCurrentProject(finalProj);
             else window.currentProject = finalProj;
 
-            try { localStorage.setItem('sld_saved_feeder', JSON.stringify(finalProj)); } catch (_) {}
+            if (typeof window.saveFeederForAdmin === 'function') {
+              window.saveFeederForAdmin(finalProj);
+            } else {
+              try { localStorage.setItem('sld_saved_feeder', JSON.stringify(finalProj)); } catch (_) {}
+            }
 
             if (window.updateFeederInputs) window.updateFeederInputs();
             if (window.renderNetwork) window.renderNetwork();
             if (window.fitToScreen) setTimeout(window.fitToScreen, 300);
 
-            showSyncToast('☁️ تم استلام ومزامنة الرسم كاملاً من سحابة Firebase (' + finalProj.nodes.length + ' عقدة و ' + (finalProj.sections || []).length + ' مقطع)', 'success');
+            showSyncToast('☁️ تم استلام ومزامنة رسم [' + (finalProj.name || currentAdminKey) + '] كاملاً من سحابة Firebase (' + finalProj.nodes.length + ' عقدة)', 'success');
             setTimeout(function () { isApplyingRemote = false; }, 800);
           }
         }
       }
 
-      // جلب المشاريع والمستخدمين والصيانة
-      fetch(FIREBASE_RTDB_URL + '/catalog.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (cat) {
+      // جلب كتالوج الإدارة
+      fetch(adminUrl + '/catalog.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (cat) {
         if (Array.isArray(cat) && cat.length > 0 && window.applySyncedCatalog) window.applySyncedCatalog(cat);
       }).catch(function () {});
 
-      fetch(FIREBASE_RTDB_URL + '/users.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (u) {
+      // جلب المستخدمين (العام على مستوى المنظومة)
+      fetch(FIREBASE_BASE_URL + '/users.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (u) {
         if (Array.isArray(u) && u.length > 0 && window.applySyncedUsers) window.applySyncedUsers(u);
       }).catch(function () {});
 
-      fetch(FIREBASE_RTDB_URL + '/maintenance.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (m) {
+      // جلب الصيانة (العام على مستوى المنظومة)
+      fetch(FIREBASE_BASE_URL + '/maintenance.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (m) {
         if (typeof m === 'boolean') {
           localStorage.setItem('sld_maintenance_mode', m ? 'true' : 'false');
           if (window.checkMaintenanceState) window.checkMaintenanceState();
@@ -772,7 +861,7 @@
     }
   }
 
-  // ربط قناة البث اللحظي السحابي عبر Firebase Realtime SSE
+  // ربط قناة البث اللحظي السحابي عبر Firebase Realtime SSE لمسار الإدارة
   function connectFirebaseSSE() {
     if (firebaseEventSource) {
       try { firebaseEventSource.close(); } catch (_) {}
@@ -780,10 +869,11 @@
     }
 
     try {
-      firebaseEventSource = new EventSource(FIREBASE_RTDB_URL + '/live_event.json');
+      var sseUrl = getAdminFirebaseUrl() + '/live_event.json';
+      firebaseEventSource = new EventSource(sseUrl);
 
       firebaseEventSource.onopen = function () {
-        console.log('✅ تم الاتصال بقناة Firebase Realtime Database SSE بنجاح');
+        console.log('✅ تم الاتصال بقناة Firebase Realtime Database SSE بنجاح للإدارة:', getAdminKey());
         isFirebaseConnected = true;
         updateBadgeUI('connected');
       };
@@ -825,26 +915,31 @@
     }
   }
 
-  // فحص نبض سحابة Firebase كل 3.5 ثانية لجلب أي تحديثات فورية
+  // فحص نبض سحابة Firebase كل 3.5 ثانية لجلب أي تحديثات فورية للإدارة
   async function pollFirebaseHeartbeat() {
     try {
       if (isApplyingRemote) return;
-      var res = await fetch(FIREBASE_RTDB_URL + '/meta.json');
+      var adminUrl = getAdminFirebaseUrl();
+      var res = await fetch(adminUrl + '/meta.json');
       if (!res.ok) return;
       var meta = await res.json();
       if (!meta || !meta.timestamp) return;
 
       if (meta.timestamp > lastFirebaseTimestamp && meta.senderId !== deviceId) {
         lastFirebaseTimestamp = meta.timestamp;
-        console.log('⚡ تحديث سحابي جديد على Firebase من:', meta.author, 'عدد العقد:', meta.nodesCount);
+        console.log('⚡ تحديث سحابي جديد على Firebase للإدارة [' + getAdminKey() + '] من:', meta.author, 'عدد العقد:', meta.nodesCount);
 
-        var projRes = await fetch(FIREBASE_RTDB_URL + '/project.json');
+        var projRes = await fetch(adminUrl + '/project.json');
         if (projRes.ok) {
           var remoteProj = await projRes.json();
           if (remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
             var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
             if (!curLocal || !curLocal.nodes) {
-              try { curLocal = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
+              if (typeof window.getSavedFeederForAdmin === 'function') {
+                curLocal = window.getSavedFeederForAdmin();
+              } else {
+                try { curLocal = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
+              }
             }
             var mRes = smartMergeProjects(curLocal, remoteProj);
             var finalProj = mRes.merged;
@@ -857,7 +952,12 @@
             isApplyingRemote = true;
             if (window.setCurrentProject) window.setCurrentProject(finalProj);
             else window.currentProject = finalProj;
-            try { localStorage.setItem('sld_saved_feeder', projStr); } catch (_) {}
+
+            if (typeof window.saveFeederForAdmin === 'function') {
+              window.saveFeederForAdmin(finalProj);
+            } else {
+              try { localStorage.setItem('sld_saved_feeder', projStr); } catch (_) {}
+            }
 
             if (window.updateFeederInputs) window.updateFeederInputs();
             if (window.renderNetwork) window.renderNetwork();
@@ -876,6 +976,20 @@
       }
     } catch (_) {}
   }
+
+  // إعادة ضبط وتوصيل Firebase عند تبديل الإدارة الهندسية
+  function reconnectFirebaseForAdmin(adminName) {
+    console.log('🔄 Reconnecting Firebase for admin workspace:', adminName);
+    lastFirebaseTimestamp = 0;
+    lastDrawingUpdateTimestamp = 0;
+    if (firebaseEventSource) {
+      try { firebaseEventSource.close(); } catch (_) {}
+      firebaseEventSource = null;
+    }
+    connectFirebaseSSE();
+    fetchFirebaseStartup();
+  }
+  window.reconnectFirebaseForAdmin = reconnectFirebaseForAdmin;
 
   async function pollStartupCloudState() {
     try {
@@ -1025,7 +1139,7 @@
     var cleanProj = compactProjectForCloud(project);
     syncProjectDirectToFirebase(cleanProj, 'project_saved');
     if (catalog) {
-      fetch(FIREBASE_RTDB_URL + '/catalog.json', {
+      fetch(getAdminFirebaseUrl() + '/catalog.json', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(catalog)
