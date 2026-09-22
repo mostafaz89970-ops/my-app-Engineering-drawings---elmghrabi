@@ -1462,11 +1462,31 @@
         <div class="form-grid-2" style="margin-bottom:12px;">
           <div class="form-group" style="margin-bottom:0;">
             <label style="color:#63b3ed; font-weight:bold; font-size:12px;">📍 من نود (نقطة البداية):</label>
-            <select id="elbow-from-node" class="form-control"></select>
+            <select id="elbow-from-node" class="form-control" onchange="onElbowFromNodeChange()"></select>
           </div>
           <div class="form-group" style="margin-bottom:0;">
-            <label style="color:#68d391; font-weight:bold; font-size:12px;">📍 إلى نود جديد:</label>
-            <input type="text" id="elbow-to-node" class="form-control" value="N2">
+            <label style="color:#68d391; font-weight:bold; font-size:12px;">🎯 نود الوجهة:</label>
+            <!-- راديو بو اختيار الوجهة -->
+            <div style="display:flex; gap:10px; margin-bottom:6px;">
+              <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:12px; font-weight:bold; color:#68d391;">
+                <input type="radio" name="elbow-to-mode" value="new" id="elbow-to-new-radio" onchange="onElbowToModeChange()" checked>
+                ➕ جديد
+              </label>
+              <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:12px; font-weight:bold; color:#63b3ed;">
+                <input type="radio" name="elbow-to-mode" value="existing" id="elbow-to-existing-radio" onchange="onElbowToModeChange()">
+                🔗 قائم
+              </label>
+            </div>
+            <!-- إنشاء نود جديد -->
+            <div id="elbow-to-new-wrap">
+              <input type="text" id="elbow-to-node" class="form-control" value="N2" placeholder="رقم النود الجديد" style="border-color:#68d391;">
+              <div style="font-size:10px; color:#68d391; margin-top:3px;">سيُنشأ نود ربط جديد عند النقطة المنكسرة</div>
+            </div>
+            <!-- اختيار نود قائم -->
+            <div id="elbow-to-existing-wrap" style="display:none;">
+              <select id="elbow-to-existing-node" class="form-control" style="border-color:#63b3ed;"></select>
+              <div style="font-size:10px; color:#63b3ed; margin-top:3px;">الكوع سيمتد من البداية ليصل لهذا النود القائم</div>
+            </div>
           </div>
         </div>
 
@@ -2499,14 +2519,14 @@
   </div>
 
   <script src="js/jszip.min.js"></script>
-  <script src="js/default_projects.js?v=21.0"></script>
-  <script src="js/auth.js?v=21.0"></script>
-  <script src="js/realtime_sync.js?v=21.0"></script>
-  <script src="js/components.js?v=21.0"></script>
-  <script src="js/simulation.js?v=21.0"></script>
-  <script src="js/canvas.js?v=21.0"></script>
-  <script src="js/app.js?v=21.0"></script>
-  <script src="js/settings.js?v=21.0"></script>
+  <script src="js/default_projects.js?v=22.0"></script>
+  <script src="js/auth.js?v=22.0"></script>
+  <script src="js/realtime_sync.js?v=22.0"></script>
+  <script src="js/components.js?v=22.0"></script>
+  <script src="js/simulation.js?v=22.0"></script>
+  <script src="js/canvas.js?v=22.0"></script>
+  <script src="js/app.js?v=22.0"></script>
+  <script src="js/settings.js?v=22.0"></script>
 </body>
 </html>
 
