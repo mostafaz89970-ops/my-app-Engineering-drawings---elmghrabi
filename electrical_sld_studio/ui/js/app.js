@@ -3097,29 +3097,135 @@ async function exportToExcel() {
     showToast("⛔ ليس لديك صلاحية تصدير ملف الإكسيل", "error");
     return;
   }
-  if (!currentProject) return;
+  if (!currentProject) { showToast("⚠️ لا يوجد مشروع مفتوح", "warning"); return; }
+
+  // التحقق من توفر SheetJS
+  if (typeof XLSX === "undefined") {
+    showToast("⏳ جاري تحميل مكتبة Excel...", "info");
+    await new Promise(r => setTimeout(r, 1500));
+    if (typeof XLSX === "undefined") {
+      alert("تعذر تحميل مكتبة Excel. تحقق من اتصال الإنترنت.");
+      return;
+    }
+  }
+
   try {
-    const res = await fetch("/api/export-excel", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ project: currentProject, user: currentUser || {} })
-    });
-    const blob = await res.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${currentProject.name || "Feeder"}_SLD_Report.xlsx`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-    showToast("📥 تم تصدير ملف Excel بنجاح!", "success");
+    showToast("⏳ جاري إعداد ملف Excel...", "info");
+
+    const nodes    = currentProject.nodes    || [];
+    const sections = currentProject.sections || [];
+    const proj     = currentProject;
+
+    // ===== ورقة 1: معلومات المشروع =====
+    const projRows = [
+      ["بيانات المشروع", ""],
+      ["اسم المشروع",    proj.name || "—"],
+      ["رقم المشروع",    proj.id   || "—"],
+      ["تاريخ التصدير",  new Date().toLocaleString("ar-EG")],
+      ["عدد النودات",    nodes.length],
+      ["عدد المقاطع",    sections.length],
+      ["إجمالي المحولات", nodes.filter(n => n.type === "transformer" || n.type === "kiosk").length],
+      ["إجمالي السكاكين", nodes.filter(n => n.type === "switch").length],
+      ["إجمالي القدرة (kVA)",
+        nodes.filter(n => n.capacity).reduce((s, n) => s + (parseFloat(n.capacity) || 0), 0) + " kVA"
+      ],
+    ];
+
+    // ===== ورقة 2: النودات =====
+    const nodeHeaders = ["م", "رقم النود", "النوع", "الاسم", "القدرة (kVA)", "الإحداثي X", "الإحداثي Y", "الحالة", "الاتجاه"];
+    const nodeRows = nodes.map((n, i) => [
+      i + 1,
+      n.id,
+      n.type === "substation"  ? "محطة محولات" :
+      n.type === "transformer" ? "محول معلق"   :
+      n.type === "kiosk"       ? "كشك محولات"  :
+      n.type === "switch"      ? "سكينة هوائية":
+      n.type === "junction"    ? "نقطة ربط"    :
+      n.type === "rmu"         ? "وحدة RMU"    :
+      n.type === "avr"         ? "منظم AVR"    : n.type || "—",
+      n.name  || "—",
+      n.capacity ? `${n.capacity} kVA` : "—",
+      Math.round(n.x || 0),
+      Math.round(n.y || 0),
+      n.state     === "open"   ? "مفتوح (فصل)" :
+      n.state     === "closed" ? "مغلق (توصيل)": "—",
+      n.direction === "vertical"   ? "رأسي"   :
+      n.direction === "horizontal" ? "أفقي"   : "—",
+    ]);
+
+    // ===== ورقة 3: الخطوط والكابلات =====
+    const secHeaders = ["م", "رقم القطعة", "من نود", "إلى نود", "النوع", "المقطع", "الطول (متر)", "الاتجاه", "نمط الكوع"];
+    const secRows = sections.map((s, i) => [
+      i + 1,
+      s.id,
+      s.from_node || "—",
+      s.to_node   || "—",
+      s.type === "كابل"   ? "كابل أرضي"   :
+      s.type === "هوائي" ? "خط هوائي"    : s.type || "—",
+      s.size   || "—",
+      s.length || 0,
+      s.direction === "down"  ? "أسفل"  :
+      s.direction === "up"    ? "أعلى"  :
+      s.direction === "right" ? "يمين"  :
+      s.direction === "left"  ? "شمال"  : s.direction || "—",
+      s.corner_style === "hv" ? "أفقي ثم رأسي" :
+      s.corner_style === "vh" ? "رأسي ثم أفقي" : "مستقيم",
+    ]);
+
+    // ===== ورقة 4: المحولات والأكشاك =====
+    const transNodes = nodes.filter(n => ["transformer","kiosk","substation"].includes(n.type));
+    const transHeaders = ["م", "رقم النود", "النوع", "الاسم", "القدرة (kVA)", "التحميل (kW)", "الجهد", "ملاحظات"];
+    const transRows = transNodes.map((n, i) => [
+      i + 1,
+      n.id,
+      n.type === "substation"  ? "محطة محولات" :
+      n.type === "transformer" ? "محول معلق"   :
+      n.type === "kiosk"       ? "كشك محولات"  : n.type,
+      n.name       || "—",
+      n.capacity   || "—",
+      n.load       || "—",
+      n.voltage    || "11/0.4 kV",
+      n.notes      || "—",
+    ]);
+
+    // ===== بناء Workbook =====
+    const wb = XLSX.utils.book_new();
+
+    // ورقة المشروع
+    const wsProjData = [["البند", "القيمة"], ...projRows];
+    const wsProj = XLSX.utils.aoa_to_sheet(wsProjData);
+    wsProj["!cols"] = [{ wch: 25 }, { wch: 35 }];
+    XLSX.utils.book_append_sheet(wb, wsProj, "معلومات المشروع");
+
+    // ورقة النودات
+    const wsNodes = XLSX.utils.aoa_to_sheet([nodeHeaders, ...nodeRows]);
+    wsNodes["!cols"] = nodeHeaders.map((_, i) => ({ wch: i === 3 ? 30 : 16 }));
+    XLSX.utils.book_append_sheet(wb, wsNodes, "النودات والعقد");
+
+    // ورقة الخطوط
+    const wsSecs = XLSX.utils.aoa_to_sheet([secHeaders, ...secRows]);
+    wsSecs["!cols"] = secHeaders.map(() => ({ wch: 16 }));
+    XLSX.utils.book_append_sheet(wb, wsSecs, "الخطوط والكابلات");
+
+    // ورقة المحولات
+    if (transRows.length > 0) {
+      const wsTrans = XLSX.utils.aoa_to_sheet([transHeaders, ...transRows]);
+      wsTrans["!cols"] = transHeaders.map((_, i) => ({ wch: i === 3 ? 30 : 16 }));
+      XLSX.utils.book_append_sheet(wb, wsTrans, "المحولات والأكشاك");
+    }
+
+    // حفظ وتنزيل
+    const safeName = (proj.name || proj.id || "مخطط_SLD").replace(/[\\/:*?"<>|]/g, "_");
+    XLSX.writeFile(wb, `${safeName}_تقرير.xlsx`);
+    showToast("📥 تم تصدير ملف Excel بنجاح! (" + sections.length + " مقطع، " + nodes.length + " نود)", "success");
+
   } catch (err) {
-    alert("تعذر تصدير ملف الإكسيل. تأكد من تشغيل الخادم.");
+    console.error("Excel export error:", err);
+    alert("تعذر تصدير ملف الإكسيل: " + (err.message || err));
   }
 }
 
-// --- تحميل المشروع بالكامل كعرض باور بوينت (.pptx) مع الاحتواء التلقائي التام والتنسيق المتطابق ---
+// --- تحميل المشروع بالكامل كعرض باور بوينت (.pptx) — 100% في المتصفح بدون خادم ---
 async function downloadProjectPPTX() {
   if (window.hasPermission && !window.hasPermission('btn_excel')) {
     showToast("⛔ ليس لديك صلاحية تحميل المشروع", "error");
@@ -3130,208 +3236,252 @@ async function downloadProjectPPTX() {
     return;
   }
 
-  showToast("⏳ جاري تجهيز وتحميل المشروع كملف PowerPoint متكامل بنفس التنسيق والاحتواء التلقائي...", "info");
+  // التحقق من توفر PptxGenJS
+  if (typeof PptxGenJS === "undefined") {
+    showToast("⏳ جاري تحميل مكتبة PowerPoint...", "info");
+    await new Promise(r => setTimeout(r, 2000));
+    if (typeof PptxGenJS === "undefined") {
+      alert("تعذر تحميل مكتبة PowerPoint. تحقق من اتصال الإنترنت.");
+      return;
+    }
+  }
+
+  showToast("⏳ جاري تجهيز ملف PowerPoint...", "info");
 
   try {
-    // 1. الحساب الدقيق لإحداثيات وحدود المخطط بالكامل (Auto-Containment Bounding Box)
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    const nodes = currentProject.nodes || [];
+    const nodes    = currentProject.nodes    || [];
     const sections = currentProject.sections || [];
+    const proj     = currentProject;
 
-    nodes.forEach(n => {
-      const nx = parseFloat(n.x);
-      const ny = parseFloat(n.y);
-      if (!isNaN(nx)) {
-        minX = Math.min(minX, nx - 90);
-        maxX = Math.max(maxX, nx + 90);
-      }
-      if (!isNaN(ny)) {
-        minY = Math.min(minY, ny - 60);
-        maxY = Math.max(maxY, ny + 60);
-      }
-    });
-
-    sections.forEach(s => {
-      const fn = nodes.find(n => n.id === s.from_node);
-      const tn = nodes.find(n => n.id === s.to_node);
-      if (fn && tn) {
-        minX = Math.min(minX, fn.x - 30, tn.x - 30);
-        maxX = Math.max(maxX, fn.x + 30, tn.x + 30);
-        minY = Math.min(minY, fn.y - 30, tn.y - 30);
-        maxY = Math.max(maxY, fn.y + 30, tn.y + 30);
-      }
-      if (s._smartLabel) {
-        const lx = parseFloat(s._smartLabel.x);
-        const ly = parseFloat(s._smartLabel.y);
-        if (!isNaN(lx)) { minX = Math.min(minX, lx - 75); maxX = Math.max(maxX, lx + 75); }
-        if (!isNaN(ly)) { minY = Math.min(minY, ly - 35); maxY = Math.max(maxY, ly + 35); }
-      }
-    });
-
-    // استخدام getBBox الفعلي من المتصفح لضمان التقاط كل عنصر بدقة متناهية
-    const stageEl = document.getElementById("canvas-stage");
-    if (stageEl && typeof stageEl.getBBox === "function") {
-      try {
-        const bb = stageEl.getBBox();
-        if (bb && bb.width > 20 && bb.height > 20) {
-          minX = Math.min(minX, bb.x - 35);
-          maxX = Math.max(maxX, bb.x + bb.width + 35);
-          minY = Math.min(minY, bb.y - 35);
-          maxY = Math.max(maxY, bb.y + bb.height + 35);
-        }
-      } catch(e) {}
-    }
-
-    if (minX === Infinity || maxX === -Infinity) {
-      minX = 100; maxX = 1200; minY = 50; maxY = 800;
-    }
-
-    // هامش أمان متناسق ومريح (50px)
-    const pad = 50;
-    const vbX = Math.round(minX - pad);
-    const vbY = Math.round(minY - pad);
-    const vbW = Math.max(400, Math.round((maxX - minX) + pad * 2));
-    const vbH = Math.max(300, Math.round((maxY - minY) + pad * 2));
-
-    // 2. استنساخ عنصر SVG وتجهيزه للتصوير عالي الدقة بنفس الألوان والتنسيق الصريح
-    const svgOriginal = document.getElementById("sld-canvas");
+    // ========== خطوة 1: التقاط صورة SVG ==========
     let imageBase64 = null;
+    const svgOriginal = document.getElementById("sld-canvas");
 
     if (svgOriginal) {
       try {
+        // حساب حدود الرسم
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        nodes.forEach(n => {
+          const nx = parseFloat(n.x), ny = parseFloat(n.y);
+          if (!isNaN(nx)) { minX = Math.min(minX, nx - 90); maxX = Math.max(maxX, nx + 90); }
+          if (!isNaN(ny)) { minY = Math.min(minY, ny - 60); maxY = Math.max(maxY, ny + 60); }
+        });
+        if (minX === Infinity) { minX = 100; maxX = 1200; minY = 50; maxY = 800; }
+
+        const pad = 60;
+        const vbX = Math.round(minX - pad);
+        const vbY = Math.round(minY - pad);
+        const vbW = Math.max(500, Math.round((maxX - minX) + pad * 2));
+        const vbH = Math.max(350, Math.round((maxY - minY) + pad * 2));
+
         const svgClone = svgOriginal.cloneNode(true);
         svgClone.setAttribute("viewBox", `${vbX} ${vbY} ${vbW} ${vbH}`);
-        svgClone.setAttribute("width", vbW);
+        svgClone.setAttribute("width",  vbW);
         svgClone.setAttribute("height", vbH);
 
-        // إزالة شبكة الخلفية إن وجدت لتكون خلفية المخطط في الباور بوينت ناصعة ونقية
+        // إزالة العناصر التفاعلية
         const bgGrid = svgClone.querySelector("#bg-grid");
         if (bgGrid) bgGrid.remove();
+        svgClone.querySelectorAll(".sld-stretch-handle-group,.sld-stretch-handle,.drag-tooltip").forEach(el => el.remove());
 
-        // إعادة ضبط التحويلات الهندسية لتعمل بإحداثيات viewBox المباشرة
         const cloneStage = svgClone.querySelector("#canvas-stage");
-        if (cloneStage) {
-          cloneStage.setAttribute("transform", "translate(0, 0) scale(1)");
-        }
+        if (cloneStage) cloneStage.setAttribute("transform", "translate(0,0) scale(1)");
 
-        // إزالة مقابض السحب التفاعلية للأطوال
-        svgClone.querySelectorAll(".sld-stretch-handle-group, .sld-stretch-handle, .drag-tooltip").forEach(el => el.remove());
-
-        // تضمين أنماط صريحة وثابتة داخل الـ SVG لضمان التطابق التام 100% في الباور بوينت
+        // تضمين الأنماط
         const styleEl = document.createElement("style");
         styleEl.textContent = `
-          text { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; }
-          .line-path { stroke-linecap: round; }
-          .line-path.cable { stroke: #1E88E5 !important; stroke-dasharray: 10 6 !important; stroke-width: 3.2px !important; }
-          .line-path.overhead { stroke: #16A34A !important; stroke-dasharray: none !important; stroke-width: 3.2px !important; }
-          .sld-length-pill { fill: #FFFFFF !important; stroke: #94A3B8 !important; stroke-width: 1.2px !important; rx: 4px; }
-          .sld-badge-text { fill: #0F172A !important; font-weight: bold !important; font-size: 11px !important; }
-          .sld-node-group text { user-select: none; }
-          .sld-transformer-cap, .sld-kiosk-cap { font-weight: bold !important; fill: #B45309 !important; font-size: 12px !important; }
-          .sld-leader-pointer line { stroke-width: 1.5px !important; }
+          text { font-family:'Segoe UI',Tahoma,Arial,sans-serif; }
+          .line-path { stroke-linecap:round; }
+          .line-path.cable    { stroke:#1E88E5!important; stroke-dasharray:10 6!important; stroke-width:3px!important; }
+          .line-path.overhead { stroke:#16A34A!important; stroke-dasharray:none!important; stroke-width:3px!important; }
         `;
         svgClone.insertBefore(styleEl, svgClone.firstChild);
 
-        // تحويل الـ SVG إلى صورة عالية الدقة عبر HTML5 Canvas
-        const svgXml = new XMLSerializer().serializeToString(svgClone);
+        const svgXml  = new XMLSerializer().serializeToString(svgClone);
         const svgBlob = new Blob([svgXml], { type: "image/svg+xml;charset=utf-8" });
-        const URL = window.URL || window.webkitURL || window;
         const blobUrl = URL.createObjectURL(svgBlob);
 
-        imageBase64 = await new Promise((resolve) => {
+        imageBase64 = await new Promise(resolve => {
           const img = new Image();
           img.onload = () => {
             try {
               const canvas = document.createElement("canvas");
-              // معامل مضاعفة الدقة مع ضبط الحد الأقصى لمنع تضخم الذاكرة وضمان سرعة التحميل الفورية
               const maxDim = Math.max(vbW, vbH);
-              let scale = 2.0;
-              if (maxDim * scale > 2400) {
-                scale = Math.max(1.0, 2400 / maxDim);
-              }
-              canvas.width = Math.round(vbW * scale);
+              const scale  = maxDim > 2000 ? 1800 / maxDim : 2.0;
+              canvas.width  = Math.round(vbW * scale);
               canvas.height = Math.round(vbH * scale);
               const ctx = canvas.getContext("2d");
-
-              // خلفية بيضاء نقية للمخطط في الباور بوينت
               ctx.fillStyle = "#ffffff";
               ctx.fillRect(0, 0, canvas.width, canvas.height);
               ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
               URL.revokeObjectURL(blobUrl);
-              // محاولة الضغط بصيغة JPEG بجودة 92% لتقليل حجم النقل والحفاظ على وضوح فائق
-              try {
-                const jpegData = canvas.toDataURL("image/jpeg", 0.92);
-                if (jpegData && jpegData.length > 200) {
-                  resolve(jpegData);
-                  return;
-                }
-              } catch (e) {}
-              resolve(canvas.toDataURL("image/png"));
-            } catch (canvasErr) {
-              console.warn("Canvas capture warning:", canvasErr);
-              URL.revokeObjectURL(blobUrl);
-              resolve(null);
-            }
+              resolve(canvas.toDataURL("image/jpeg", 0.92));
+            } catch (e) { URL.revokeObjectURL(blobUrl); resolve(null); }
           };
-          img.onerror = () => {
-            URL.revokeObjectURL(blobUrl);
-            resolve(null);
-          };
+          img.onerror = () => { URL.revokeObjectURL(blobUrl); resolve(null); };
           img.src = blobUrl;
         });
-      } catch (cloneErr) {
-        console.warn("SVG processing note:", cloneErr);
-      }
+      } catch (e) { console.warn("SVG capture:", e); }
     }
 
-    // 3. إرسال البيانات والصورة إلى الخادم لتوليد ملف الـ PowerPoint مع الاحتواء التلقائي
-    const res = await fetch("/api/export-powerpoint", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        project: currentProject,
-        user: currentUser || {},
-        image: imageBase64,
-        viewBox: { x: vbX, y: vbY, width: vbW, height: vbH }
-      })
+    // ========== خطوة 2: بناء ملف PowerPoint ==========
+    const pptx = new PptxGenJS();
+    pptx.layout  = "LAYOUT_WIDE";   // 33.87 × 19.05 cm
+    pptx.author  = "مهندس مصطفى المغربي";
+    pptx.subject = proj.name || "مخطط SLD";
+    pptx.title   = proj.name || "مخطط الشبكة الكهربائية";
+
+    // ---- شريحة 1: صفحة العنوان ----
+    const slideTitle = pptx.addSlide();
+    slideTitle.background = { color: "0F172A" };
+    slideTitle.addText(proj.name || "مخطط الشبكة الكهربائية", {
+      x: 0.5, y: 2.5, w: 12.5, h: 1.2,
+      fontSize: 36, bold: true, color: "38BDF8", align: "center",
+      fontFace: "Segoe UI"
+    });
+    slideTitle.addText("مخطط SLD — الشبكة الكهربائية", {
+      x: 0.5, y: 3.8, w: 12.5, h: 0.6,
+      fontSize: 18, color: "94A3B8", align: "center"
+    });
+    slideTitle.addText(`تاريخ التصدير: ${new Date().toLocaleDateString("ar-EG")}`, {
+      x: 0.5, y: 4.5, w: 12.5, h: 0.5,
+      fontSize: 14, color: "64748B", align: "center"
+    });
+    slideTitle.addText("إعداد: المهندس مصطفى المغربي — ENG-MOSTAFAELMGHRABY ©", {
+      x: 0.5, y: 6.8, w: 12.5, h: 0.4,
+      fontSize: 11, color: "475569", align: "center"
     });
 
-    if (!res.ok) {
-      let errorMsg = `Server returned ${res.status}`;
-      try {
-        const errJson = await res.json();
-        if (errJson && errJson.error) errorMsg = errJson.error;
-      } catch (e) {}
-      throw new Error(errorMsg);
+    // ---- شريحة 2: الرسم الهندسي ----
+    const slideDrawing = pptx.addSlide();
+    slideDrawing.background = { color: "FFFFFF" };
+    slideDrawing.addText(proj.name || "مخطط الشبكة الكهربائية", {
+      x: 0.3, y: 0.1, w: 13, h: 0.5,
+      fontSize: 16, bold: true, color: "0F172A", align: "center"
+    });
+
+    if (imageBase64) {
+      slideDrawing.addImage({
+        data: imageBase64,
+        x: 0.2, y: 0.65, w: 13, h: 6.8,
+        sizing: { type: "contain", w: 13, h: 6.8 }
+      });
+    } else {
+      slideDrawing.addText("⚠️ تعذر التقاط صورة الرسم", {
+        x: 2, y: 3, w: 9, h: 1, fontSize: 18, color: "EF4444", align: "center"
+      });
     }
 
-    const blob = await res.blob();
-    const downloadUrl = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = downloadUrl;
-    const safeName = (currentProject.name || currentProject.id || "مشروع_المخطط_الهندسي").replace(/[\\/:*?"<>|]/g, "_");
-    a.download = `${safeName}.pptx`;
-    document.body.appendChild(a);
-    a.click();
-    
-    // تأخير إزالة الرابط لضمان اكتمال التنزيل في متصفحات Chrome و Edge دون إلغاء
-    setTimeout(() => {
-      try {
-        if (a.parentNode) a.parentNode.removeChild(a);
-        window.URL.revokeObjectURL(downloadUrl);
-      } catch (e) {}
-    }, 15000);
+    // ---- شريحة 3: ملخص البيانات ----
+    const slideSummary = pptx.addSlide();
+    slideSummary.background = { color: "0F172A" };
+    slideSummary.addText("ملخص بيانات المشروع", {
+      x: 0.5, y: 0.2, w: 12.5, h: 0.6,
+      fontSize: 22, bold: true, color: "38BDF8", align: "center"
+    });
 
-    showToast("📥 تم تحميل المشروع بنجاح كملف PowerPoint جاهز للفتح والعرض!", "success");
+    const summaryData = [
+      ["البند", "القيمة"],
+      ["اسم المشروع",        proj.name || "—"],
+      ["عدد النودات الكلي",  nodes.length + " نود"],
+      ["عدد الخطوط والكابلات", sections.length + " مقطع"],
+      ["محولات وأكشاك",     nodes.filter(n => ["transformer","kiosk"].includes(n.type)).length + " وحدة"],
+      ["سكاكين هوائية",     nodes.filter(n => n.type === "switch").length + " سكينة"],
+      ["إجمالي القدرة",
+        nodes.filter(n => n.capacity).reduce((s, n) => s + (parseFloat(n.capacity)||0), 0) + " kVA"
+      ],
+      ["خطوط هوائية",       sections.filter(s => s.type === "هوائي").length + " خط"],
+      ["كابلات أرضية",      sections.filter(s => s.type === "كابل").length + " كابل"],
+      ["تاريخ التصدير",     new Date().toLocaleDateString("ar-EG")],
+    ];
 
-    // إظهار لافتة كلمة المرور المعتمدة وإرشادات التعديل للمستخدم فوراً
+    const tableRows = summaryData.map((row, i) => row.map(cell => ({
+      text: String(cell),
+      options: {
+        bold: i === 0,
+        fontSize: i === 0 ? 13 : 12,
+        color: i === 0 ? "FFFFFF" : "E2E8F0",
+        fill: i === 0 ? { color: "1E40AF" } : (i % 2 === 0 ? { color: "1E293B" } : { color: "0F172A" }),
+        align: "center",
+        valign: "middle",
+        fontFace: "Segoe UI"
+      }
+    })));
+
+    slideSummary.addTable(tableRows, {
+      x: 1.0, y: 1.0, w: 11.5, h: 5.5,
+      rowH: 0.48,
+      border: { pt: 1, color: "334155" },
+    });
+
+    // ---- شريحة 4: جدول النودات ----
+    if (nodes.length > 0) {
+      const slideNodes = pptx.addSlide();
+      slideNodes.background = { color: "0F172A" };
+      slideNodes.addText("جدول النودات والعقد", {
+        x: 0.5, y: 0.15, w: 12.5, h: 0.5,
+        fontSize: 20, bold: true, color: "38BDF8", align: "center"
+      });
+      const nodeHeader = ["م", "رقم النود", "النوع", "الاسم", "القدرة", "الحالة"];
+      const nodeTableRows = [
+        nodeHeader.map(h => ({ text: h, options: { bold: true, fontSize: 11, color: "FFFFFF", fill: { color: "1E40AF" }, align: "center" } })),
+        ...nodes.slice(0, 22).map((n, i) => [
+          { text: String(i+1) },
+          { text: n.id || "—" },
+          { text: n.type === "substation" ? "محطة" : n.type === "transformer" ? "محول" : n.type === "kiosk" ? "كشك" : n.type === "switch" ? "سكينة" : n.type === "junction" ? "ربط" : n.type || "—" },
+          { text: n.name || "—" },
+          { text: n.capacity ? n.capacity + " kVA" : "—" },
+          { text: n.state === "open" ? "مفتوح" : n.state === "closed" ? "مغلق" : "—" },
+        ].map((cell, ci) => ({ ...cell, options: { fontSize: 10, color: "E2E8F0", fill: { color: i%2===0?"1E293B":"0F172A" }, align: "center" } })))
+      ];
+      slideNodes.addTable(nodeTableRows, {
+        x: 0.3, y: 0.75, w: 13, h: 6.5,
+        rowH: 0.28,
+        border: { pt: 1, color: "334155" },
+      });
+    }
+
+    // ---- شريحة 5: جدول الخطوط ----
+    if (sections.length > 0) {
+      const slideSec = pptx.addSlide();
+      slideSec.background = { color: "0F172A" };
+      slideSec.addText("جدول الخطوط والكابلات", {
+        x: 0.5, y: 0.15, w: 12.5, h: 0.5,
+        fontSize: 20, bold: true, color: "68D391", align: "center"
+      });
+      const secHeader = ["م", "رقم القطعة", "من نود", "إلى نود", "النوع", "المقطع", "الطول (م)"];
+      const secTableRows = [
+        secHeader.map(h => ({ text: h, options: { bold: true, fontSize: 11, color: "FFFFFF", fill: { color: "065F46" }, align: "center" } })),
+        ...sections.slice(0, 22).map((s, i) => [
+          { text: String(i+1) },
+          { text: s.id || "—" },
+          { text: s.from_node || "—" },
+          { text: s.to_node   || "—" },
+          { text: s.type === "كابل" ? "كابل" : "هوائي" },
+          { text: s.size   || "—" },
+          { text: String(s.length || 0) },
+        ].map((cell, ci) => ({ ...cell, options: { fontSize: 10, color: "E2E8F0", fill: { color: i%2===0?"1E293B":"0F172A" }, align: "center" } })))
+      ];
+      slideSec.addTable(secTableRows, {
+        x: 0.3, y: 0.75, w: 13, h: 6.5,
+        rowH: 0.28,
+        border: { pt: 1, color: "334155" },
+      });
+    }
+
+    // ========== خطوة 3: تحميل الملف ==========
+    const safeName = (proj.name || proj.id || "مخطط_SLD").replace(/[\\/:*?"<>|]/g, "_");
+    await pptx.writeFile({ fileName: `${safeName}.pptx` });
+
+    showToast("📥 تم تحميل المشروع بنجاح كملف PowerPoint!", "success");
     showPowerPointDownloadModal();
+
   } catch (err) {
-    console.error("Download Project Error:", err);
-    alert("تعذر تحميل المشروع بصيغة باور بوينت: " + (err.message || "تأكد من تشغيل الخادم والاتصال بالشبكة."));
+    console.error("PPTX export error:", err);
+    alert("تعذر تصدير ملف PowerPoint: " + (err.message || err));
   }
 }
+
 
 function showPowerPointDownloadModal() {
   const modal = document.getElementById("pptx-download-success-modal");
