@@ -4503,6 +4503,213 @@ function quickAddSwitchPrompt() {
 window.quickAddSwitch = quickAddSwitch;
 window.quickAddSwitchPrompt = quickAddSwitchPrompt;
 
+// --- نافذة ودوال رسم كوع (مسار منكسر 90°) بجميع الاتجاهات ---
+function openElbowModal() {
+  if (!currentProject || !currentProject.nodes || currentProject.nodes.length === 0) {
+    if (typeof createNewProjectDirectly === 'function') {
+      createNewProjectDirectly();
+    } else {
+      currentProject = { id: "feeder_" + Date.now(), name: "مخطط جديد", nodes: [], sections: [] };
+      window.currentProject = currentProject;
+    }
+  }
+  if (!currentProject.nodes) currentProject.nodes = [];
+  if (!currentProject.sections) currentProject.sections = [];
+
+  // إذا كان المشروع فارغاً ننشئ محطة كبداية
+  if (currentProject.nodes.length === 0) {
+    currentProject.nodes.push({
+      id: "N1",
+      type: "substation",
+      name: "محطة محولات",
+      x: 400,
+      y: (window.drawingFlowDirection === 'up') ? 800 : 100
+    });
+    if (typeof renderNetwork === 'function') renderNetwork();
+  }
+
+  const modal = document.getElementById("elbow-modal");
+  if (!modal) return;
+
+  try { populateNodeDropdowns(); } catch (_) {}
+
+  // تعبئة قائمة نود البداية
+  const fromSelect = document.getElementById("elbow-from-node");
+  if (fromSelect) {
+    let opts = "";
+    currentProject.nodes.forEach(n => {
+      let desc = n.name || n.type || "نود";
+      opts += `<option value="${n.id}">[${n.id}] ${desc}</option>`;
+    });
+    fromSelect.innerHTML = opts;
+
+    // تحديد النود الافتراضي (المحدد أو آخر نود)
+    const lastNode = currentProject.nodes[currentProject.nodes.length - 1];
+    let defaultId = (selectedElement && selectedElement.type === 'node') ? selectedElement.id : (lastNode ? lastNode.id : null);
+    if (defaultId) fromSelect.value = defaultId;
+  }
+
+  // اقتراح رقم النود التالي
+  let nextNum = currentProject.nodes.length + 1;
+  while (currentProject.nodes.some(n => n.id === "N" + nextNum)) nextNum++;
+  const toNodeInput = document.getElementById("elbow-to-node");
+  if (toNodeInput) toNodeInput.value = "N" + nextNum;
+
+  modal.classList.remove("hidden");
+  modal.style.display = "flex";
+}
+
+function closeElbowModal() {
+  const modal = document.getElementById("elbow-modal");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.style.display = "none";
+  }
+}
+
+function submitElbowModal() {
+  if (!currentProject) return;
+
+  const fromNodeId = document.getElementById("elbow-from-node")?.value;
+  let toNodeId = document.getElementById("elbow-to-node")?.value?.trim()?.toUpperCase();
+  const dirRadio = document.querySelector('input[name="elbow-dir"]:checked');
+  const elbowDir = dirRadio ? dirRadio.value : "right-down";
+  const lineType = document.getElementById("elbow-line-type")?.value || "هوائي";
+  const lineSize = document.getElementById("elbow-line-size")?.value || "70/12";
+  const lineLen = parseFloat(document.getElementById("elbow-line-len")?.value) || 800;
+
+  const fromNode = currentProject.nodes.find(n => n.id === fromNodeId);
+  if (!fromNode) {
+    alert("الرجاء اختيار نقطة البداية!");
+    return;
+  }
+
+  if (!toNodeId) {
+    let nextNum = currentProject.nodes.length + 1;
+    while (currentProject.nodes.some(n => n.id === "N" + nextNum)) nextNum++;
+    toNodeId = "N" + nextNum;
+  }
+
+  if (currentProject.nodes.some(n => n.id === toNodeId)) {
+    alert(`رقم النود [${toNodeId}] مستخدم بالفعل، يرجى كتابة رقم آخر.`);
+    return;
+  }
+
+  saveHistoryState();
+
+  // حساب إزاحة النود الجديد بناءً على اتجاه الكوع
+  // المسافات القياسية: dx=200, dy=180
+  const STEP_X = 200;
+  const STEP_Y = 180;
+  let dx = 0, dy = 0;
+  let cornerStyle = "hv"; // hv = أفقي ثم رأسي، vh = رأسي ثم أفقي
+  let secDirection = "right";
+
+  switch (elbowDir) {
+    case "right-down":
+      dx = STEP_X;
+      dy = STEP_Y;
+      cornerStyle = "hv"; // يمين أفقي ثم لأسفل
+      secDirection = "right";
+      break;
+    case "right-up":
+      dx = STEP_X;
+      dy = -STEP_Y;
+      cornerStyle = "hv"; // يمين أفقي ثم لأعلى
+      secDirection = "right";
+      break;
+    case "left-down":
+      dx = -STEP_X;
+      dy = STEP_Y;
+      cornerStyle = "hv"; // شمال أفقي ثم لأسفل
+      secDirection = "left";
+      break;
+    case "left-up":
+      dx = -STEP_X;
+      dy = -STEP_Y;
+      cornerStyle = "hv"; // شمال أفقي ثم لأعلى
+      secDirection = "left";
+      break;
+    case "down-right":
+      dx = STEP_X;
+      dy = STEP_Y;
+      cornerStyle = "vh"; // لأسفل رأسي ثم يمين
+      secDirection = "down";
+      break;
+    case "down-left":
+      dx = -STEP_X;
+      dy = STEP_Y;
+      cornerStyle = "vh"; // لأسفل رأسي ثم شمال
+      secDirection = "down";
+      break;
+    case "up-right":
+      dx = STEP_X;
+      dy = -STEP_Y;
+      cornerStyle = "vh"; // لأعلى رأسي ثم يمين
+      secDirection = "up";
+      break;
+    case "up-left":
+      dx = -STEP_X;
+      dy = -STEP_Y;
+      cornerStyle = "vh"; // لأعلى رأسي ثم شمال
+      secDirection = "up";
+      break;
+    default:
+      dx = STEP_X;
+      dy = STEP_Y;
+      cornerStyle = "hv";
+      secDirection = "right";
+  }
+
+  // إنشاء النود الجديد (نقطة ربط طرفية بعد الكوع)
+  const newNode = {
+    id: toNodeId,
+    type: "junction",
+    name: `نقطة ${toNodeId}`,
+    x: fromNode.x + dx,
+    y: fromNode.y + dy
+  };
+  currentProject.nodes.push(newNode);
+
+  // إنشاء الخط المنكسر 90°
+  let nextSecNum = currentProject.sections.length + 1;
+  while (currentProject.sections.some(s => s.id === "S" + nextSecNum)) nextSecNum++;
+
+  const newSec = {
+    id: "S" + nextSecNum,
+    from_node: fromNode.id,
+    to_node: toNodeId,
+    type: lineType,
+    size: lineSize,
+    length: lineLen,
+    direction: secDirection,
+    corner_style: cornerStyle,
+    deflection_offset: 0,
+    is_slanted: false
+  };
+  currentProject.sections.push(newSec);
+
+  closeElbowModal();
+  renderNetwork();
+
+  const dirLabels = {
+    "right-down": "يمين ثم لأسفل ↘️",
+    "right-up": "يمين ثم لأعلى ↗️",
+    "left-down": "شمال ثم لأسفل ↙️",
+    "left-up": "شمال ثم لأعلى ↖️",
+    "down-right": "لأسفل ثم يمين ↳",
+    "down-left": "لأسفل ثم شمال ↲",
+    "up-right": "لأعلى ثم يمين ↱",
+    "up-left": "لأعلى ثم شمال ↰"
+  };
+
+  showToast(`📐 تم رسم كوع 90° (${dirLabels[elbowDir] || elbowDir}) من [${fromNode.id}] إلى [${toNodeId}] بنجاح!`, "success");
+}
+
+window.openElbowModal = openElbowModal;
+window.closeElbowModal = closeElbowModal;
+window.submitElbowModal = submitElbowModal;
+
 // --- وحدة الربط الحلقي RMU (بدون كابلات، وتوصيل حسب الاتجاه فقط) ---
 function openRMUModal() {
   if (window.hasPermission && !window.hasPermission('btn_rmu')) {

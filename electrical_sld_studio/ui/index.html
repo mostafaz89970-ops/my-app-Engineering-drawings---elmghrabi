@@ -252,6 +252,9 @@
           <button class="cad-tool-btn" data-perm="btn_line_between" onclick="openLineBetweenNodesModal()" title="أخذ مناول أو تفريعة جديدة من خط مارر بين نقطتين">
             <span>⚡ أخذ مناول</span>
           </button>
+          <button class="cad-tool-btn" onclick="openElbowModal()" title="رسم مسار كوع منكسر بزاوية 90° بجميع الاتجاهات" style="background: rgba(14, 165, 233, 0.15); border-color: #38bdf8; color: #38bdf8; font-weight: bold;">
+            <span>📐 كوع 90°</span>
+          </button>
         </div>
 
         <div class="cad-ribbon-sep"></div>
@@ -400,6 +403,11 @@
           <div class="palette-item" onclick="openSwitchModal('right')" title="سكينة هوائية مفصلية أفقية">
             <div class="item-icon">➖</div>
             <span class="item-name">سكينة أفقية</span>
+          </div>
+
+          <div class="palette-item" onclick="openElbowModal()" title="رسم كوع منكسر بزاوية 90° بجميع الاتجاهات">
+            <div class="item-icon">📐</div>
+            <span class="item-name">كوع 90°</span>
           </div>
 
           <div class="palette-item" data-perm="btn_switch" onclick="toggleAllSwitches()" title="فتح أو غلق جميع السكاكين الهوائية في المخطط بالكامل" style="background: rgba(245, 158, 11, 0.12); border: 1px solid #f59e0b;">
@@ -1382,6 +1390,104 @@
     </div>
   </div>
 
+  <!-- نافذة رسم كوع منكسر بزاوية 90° بجميع الاتجاهات -->
+  <div id="elbow-modal" class="modal-overlay hidden">
+    <div class="modal-dialog" style="max-width: 530px;">
+      <div class="modal-header">
+        <h3 id="elbow-modal-title" style="color:#38bdf8; font-size:16px;">📐 رسم كوع (مسار منكسر 90°) بجميع الاتجاهات</h3>
+        <button class="modal-close" onclick="closeElbowModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:16px 20px;">
+        <div class="form-grid-2" style="margin-bottom:12px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="color:#63b3ed; font-weight:bold; font-size:12px;">📍 من نود (نقطة البداية):</label>
+            <select id="elbow-from-node" class="form-control"></select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="color:#68d391; font-weight:bold; font-size:12px;">📍 إلى نود جديد:</label>
+            <input type="text" id="elbow-to-node" class="form-control" value="N2">
+          </div>
+        </div>
+
+        <!-- اختيار اتجاه الكوع -->
+        <div class="form-group" style="margin-bottom:14px;">
+          <label style="font-weight:bold; font-size:12px; color:#e2e8f0; margin-bottom:8px; display:block;">
+            🧭 اتجاه مسار الكوع (انكسار 90°):
+          </label>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+            <label style="background:var(--bg-tertiary); padding:10px 12px; border-radius:6px; cursor:pointer; font-size:12px; border:1px solid var(--border-color); display:flex; align-items:center; gap:8px;">
+              <input type="radio" name="elbow-dir" value="right-down" checked>
+              <span>↘️ <b>يمين ثم لأسفل</b> (أفقي ➔ رأسي)</span>
+            </label>
+            <label style="background:var(--bg-tertiary); padding:10px 12px; border-radius:6px; cursor:pointer; font-size:12px; border:1px solid var(--border-color); display:flex; align-items:center; gap:8px;">
+              <input type="radio" name="elbow-dir" value="right-up">
+              <span>↗️ <b>يمين ثم لأعلى</b> (أفقي ➔ رأسي)</span>
+            </label>
+            <label style="background:var(--bg-tertiary); padding:10px 12px; border-radius:6px; cursor:pointer; font-size:12px; border:1px solid var(--border-color); display:flex; align-items:center; gap:8px;">
+              <input type="radio" name="elbow-dir" value="left-down">
+              <span>↙️ <b>شمال ثم لأسفل</b> (أفقي ➔ رأسي)</span>
+            </label>
+            <label style="background:var(--bg-tertiary); padding:10px 12px; border-radius:6px; cursor:pointer; font-size:12px; border:1px solid var(--border-color); display:flex; align-items:center; gap:8px;">
+              <input type="radio" name="elbow-dir" value="left-up">
+              <span>↖️ <b>شمال ثم لأعلى</b> (أفقي ➔ رأسي)</span>
+            </label>
+            <label style="background:var(--bg-tertiary); padding:10px 12px; border-radius:6px; cursor:pointer; font-size:12px; border:1px solid var(--border-color); display:flex; align-items:center; gap:8px;">
+              <input type="radio" name="elbow-dir" value="down-right">
+              <span>↳ <b>لأسفل ثم يمين</b> (رأسي ➔ أفقي)</span>
+            </label>
+            <label style="background:var(--bg-tertiary); padding:10px 12px; border-radius:6px; cursor:pointer; font-size:12px; border:1px solid var(--border-color); display:flex; align-items:center; gap:8px;">
+              <input type="radio" name="elbow-dir" value="down-left">
+              <span>↲ <b>لأسفل ثم شمال</b> (رأسي ➔ أفقي)</span>
+            </label>
+            <label style="background:var(--bg-tertiary); padding:10px 12px; border-radius:6px; cursor:pointer; font-size:12px; border:1px solid var(--border-color); display:flex; align-items:center; gap:8px;">
+              <input type="radio" name="elbow-dir" value="up-right">
+              <span>↱ <b>لأعلى ثم يمين</b> (رأسي ➔ أفقي)</span>
+            </label>
+            <label style="background:var(--bg-tertiary); padding:10px 12px; border-radius:6px; cursor:pointer; font-size:12px; border:1px solid var(--border-color); display:flex; align-items:center; gap:8px;">
+              <input type="radio" name="elbow-dir" value="up-left">
+              <span>↰ <b>لأعلى ثم شمال</b> (رأسي ➔ أفقي)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- خصائص الخط -->
+        <div class="form-grid-3" style="margin-bottom:12px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:11px; color:#cbd5e1;">نوع الموصل:</label>
+            <select id="elbow-line-type" class="form-control">
+              <option value="هوائي" selected>➖ خط هوائي</option>
+              <option value="كابل">╍ كابل أرضي</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:11px; color:#cbd5e1;">المقطع:</label>
+            <select id="elbow-line-size" class="form-control">
+              <option value="70/12" selected>70/12</option>
+              <option value="150/25">150/25</option>
+              <option value="سبيكة">سبيكة AAAC</option>
+              <option value="3*240">3*240 مم²</option>
+              <option value="3*150">3*150 مم²</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:11px; color:#cbd5e1;">الطول (متر):</label>
+            <input type="number" id="elbow-line-len" class="form-control" value="800" step="50">
+          </div>
+        </div>
+
+        <div style="font-size:11px; color:#94a3b8; padding:8px 10px; background:rgba(14,165,233,0.08); border:1px solid rgba(14,165,233,0.3); border-radius:6px;">
+          💡 <b>الكوع</b>: يقوم برسم مسار هندسي منكسر بزاوية قائمة 90° تماماً بالاتجاه المحدد، مع إنشاء نقطة ربط طرفية يمكنك بعدها إكمال الرسم منها بحرية.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeElbowModal()">إلغاء</button>
+        <button class="btn btn-primary" id="elbow-submit-btn" onclick="submitElbowModal()" style="background:#0284c7; border-color:#38bdf8;">
+          <span>📐 رسم الكوع فوراً ➔</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- مدخل ملف الباور بوينت المخفي -->
   <input type="file" id="pptx-file-input" accept=".pptx" style="display:none;" onchange="handlePowerPointFileInput(event)">
 
@@ -2332,14 +2438,14 @@
   </div>
 
   <script src="js/jszip.min.js"></script>
-  <script src="js/default_projects.js?v=19.0"></script>
-  <script src="js/auth.js?v=19.0"></script>
-  <script src="js/realtime_sync.js?v=19.0"></script>
-  <script src="js/components.js?v=19.0"></script>
-  <script src="js/simulation.js?v=19.0"></script>
-  <script src="js/canvas.js?v=19.0"></script>
-  <script src="js/app.js?v=19.0"></script>
-  <script src="js/settings.js?v=19.0"></script>
+  <script src="js/default_projects.js?v=20.0"></script>
+  <script src="js/auth.js?v=20.0"></script>
+  <script src="js/realtime_sync.js?v=20.0"></script>
+  <script src="js/components.js?v=20.0"></script>
+  <script src="js/simulation.js?v=20.0"></script>
+  <script src="js/canvas.js?v=20.0"></script>
+  <script src="js/app.js?v=20.0"></script>
+  <script src="js/settings.js?v=20.0"></script>
 </body>
 </html>
 
