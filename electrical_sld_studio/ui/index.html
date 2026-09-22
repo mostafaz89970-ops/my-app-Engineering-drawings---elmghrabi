@@ -1014,32 +1014,54 @@
 
   <!-- نافذة إدخال الخط / الكابل (Line Dialog) -->
   <div id="line-dialog-modal" class="modal-overlay hidden">
-    <div class="modal-dialog">
+    <div class="modal-dialog" style="max-width:560px;">
       <div class="modal-header">
         <h3 id="line-dialog-title">➖ رسم خط هوائي</h3>
         <button class="modal-close" onclick="closeLineDialog()">✕</button>
       </div>
       <div class="modal-body">
-        <div class="form-grid-2">
-          <div class="form-group">
-            <label>من نود (أخذ مناول من أي نقطة):</label>
-            <select id="dlg-from-node" class="form-control" onchange="onLineFromNodeChange()"></select>
-          </div>
-          <div class="form-group">
-            <label>إلى نود:</label>
-            <input type="text" id="dlg-to-node" class="form-control" value="N2">
-          </div>
+
+        <!-- من نود -->
+        <div class="form-group">
+          <label>📍 من نود (نقطة البداية):</label>
+          <select id="dlg-from-node" class="form-control" onchange="onLineFromNodeChange()"></select>
         </div>
 
         <!-- خيار الربط المباشر قبل السكينة عند التفرع من نود سكينة -->
-        <div id="dlg-switch-tap-group" style="display:none; margin-top: 6px; margin-bottom: 12px; padding: 10px 14px; background: rgba(56, 178, 172, 0.1); border: 1px solid rgba(56, 178, 172, 0.4); border-radius: 6px;">
+        <div id="dlg-switch-tap-group" style="display:none; margin-bottom: 10px; padding: 10px 14px; background: rgba(56, 178, 172, 0.1); border: 1px solid rgba(56, 178, 172, 0.4); border-radius: 6px;">
           <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-weight:bold; color:#E2E8F0; margin-bottom:4px;">
             <input type="checkbox" id="dlg-switch-tap-direct" checked style="width:18px; height:18px; accent-color:#38B2AC; cursor:pointer;">
             <span>⚡ ربط مباشر قبل السكينة (على الخط الرئيسي المغذي)</span>
           </label>
           <div style="font-size:11.5px; color:#A0AEC0; line-height:1.6; margin-right:28px;">
-            • <b>مفعل (☑️):</b> أخذ تفريعة مباشرة من الخط الرئيسي المغذي للسكينة دون أن تتأثر بفتح/فصل السكينة للخط الآخر.<br>
-            • <b>مغلق (⬜):</b> توصيل بعد السكينة بحيث يتحكم سيف السكينة في فصل وتوصيل هذا الخط.
+            • <b>مفعل (☑️):</b> أخذ تفريعة مباشرة من الخط الرئيسي دون التأثر بفتح/فصل السكينة.<br>
+            • <b>مغلق (⬜):</b> توصيل بعد السكينة بحيث يتحكم سيف السكينة في الفصل والتوصيل.
+          </div>
+        </div>
+
+        <!-- إلى نود: اختيار قائم أو جديد -->
+        <div class="form-group">
+          <label>🎯 إلى نود (نقطة الوجهة):</label>
+          <div style="display:flex; gap:8px; margin-bottom:6px;">
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; font-weight:bold; color:#63b3ed;">
+              <input type="radio" name="dlg-to-mode" value="existing" id="dlg-to-existing-radio" onchange="onDlgToModeChange()">
+              🔗 نود قائم موجود
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; font-weight:bold; color:#68d391;">
+              <input type="radio" name="dlg-to-mode" value="new" id="dlg-to-new-radio" onchange="onDlgToModeChange()" checked>
+              ➕ إنشاء نود جديد
+            </label>
+          </div>
+          <!-- اختيار نود قائم -->
+          <div id="dlg-to-existing-wrap" style="display:none;">
+            <select id="dlg-to-existing-node" class="form-control" style="border-color:#63b3ed;"></select>
+            <div style="font-size:11px; color:#63b3ed; margin-top:4px;">
+              💡 سيتم رسم الخط وتوصيله بهذا النود القائم مباشرةً (ربط بين نود ونود).
+            </div>
+          </div>
+          <!-- إنشاء نود جديد -->
+          <div id="dlg-to-new-wrap">
+            <input type="text" id="dlg-to-node" class="form-control" value="N2" placeholder="رقم النود الجديد" style="border-color:#68d391;">
           </div>
         </div>
 
@@ -1069,6 +1091,45 @@
             <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
               <input type="radio" name="dlg-dir" value="left" onchange="onLineFromNodeChange()"> شمال ⬅️
             </label>
+          </div>
+        </div>
+
+        <!-- سكينة اختيارية في نهاية الخط (ربط حلقي) -->
+        <div style="margin-top:12px; padding:10px 14px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.35); border-radius:6px;">
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-weight:bold; color:#fbbf24; margin-bottom:6px;">
+            <input type="checkbox" id="dlg-add-switch" style="width:18px; height:18px; accent-color:#f59e0b; cursor:pointer;" onchange="onDlgAddSwitchChange()">
+            <span>⚡ إضافة سكينة في نهاية الخط (ربط حلقي)</span>
+          </label>
+          <div style="font-size:11px; color:#A0AEC0; line-height:1.5; margin-right:28px; margin-bottom:6px;">
+            💡 تُدرج سكينة في <b>نهاية الخط</b> لإمكانية فصل/توصيل الربط الحلقي بين المغذيات.
+          </div>
+          <div id="dlg-switch-details" style="display:none; margin-top:8px;">
+            <div class="form-grid-3">
+              <div class="form-group" style="margin-bottom:0;">
+                <label style="font-size:11px; color:#cbd5e1;">اسم السكينة:</label>
+                <input type="text" id="dlg-sw-name" class="form-control" value="سكينة ربط حلقي">
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label style="font-size:11px; color:#cbd5e1;">الحالة:</label>
+                <select id="dlg-sw-state" class="form-control">
+                  <option value="open" selected>مفتوحة 🔴 (فصل)</option>
+                  <option value="closed">مغلقة 🟢 (توصيل)</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label style="font-size:11px; color:#cbd5e1;">اتجاه السكينة:</label>
+                <select id="dlg-sw-dir" class="form-control">
+                  <option value="auto" selected>تلقائي</option>
+                  <option value="down">رأسي ⬇️</option>
+                  <option value="right">أفقي ➡️</option>
+                  <option value="up">رأسي ⬆️</option>
+                  <option value="left">أفقي ⬅️</option>
+                </select>
+              </div>
+            </div>
+            <div style="font-size:11px; color:#94a3b8; margin-top:8px; padding:6px 10px; background:rgba(245,158,11,0.06); border-radius:4px;">
+              📌 ملاحظة: عند الربط بنود قائم — السكينة تُضاف قبل النود المختار مباشرةً على الخط.
+            </div>
           </div>
         </div>
 
@@ -2438,14 +2499,14 @@
   </div>
 
   <script src="js/jszip.min.js"></script>
-  <script src="js/default_projects.js?v=20.0"></script>
-  <script src="js/auth.js?v=20.0"></script>
-  <script src="js/realtime_sync.js?v=20.0"></script>
-  <script src="js/components.js?v=20.0"></script>
-  <script src="js/simulation.js?v=20.0"></script>
-  <script src="js/canvas.js?v=20.0"></script>
-  <script src="js/app.js?v=20.0"></script>
-  <script src="js/settings.js?v=20.0"></script>
+  <script src="js/default_projects.js?v=21.0"></script>
+  <script src="js/auth.js?v=21.0"></script>
+  <script src="js/realtime_sync.js?v=21.0"></script>
+  <script src="js/components.js?v=21.0"></script>
+  <script src="js/simulation.js?v=21.0"></script>
+  <script src="js/canvas.js?v=21.0"></script>
+  <script src="js/app.js?v=21.0"></script>
+  <script src="js/settings.js?v=21.0"></script>
 </body>
 </html>
 
