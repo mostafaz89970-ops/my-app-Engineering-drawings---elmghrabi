@@ -941,14 +941,10 @@ const Components = {
 
         // المسار المحكوم بسيف السكينة
         if (isSource) {
-          if (dir === "right" && otherNode && otherNode.x < node.x) {
-            return pBase;
-          }
-          if (dir === "left" && otherNode && otherNode.x > node.x) {
-            return pBase;
-          }
+          // الخط الخارج من السكينة يخرج دائماً من طرف السيف
           return pOut;
         } else {
+          // الخط الداخل للسكينة: إذا كان قادماً من نفس جهة السيف يدخل من طرف السيف
           if ((dir === "left" && otherNode && otherNode.x < node.x) ||
               (dir === "right" && otherNode && otherNode.x > node.x)) {
             return pOut;
