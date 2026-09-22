@@ -1973,7 +1973,7 @@ function openLineDialog(type) {
 
   populateNodeDropdowns();
 
-  // اقتراح آخر نود كافتراضي، مع إمكانية اختيار أي نود لأخذ مناول
+  // اقتراح آخر نود كافتراضي
   const lastNode = currentProject.nodes[currentProject.nodes.length - 1];
   const nextNum = currentProject.nodes.length + 1;
   if (lastNode) document.getElementById("dlg-from-node").value = lastNode.id;
@@ -1983,9 +1983,53 @@ function openLineDialog(type) {
   const dirRadio = document.querySelector(`input[name="dlg-dir"][value="${targetDir}"]`);
   if (dirRadio) dirRadio.checked = true;
 
+  // إعادة ضبط وضع النود الوجهة: افتراضي = إنشاء جديد
+  const toNewRadio = document.getElementById("dlg-to-new-radio");
+  if (toNewRadio) toNewRadio.checked = true;
+  onDlgToModeChange();
+
+  // تعبئة dropdown النود القائم بجميع النودات (باستثناء نود البداية)
+  _populateExistingNodeDropdown();
+
+  // إعادة ضبط السكينة
+  const addSwChk = document.getElementById("dlg-add-switch");
+  if (addSwChk) addSwChk.checked = false;
+  const swDetails = document.getElementById("dlg-switch-details");
+  if (swDetails) swDetails.style.display = "none";
+
   onLineFromNodeChange();
   modal.classList.remove("hidden");
 }
+
+// تعبئة dropdown النودات القائمة لاختيار الوجهة
+function _populateExistingNodeDropdown() {
+  const sel = document.getElementById("dlg-to-existing-node");
+  if (!sel || !currentProject) return;
+  const fromId = document.getElementById("dlg-from-node")?.value;
+  let opts = "";
+  currentProject.nodes.forEach(n => {
+    if (n.id === fromId) return; // استبعاد نود البداية
+    const typeLabel = n.type === "substation" ? "محطة" :
+                      n.type === "switch" ? "سكينة" :
+                      n.type === "kiosk" ? "كشك" :
+                      n.type === "transformer" ? "محول" :
+                      n.type === "junction" ? "نقطة ربط" : n.type;
+    opts += `<option value="${n.id}">[${n.id}] ${n.name || typeLabel}</option>`;
+  });
+  sel.innerHTML = opts || `<option value="">— لا توجد نودات قائمة —</option>`;
+}
+window._populateExistingNodeDropdown = _populateExistingNodeDropdown;
+
+// تبديل عرض حقل الوجهة (قائم أو جديد)
+function onDlgToModeChange() {
+  const mode = document.querySelector('input[name="dlg-to-mode"]:checked')?.value || "new";
+  const existingWrap = document.getElementById("dlg-to-existing-wrap");
+  const newWrap = document.getElementById("dlg-to-new-wrap");
+  if (existingWrap) existingWrap.style.display = (mode === "existing") ? "block" : "none";
+  if (newWrap) newWrap.style.display = (mode === "new") ? "block" : "none";
+  if (mode === "existing") _populateExistingNodeDropdown();
+}
+window.onDlgToModeChange = onDlgToModeChange;
 
 function onLineFromNodeChange() {
   if (!currentProject) return;
@@ -2323,11 +2367,23 @@ function submitLineDialog() {
 
   saveHistoryState();
   const fromNodeId = document.getElementById("dlg-from-node").value.trim().toUpperCase();
-  const toNodeId = document.getElementById("dlg-to-node").value.trim().toUpperCase();
   const length = parseFloat(document.getElementById("dlg-length").value) || 1000;
   const size = document.getElementById("dlg-size").value;
   const dirEl = document.querySelector('input[name="dlg-dir"]:checked');
   const dir = dirEl ? dirEl.value : "down";
+
+  // --- تحديد وضع الوجهة: نود قائم أو جديد ---
+  const toMode = document.querySelector('input[name="dlg-to-mode"]:checked')?.value || "new";
+  let toNodeId;
+  let connectToExisting = false;
+
+  if (toMode === "existing") {
+    toNodeId = document.getElementById("dlg-to-existing-node")?.value;
+    if (!toNodeId) { alert("الرجاء اختيار النود الوجهة القائم!"); return; }
+    connectToExisting = true;
+  } else {
+    toNodeId = document.getElementById("dlg-to-node").value.trim().toUpperCase();
+  }
 
   const fromNode = currentProject.nodes.find(n => n.id === fromNodeId);
   if (!fromNode) {
@@ -2339,44 +2395,158 @@ function submitLineDialog() {
   const isDirectTap = isFromSwitch && (document.getElementById("dlg-switch-tap-direct")?.checked !== false);
   const tapSide = isFromSwitch ? (isDirectTap ? "before_switch" : "after_switch") : undefined;
 
-  const startPt = (typeof Components !== "undefined" && Components.getTerminalPoint) ?
-    Components.getTerminalPoint(fromNode, true, { tap_side: tapSide, direction: dir }) :
-    { x: fromNode.x, y: fromNode.y };
-
-  let targetX = fromNode.x;
-  let targetY = fromNode.y;
-  if (dir === "down") targetY += 220;
-  else if (dir === "up") targetY -= 220;
-  else if (dir === "right") targetX += 260;
-  else if (dir === "left") targetX -= 260;
-
+  // --- تحديد موقع النود الوجهة ---
   let toNode = currentProject.nodes.find(n => n.id === toNodeId);
-  if (!toNode) {
-    toNode = {
-      id: toNodeId,
-      type: "junction",
-      name: `نقطة ${toNodeId}`,
-      x: targetX,
-      y: targetY
-    };
-    currentProject.nodes.push(toNode);
+
+  if (connectToExisting) {
+    // ربط بنود قائم — النود موجود مسبقاً
+    if (!toNode) {
+      alert(`النود القائم (${toNodeId}) غير موجود بالمخطط!`);
+      return;
+    }
+  } else {
+    // إنشاء نود جديد بموقع مناسب
+    let targetX = fromNode.x;
+    let targetY = fromNode.y;
+    if (dir === "down") targetY += 220;
+    else if (dir === "up") targetY -= 220;
+    else if (dir === "right") targetX += 260;
+    else if (dir === "left") targetX -= 260;
+
+    if (!toNode) {
+      toNode = {
+        id: toNodeId,
+        type: "junction",
+        name: `نقطة ${toNodeId}`,
+        x: targetX,
+        y: targetY
+      };
+      currentProject.nodes.push(toNode);
+    }
   }
 
-  currentProject.sections.push({
-    id: "S" + (currentProject.sections.length + 1),
-    from_node: fromNodeId,
-    to_node: toNodeId,
-    type: currentLineDialogType,
-    size: size,
-    length: length,
-    direction: dir,
-    tap_side: isFromSwitch ? (isDirectTap ? "before_switch" : "after_switch") : undefined
-  });
+  // --- خيار إضافة سكينة في نهاية الخط (ربط حلقي) ---
+  const addSwitch = document.getElementById("dlg-add-switch")?.checked;
 
-  closeLineDialog();
-  renderNetwork();
-  showToast(`➕ تم رسم ${currentLineDialogType === 'كابل' ? 'كابل متقطع' : 'خط هوائي سليم'} بطول ${length}م من ${fromNodeId}`, "success");
+  if (addSwitch) {
+    const swName = document.getElementById("dlg-sw-name")?.value?.trim() || "سكينة ربط حلقي";
+    const swState = document.getElementById("dlg-sw-state")?.value || "open";
+    const swDirChoice = document.getElementById("dlg-sw-dir")?.value || "auto";
+
+    // حساب اتجاه السكينة
+    let swDir, swDirection;
+    if (swDirChoice !== "auto") {
+      swDir = swDirChoice;
+      swDirection = (swDir === "left" || swDir === "right") ? "horizontal" : "vertical";
+    } else {
+      swDir = dir;
+      swDirection = (dir === "right" || dir === "left") ? "horizontal" : "vertical";
+    }
+
+    // توليد ID فريد للسكينة
+    let swNum = currentProject.nodes.length + 1;
+    while (currentProject.nodes.some(n => n.id === "N" + swNum)) swNum++;
+    const swNodeId = "N" + swNum;
+
+    // موقع السكينة: قبل النود الوجهة مباشرةً
+    // نحسب موقعاً قريباً من toNode لكن على امتداد خط الاتجاه
+    let swX, swY;
+    if (connectToExisting) {
+      // موقع السكينة بين نود البداية ونود الوجهة (ثلثان من البداية)
+      swX = Math.round(fromNode.x + (toNode.x - fromNode.x) * 0.7);
+      swY = Math.round(fromNode.y + (toNode.y - fromNode.y) * 0.7);
+    } else {
+      // موقع السكينة عند نهاية الخط مع إزاحة بسيطة قبل النود الجديد
+      swX = toNode.x;
+      swY = toNode.y;
+      if (dir === "down") swY -= 50;
+      else if (dir === "up") swY += 50;
+      else if (dir === "right") swX -= 50;
+      else if (dir === "left") swX += 50;
+    }
+
+    // إنشاء نود السكينة
+    const switchNode = {
+      id: swNodeId,
+      type: "switch",
+      name: swName,
+      direction: swDirection,
+      dir: swDir,
+      state: swState,
+      x: swX,
+      y: swY
+    };
+    currentProject.nodes.push(switchNode);
+
+    // توليد IDs فريدة للمقاطع
+    let nextSecNum = currentProject.sections.length + 1;
+    while (currentProject.sections.some(s => s.id === "S" + nextSecNum)) nextSecNum++;
+
+    const mainLen = Math.round(length * 0.8);
+    const swLen = length - mainLen;
+
+    // الخط الأول: من المصدر إلى السكينة
+    currentProject.sections.push({
+      id: "S" + nextSecNum,
+      from_node: fromNodeId,
+      to_node: swNodeId,
+      type: currentLineDialogType,
+      size: size,
+      length: mainLen,
+      direction: dir,
+      tap_side: tapSide
+    });
+    nextSecNum++;
+    while (currentProject.sections.some(s => s.id === "S" + nextSecNum)) nextSecNum++;
+
+    // الخط الثاني: من السكينة إلى نود الوجهة
+    currentProject.sections.push({
+      id: "S" + nextSecNum,
+      from_node: swNodeId,
+      to_node: toNodeId,
+      type: currentLineDialogType,
+      size: size,
+      length: swLen,
+      direction: dir
+    });
+
+    closeLineDialog();
+    renderNetwork();
+    const modeLabel = connectToExisting ? `(ربط بنود قائم [${toNodeId}])` : `(نود جديد [${toNodeId}])`;
+    showToast(`⚡ تم رسم ${currentLineDialogType === 'كابل' ? 'كابل' : 'خط هوائي'} مع سكينة [${swName}] ${modeLabel}`, "success");
+
+  } else {
+    // الحالة العادية: خط مباشر بدون سكينة
+    let nextSecNum = currentProject.sections.length + 1;
+    while (currentProject.sections.some(s => s.id === "S" + nextSecNum)) nextSecNum++;
+
+    currentProject.sections.push({
+      id: "S" + nextSecNum,
+      from_node: fromNodeId,
+      to_node: toNodeId,
+      type: currentLineDialogType,
+      size: size,
+      length: length,
+      direction: dir,
+      tap_side: tapSide
+    });
+
+    closeLineDialog();
+    renderNetwork();
+    const modeLabel = connectToExisting ? `ربط بنود قائم [${toNodeId}]` : `نود جديد [${toNodeId}]`;
+    showToast(`➕ تم رسم ${currentLineDialogType === 'كابل' ? 'كابل متقطع' : 'خط هوائي سليم'} بطول ${length}م — ${modeLabel}`, "success");
+  }
 }
+
+// دالة إظهار/إخفاء تفاصيل السكينة عند تفعيل/إلغاء الخيار
+function onDlgAddSwitchChange() {
+  const chk = document.getElementById("dlg-add-switch");
+  const details = document.getElementById("dlg-switch-details");
+  if (details) {
+    details.style.display = chk && chk.checked ? "block" : "none";
+  }
+}
+window.onDlgAddSwitchChange = onDlgAddSwitchChange;
 
 // نافذة المحولات والأكشاك المتطورة مع ربط خط التغذية فوراً
 // نافذة المحولات والأكشاك المتطورة مع ربط خط التغذية فوراً
