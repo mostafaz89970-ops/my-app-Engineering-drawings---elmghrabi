@@ -1,0 +1,511 @@
+/*
+  Smart Grid SLD Studio - Canvas & Vector Styles
+  Copyright (C) ENG-MOSTAFAELMGHRABY - All Rights Reserved
+*/
+
+.canvas-viewport {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background-color: #0d1117;
+  cursor: grab;
+}
+
+.canvas-viewport.panning {
+  cursor: grabbing;
+}
+
+.infinite-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* أدوات التحكم العائمة */
+.floating-canvas-controls {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background-color: rgba(22, 27, 34, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  z-index: 50;
+  box-shadow: var(--shadow-main);
+}
+
+.ctrl-btn {
+  width: 34px;
+  height: 34px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ctrl-btn:hover {
+  background-color: var(--accent-blue);
+  border-color: var(--accent-blue);
+}
+
+/* مؤشر وضع المحاكاة */
+.sim-banner {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, #b7791f, #d69e2e);
+  color: #fff;
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 4px 15px rgba(214, 158, 46, 0.4);
+  z-index: 60;
+  animation: pulseGlow 2s infinite;
+}
+
+.sim-banner.hidden {
+  display: none;
+}
+
+@keyframes pulseGlow {
+  0% { box-shadow: 0 0 10px rgba(214, 158, 46, 0.4); }
+  50% { box-shadow: 0 0 20px rgba(214, 158, 46, 0.8); }
+  100% { box-shadow: 0 0 10px rgba(214, 158, 46, 0.4); }
+}
+
+/* خرطوشة المخطط الهندسية (أسفل مساحة الرسم) */
+.official-title-block {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  background-color: rgba(22, 27, 34, 0.92);
+  border: 2px solid #2b6cb0;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  min-width: 280px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+  z-index: 40;
+  pointer-events: auto;
+  transition: all 0.2s ease;
+}
+
+.official-title-block .block-company-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #38bdf8;
+  border-bottom: 1px solid rgba(43, 108, 176, 0.5);
+  padding-bottom: 5px;
+  margin-bottom: 7px;
+  letter-spacing: 0.3px;
+}
+
+.official-title-block .tb-toggle-btn {
+  background: rgba(43, 108, 176, 0.4);
+  border: 1px solid rgba(66, 153, 225, 0.5);
+  color: #e2e8f0;
+  border-radius: 4px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s ease;
+  user-select: none;
+  line-height: 1;
+}
+
+.official-title-block .tb-toggle-btn:hover {
+  background: #2b6cb0;
+  color: #ffffff;
+  border-color: #63b3ed;
+  box-shadow: 0 0 8px rgba(66, 153, 225, 0.4);
+}
+
+.official-title-block.collapsed {
+  padding: 6px 12px;
+  border-color: rgba(43, 108, 176, 0.6);
+  background-color: rgba(22, 27, 34, 0.88);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.official-title-block.collapsed .block-company-header {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.official-title-block .block-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.official-title-block .b-label {
+  color: #a0aec0;
+  font-weight: 600;
+}
+
+.official-title-block .b-val {
+  color: #edf2f7;
+  font-weight: 700;
+}
+
+.official-title-block .highlight-val {
+  color: #63b3ed;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.official-title-block .copyright-row {
+  border-top: 1px solid var(--border-color);
+  padding-top: 6px;
+  margin-top: 6px;
+  color: #718096;
+  font-size: 10px;
+  text-align: center;
+  display: block;
+}
+
+/* تمييز الكابل الأرضي المتقطع والخط الهوائي المكتمل السليم */
+.line-path {
+  stroke-linecap: round;
+  transition: stroke 0.25s ease, stroke-width 0.25s ease;
+}
+
+/* الكابل الأرضي: خط متقطع شرطات واضحة */
+.line-path.cable {
+  stroke-dasharray: 10 6 !important;
+  stroke-width: 3.5px !important;
+}
+
+/* الخط الهوائي: خط سليم مكتمل متصل */
+.line-path.overhead {
+  stroke-dasharray: none !important;
+  stroke-width: 3.5px !important;
+}
+
+.line-path.energized.overhead {
+  stroke: #48bb78;
+}
+
+.line-path.energized.cable {
+  stroke: #4299e1;
+}
+
+.line-path.de-energized {
+  stroke: #718096 !important;
+  opacity: 0.55;
+}
+
+/* عقد ومعدات الرسم */
+.sld-node-group {
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.sld-node-group:hover {
+  filter: drop-shadow(0 0 8px rgba(66, 153, 225, 0.8));
+}
+
+.sld-switch-interactive {
+  cursor: pointer;
+}
+
+.sld-switch-interactive:hover circle {
+  fill: #ecc94b !important;
+}
+
+/* الشارات والنصوص التوضيحية */
+.sld-badge-text {
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  font-weight: bold;
+  fill: #e2e8f0;
+  user-select: none;
+}
+
+.sld-length-pill {
+  fill: #1a202c;
+  stroke: #4a5568;
+  stroke-width: 1px;
+  rx: 4;
+}
+
+.sld-capacity-pill {
+  fill: #22543d;
+  stroke: #38a169;
+  stroke-width: 1px;
+  rx: 4;
+}
+
+.sld-node-tag {
+  fill: #2b6cb0;
+  stroke: #63b3ed;
+  stroke-width: 1px;
+  rx: 3;
+}
+/* تمييز العنصر المحدد عند النقر */
+.sld-selected {
+  outline: 2px dashed #00f0ff !important;
+  filter: drop-shadow(0 0 10px rgba(0, 240, 255, 0.9)) !important;
+}
+
+/* تمييز النود الذي تم البحث عنه بنبض وتوهج ذهبي/سماوي ملفت جداً */
+@keyframes sldSearchPulse {
+  0% {
+    filter: drop-shadow(0 0 6px #f59e0b) drop-shadow(0 0 16px #fbbf24);
+  }
+  50% {
+    filter: drop-shadow(0 0 20px #ef4444) drop-shadow(0 0 35px #f59e0b);
+  }
+  100% {
+    filter: drop-shadow(0 0 6px #f59e0b) drop-shadow(0 0 16px #fbbf24);
+  }
+}
+
+.sld-search-highlight {
+  animation: sldSearchPulse 0.9s ease-in-out infinite !important;
+}
+
+.sld-search-highlight circle,
+.sld-search-highlight rect,
+.sld-search-highlight polygon,
+.sld-search-highlight path {
+  stroke: #fbbf24 !important;
+  stroke-width: 3.5px !important;
+}
+
+/* ─── مؤشر وسهم بطاقة الخط الهندسية (Leader Pointer & Arrow) ─── */
+.sld-leader-pointer {
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.sld-section-group:hover .sld-leader-pointer polygon,
+.sld-section-group:hover .sld-leader-pointer line {
+  filter: drop-shadow(0 0 3px rgba(99, 179, 237, 0.9));
+}
+
+.sld-section-group.sld-selected .sld-leader-pointer polygon,
+.sld-section-group.sld-selected .sld-leader-pointer line,
+.sld-section-group.sld-selected .sld-leader-pointer circle {
+  stroke: #00F0FF !important;
+  fill: #00F0FF !important;
+  filter: drop-shadow(0 0 5px #00F0FF) !important;
+}
+
+line.sld-selected {
+  stroke: #00f0ff !important;
+  stroke-width: 5px !important;
+  filter: drop-shadow(0 0 8px #00f0ff) !important;
+}
+
+/* ==========================================================================
+   وضع الخلفية البيضاء النقية لصفحة الرسم (Clean White Canvas Mode)
+   ========================================================================== */
+.canvas-viewport.canvas-light {
+  background-color: #ffffff !important;
+}
+
+/* خرطوشة المخطط بالنمط الأبيض */
+.canvas-viewport.canvas-light .official-title-block {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+  border: 2px solid #0284c7 !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12) !important;
+}
+
+.canvas-viewport.canvas-light .official-title-block .block-company-header {
+  color: #0369a1 !important;
+  border-bottom: 1px solid rgba(2, 132, 199, 0.3) !important;
+}
+
+.canvas-viewport.canvas-light .official-title-block .b-label {
+  color: #64748b !important;
+}
+
+.canvas-viewport.canvas-light .official-title-block .b-val {
+  color: #0f172a !important;
+}
+
+.canvas-viewport.canvas-light .official-title-block .highlight-val {
+  color: #0284c7 !important;
+}
+
+.canvas-viewport.canvas-light .official-title-block .copyright-row {
+  border-top: 1px solid #e2e8f0 !important;
+  color: #64748b !important;
+}
+
+.canvas-viewport.canvas-light .official-title-block.collapsed {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-color: #0284c7 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+.canvas-viewport.canvas-light .tb-toggle-btn {
+  background: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0369a1 !important;
+}
+
+.canvas-viewport.canvas-light .tb-toggle-btn:hover {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+  border-color: #0284c7 !important;
+}
+
+.ctrl-btn.active-collapsed {
+  background-color: #d69e2e !important;
+  border-color: #b7791f !important;
+  color: #ffffff !important;
+}
+
+/* أدوات التحكم العائمة */
+.canvas-viewport.canvas-light .floating-canvas-controls {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1) !important;
+}
+
+.canvas-viewport.canvas-light .ctrl-btn {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #1e293b !important;
+}
+
+.canvas-viewport.canvas-light .ctrl-btn:hover {
+  background-color: #0284c7 !important;
+  border-color: #0284c7 !important;
+  color: #ffffff !important;
+}
+
+/* بطاقات الأطوال والمقاطع في الوضع الأبيض */
+.canvas-viewport.canvas-light .sld-length-pill {
+  fill: #ffffff !important;
+  stroke: #94a3b8 !important;
+}
+
+.canvas-viewport.canvas-light .sld-length-pill + text {
+  fill: #b45309 !important;
+  font-weight: bold !important;
+}
+
+.canvas-viewport.canvas-light text[fill="#ECC94B"] {
+  fill: #b45309 !important;
+  font-weight: bold !important;
+}
+
+.canvas-viewport.canvas-light text[fill="#90CDF4"] {
+  fill: #0369a1 !important;
+  font-weight: bold !important;
+}
+
+.canvas-viewport.canvas-light text[fill="#63B3ED"] {
+  fill: #0284c7 !important;
+  font-weight: bold !important;
+}
+
+.canvas-viewport.canvas-light text[fill="#9AE6B4"] {
+  fill: #15803d !important;
+  font-weight: bold !important;
+}
+
+.canvas-viewport.canvas-light rect[fill="#1A202C"] {
+  fill: #f8fafc !important;
+  stroke: #94a3b8 !important;
+}
+
+.canvas-viewport.canvas-light rect[fill="#161B22"] {
+  fill: #f1f5f9 !important;
+  stroke: #64748b !important;
+}
+
+.canvas-viewport.canvas-light text[fill="#FFFFFF"] {
+  fill: #0f172a !important;
+  font-weight: bold !important;
+}
+
+/* تنسيق يفط مسميات الأكشاك والمحولات الهندسية الأنيقة */
+.sld-placard-bg {
+  transition: all 0.2s ease;
+  pointer-events: none;
+}
+
+.sld-placard-title,
+.sld-placard-sub {
+  font-family: inherit;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* وضوح يفط ومسميات المحولات والأكشاك في الخلفية البيضاء */
+.canvas-viewport.canvas-light .sld-placard-bg {
+  fill: #ffffff !important;
+  stroke: #94a3b8 !important;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.12)) !important;
+}
+
+.canvas-viewport.canvas-light .sld-kiosk-placard rect.sld-placard-bg {
+  stroke: #2563eb !important;
+}
+
+.canvas-viewport.canvas-light .sld-trans-placard rect.sld-placard-bg {
+  stroke: #16a34a !important;
+}
+
+.canvas-viewport.canvas-light .sld-placard-title,
+.canvas-viewport.canvas-light .sld-transformer-name,
+.canvas-viewport.canvas-light .sld-kiosk-name {
+  fill: #0f172a !important;
+  font-weight: 800 !important;
+}
+
+.canvas-viewport.canvas-light .sld-placard-sub,
+.canvas-viewport.canvas-light .sld-transformer-cap,
+.canvas-viewport.canvas-light .sld-kiosk-cap,
+.canvas-viewport.canvas-light text.sld-transformer-cap,
+.canvas-viewport.canvas-light text.sld-kiosk-cap {
+  fill: #b45309 !important;
+  font-weight: 800 !important;
+}
+
+.canvas-viewport.canvas-light .sld-placard-sub tspan,
+.canvas-viewport.canvas-light .sld-transformer-id,
+.canvas-viewport.canvas-light .sld-kiosk-id {
+  fill: #0284c7 !important;
+  font-weight: 700 !important;
+}
+
+.canvas-viewport.canvas-light .line-path.de-energized {
+  stroke: #94a3b8 !important;
+}
+
+.canvas-viewport.canvas-light .sld-leader-pointer polygon,
+.canvas-viewport.canvas-light .sld-leader-pointer line,
+.canvas-viewport.canvas-light .sld-leader-pointer circle {
+  opacity: 1 !important;
+}
