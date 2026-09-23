@@ -440,6 +440,7 @@ async function handleLogin(e) {
 
   updateUserInfoUI();
   applyUserPermissions();
+  if (window.initHeaderLayout) window.initHeaderLayout();
 
   // إطلاق حدث لإظهار/إخفاء زر النسخ الاحتياطي
   try { document.dispatchEvent(new CustomEvent("sld-user-logged-in", { detail: currentUser })); } catch(e) {}
@@ -719,6 +720,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (window.initSettings) await window.initSettings();
     applyUserPermissions();
     if (window.initCanvas) window.initCanvas();
+    if (window.initHeaderLayout) window.initHeaderLayout();
     
     // استعادة المخطط الجاري العمل عليه محلياً للإدارة الحالية
     const adminName = (currentUser && currentUser.administration) ? currentUser.administration : "بني مزار شرق";
