@@ -8236,7 +8236,7 @@ async function openTransferProjectModal(projectId = null) {
   document.getElementById("transfer-current-sector").value = curSector;
   document.getElementById("transfer-current-admin").value = curAdmin;
 
-  // ملء قائمة القطاعات المستهدفة
+  // ملء قائمة القطاعات المستهدفة بنفس قطاعات تسجيل الدخول
   const sectorSelect = document.getElementById("transfer-new-sector");
   const sectorsMap = getSystemSectorsMap();
   const sectorKeys = Object.keys(sectorsMap);
@@ -8245,7 +8245,14 @@ async function openTransferProjectModal(projectId = null) {
     `<option value="${s}" ${s === curSector ? "selected" : ""}>قطاع ${s}</option>`
   ).join('');
 
-  onTransferSectorChange();
+  // اقتراح الفرع البديل تلقائياً (مثلاً إذا كان بني مزار شرق يُقترح بني مزار غرب)
+  let suggestedBranch = null;
+  if (curAdmin === "بني مزار شرق") suggestedBranch = "بني مزار غرب";
+  else if (curAdmin === "بني مزار غرب") suggestedBranch = "بني مزار شرق";
+  else if (curAdmin === "سمالوط شرق") suggestedBranch = "سمالوط غرب";
+  else if (curAdmin === "سمالوط غرب") suggestedBranch = "سمالوط شرق";
+
+  onTransferSectorChange(suggestedBranch);
   modal.classList.remove("hidden");
 }
 window.openTransferProjectModal = openTransferProjectModal;
@@ -8256,23 +8263,29 @@ function closeTransferProjectModal() {
 }
 window.closeTransferProjectModal = closeTransferProjectModal;
 
-// عند تغيير القطاع في نافذة التحويل، يتم تحديث قائمة الإدارات التابعة له تلقائياً
-function onTransferSectorChange() {
+// عند تغيير القطاع في نافذة التحويل، يتم ملء الفروع مثل تسجيل الدخول تماماً (بني مزار شرق، بني مزار غرب...)
+function onTransferSectorChange(selectedBranch = null) {
   const sectorSelect = document.getElementById("transfer-new-sector");
   const adminSelect = document.getElementById("transfer-new-admin");
   if (!sectorSelect || !adminSelect) return;
 
-  const selectedSector = sectorSelect.value;
+  const selectedSector = sectorSelect.value || "المنيا شمال";
   const sectorsMap = getSystemSectorsMap();
-  const admins = sectorsMap[selectedSector] || [];
+  const branches = sectorsMap[selectedSector] || [];
 
-  adminSelect.innerHTML = admins.map(adm => 
-    `<option value="${adm}">هندسة كهرباء ${adm}</option>`
+  adminSelect.innerHTML = branches.map(adm => 
+    `<option value="${adm}" ${adm === selectedBranch ? "selected" : ""}>${adm}</option>`
   ).join('');
+
+  if (selectedBranch && branches.includes(selectedBranch)) {
+    adminSelect.value = selectedBranch;
+  } else if (branches.length > 0) {
+    adminSelect.value = branches[0];
+  }
 }
 window.onTransferSectorChange = onTransferSectorChange;
 
-// تأكيد وتنفيذ تحويل المشروع
+// تأكيد وتنفيذ تحويل المشروع مع العزل التام ومنع خلط البيانات نهائياً
 async function submitTransferProject() {
   if (typeof isCurrentUserAdmin === "function" && !isCurrentUserAdmin()) {
     showToast("⛔ صلاحية تحويل المشاريع للمدير العام فقط", "error");
@@ -8285,7 +8298,7 @@ async function submitTransferProject() {
   const keepCopy = document.getElementById("transfer-keep-copy") ? document.getElementById("transfer-keep-copy").checked : false;
 
   if (!newSector || !newAdmin) {
-    showToast("⚠️ يرجى اختيار القطاع والإدارة المستهدفة", "warning");
+    showToast("⚠️ يرجى اختيار القطاع والفرع المستهدف", "warning");
     return;
   }
 
@@ -8296,15 +8309,16 @@ async function submitTransferProject() {
   }
 
   const oldAdmin = proj.administration || getCurrentAdminName();
-  if (oldAdmin === newAdmin && proj.sector === newSector) {
-    showToast("⚠️ المشروع ينتمي بالفعل لنفس الإدارة والقطاع المحددين!", "info");
+  const oldSector = proj.sector || "المنيا شمال";
+  if (oldAdmin === newAdmin && oldSector === newSector) {
+    showToast("⚠️ المشروع ينتمي بالفعل لنفس الفرع والقطاع المحددين!", "info");
     return;
   }
 
-  // أخذ لقطة أمان احتياطية قبل التحويل
-  captureTimelineSnapshot(`لقطة أمان قبل تحويل المخطط إلى هندسة ${newAdmin}`, proj);
+  // أخذ لقطة أمان احتياطية قبل التحويل في السجل الزمني
+  captureTimelineSnapshot(`لقطة أمان قبل تحويل المخطط من [${oldAdmin}] إلى [${newAdmin}]`, proj);
 
-  // تحديث بيانات المخطط
+  // تحديث بيانات المخطط بالفرع والقطاع الجديد وعزل كافة العقد والمقاطع
   const updatedProj = JSON.parse(JSON.stringify(proj));
   updatedProj.sector = newSector;
   updatedProj.administration = newAdmin;
@@ -8313,8 +8327,18 @@ async function submitTransferProject() {
   updatedProj.updated_at = nowStr;
   updatedProj.transferred_at = nowTs;
 
-  // 1. إضافة المشروع إلى فهرس الإدارة الجديدة
+  // تحديث هوية الإدارة داخل كل عقدة لمنع أي تداخل
+  if (Array.isArray(updatedProj.nodes)) {
+    updatedProj.nodes.forEach(n => {
+      n.administration = newAdmin;
+      n.sector = newSector;
+    });
+  }
+
   const newKey = newAdmin.trim().replace(/\s+/g, '_');
+  const oldKey = oldAdmin.trim().replace(/\s+/g, '_');
+
+  // 1. إضافة المشروع إلى فهرس الفرع الجديد المستهدف (sld_catalog_{newAdmin})
   const targetCatalog = getCatalogForAdmin(newAdmin);
   const meta = {
     id: updatedProj.id,
@@ -8336,28 +8360,80 @@ async function submitTransferProject() {
     targetCatalog.unshift(meta);
   }
   saveCatalogForAdmin(targetCatalog, newAdmin);
-  saveFeederForAdmin(updatedProj, newAdmin);
+
+  // حفظ بيانات المخطط بالمعرف المنفصل في التخزين
   try {
     localStorage.setItem("sld_proj_" + updatedProj.id, JSON.stringify(updatedProj));
   } catch(_) {}
 
-  // 2. إذا لم يتم تحديد الاحتفاظ بنسخة، نحذف من فهرس الإدارة القديمة
+  // 🔒 حماية منع خلط البيانات: لا نقوم باستبدال المخطط الجاري العمل عليه في الفرع الجديد إلا إذا كان فارغاً
+  const existingTargetFeeder = localStorage.getItem("sld_feeder_" + newKey);
+  if (!existingTargetFeeder) {
+    try { localStorage.setItem("sld_feeder_" + newKey, JSON.stringify(updatedProj)); } catch(_) {}
+  }
+
+  // 2. إذا لم يتم تحديد الاحتفاظ بنسخة، نحذف المخطط تماماً من فهرس وبيانات الفرع القديم
   if (!keepCopy && oldAdmin && oldAdmin !== newAdmin) {
     let oldCatalog = getCatalogForAdmin(oldAdmin);
     oldCatalog = oldCatalog.filter(c => c.id !== updatedProj.id && c.name !== updatedProj.name);
     saveCatalogForAdmin(oldCatalog, oldAdmin);
+
+    // إذا كان المخطط النشط في الفرع القديم هو نفس هذا المخطط، نحدث الفرع القديم لمنع بقائه أو خلطه
+    const oldSavedRaw = localStorage.getItem("sld_feeder_" + oldKey);
+    if (oldSavedRaw) {
+      try {
+        const oldP = JSON.parse(oldSavedRaw);
+        if (oldP.id === updatedProj.id || oldP.name === updatedProj.name) {
+          if (oldCatalog.length > 0) {
+            const nextProj = await loadProjectDataById(oldCatalog[0].id);
+            if (nextProj) {
+              localStorage.setItem("sld_feeder_" + oldKey, JSON.stringify(nextProj));
+            } else {
+              const blankOld = initAdminDefaultProject(oldAdmin);
+              localStorage.setItem("sld_feeder_" + oldKey, JSON.stringify(blankOld));
+            }
+          } else {
+            const blankOld = initAdminDefaultProject(oldAdmin);
+            localStorage.setItem("sld_feeder_" + oldKey, JSON.stringify(blankOld));
+          }
+        }
+      } catch(_) {}
+    }
+
+    // إذا كان هذا المخطط مفتوحاً حالياً على الشاشة والمستخدم يعمل في الفرع القديم:
+    // نقوم بتفريغ اللوحة أو تحميل مخطط آخر من نفس الفرع القديم حتى ينعزل المخطط المحول تماماً
+    if (currentProject && (currentProject.id === pId || currentProject.name === pId)) {
+      const activeAdmin = getCurrentAdminName();
+      if (activeAdmin === oldAdmin) {
+        if (oldCatalog.length > 0) {
+          const replacement = await loadProjectDataById(oldCatalog[0].id);
+          if (replacement) {
+            currentProject = replacement;
+            window.currentProject = replacement;
+          } else {
+            if (typeof createNewProjectDirectly === "function") createNewProjectDirectly();
+          }
+        } else {
+          if (typeof createNewProjectDirectly === "function") createNewProjectDirectly();
+        }
+        if (window.clearSelection) clearSelection();
+        if (typeof updateFeederInputs === "function") updateFeederInputs();
+        if (typeof renderNetwork === "function") renderNetwork();
+      } else if (activeAdmin === newAdmin) {
+        currentProject = updatedProj;
+        window.currentProject = updatedProj;
+        if (typeof updateFeederInputs === "function") updateFeederInputs();
+        if (typeof renderNetwork === "function") renderNetwork();
+      }
+    }
   }
 
-  // 3. إذا كان المشروع هو المشروع المفتوح حالياً، نحدث مساحة العمل
-  if (currentProject && currentProject.id === pId) {
-    currentProject = updatedProj;
-    window.currentProject = updatedProj;
-    if (typeof updateFeederInputs === "function") updateFeederInputs();
-  }
+  // 3. تسجيل لقطة زمنية للمخطط بعد التحويل
+  captureTimelineSnapshot(`تم تحويل المخطط بنجاح إلى فرع [${newAdmin}]`, updatedProj);
 
   // 4. البث عبر المزامنة
   if (typeof window.broadcastProjectUpdate === "function") {
-    try { window.broadcastProjectUpdate("transfer"); } catch(_) {}
+    try { window.broadcastProjectUpdate("transfer", { projectId: updatedProj.id, fromAdmin: oldAdmin, toAdmin: newAdmin }); } catch(_) {}
   }
 
   closeTransferProjectModal();
@@ -8368,7 +8444,7 @@ async function submitTransferProject() {
     openProjectsManager();
   }
 
-  showToast(`✅ تم تحويل المخطط [${updatedProj.name || updatedProj.id}] بنجاح إلى قطاع [${newSector}] - هندسة كهرباء [${newAdmin}]!`, "success");
+  showToast(`✅ تم تحويل المخطط [${updatedProj.name || updatedProj.id}] بنجاح إلى فرع [${newAdmin}] بقطاع [${newSector}] وتم عزله تماماً لمنع خلط البيانات!`, "success");
 }
 window.submitTransferProject = submitTransferProject;
 
