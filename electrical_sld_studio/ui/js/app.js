@@ -144,13 +144,18 @@ function showToast(message, type = "info") {
 }
 window.showToast = showToast;
 
-// حفظ المخطط بشكل دائم ومؤمن 100% يمنع الحذف أو التراجع عند التحديث أو البث
+// حفظ المخطط بشكل دائم ومؤمن 100% يمنع الحذف أو التراجع عند التحديث أو البث (حفظ فوري بدون تأخير)
 async function saveCurrentProject() {
   if (window.hasPermission && !window.hasPermission('btn_save')) {
     showToast("⛔ ليس لديك صلاحية حفظ المخطط", "error");
     return;
   }
   if (!currentProject) return;
+
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
 
   const now = Date.now();
   currentProject.user_saved_at = now;
@@ -160,7 +165,7 @@ async function saveCurrentProject() {
     currentProject.id = "proj_" + now;
   }
 
-  // 1. حفظ فوري محكم في التخزين المحلي للإدارة وللمتصفح
+  // 1. حفظ فوري محكم في التخزين المحلي للإدارة وللمتصفح دون أي انتظار
   const curAdmin = getCurrentAdminName();
   const curKey = curAdmin.trim().replace(/\s+/g, '_');
   saveFeederForAdmin(currentProject, curAdmin);
@@ -171,12 +176,15 @@ async function saveCurrentProject() {
     localStorage.setItem("sld_authoritative_save_time", String(now));
   } catch(e) {}
 
-  const ok = await saveProjectToStorage(currentProject);
+  // إشعار حفظ فوري مباشر دون أي لاج أو انتظار
+  showToast(`💾 تم حفظ المخطط [${currentProject.name || 'المحدد'}] فوراً بنجاح!`, "success");
+
+  // 2. مزامنة السحابة والخادم في الخلفية فوراً دون تأخير واجهة المستخدم
+  saveProjectToStorage(currentProject).catch(() => {});
   if (typeof captureTimelineSnapshot === "function") {
     try { captureTimelineSnapshot("حفظ معتمد للمخطط", currentProject); } catch(_) {}
   }
 
-  // 2. رفع مباشر وفوري لسحابة Firebase واعتماده كسجل موثوق
   if (window.pushDrawingToFirebase) {
     try { window.pushDrawingToFirebase(currentProject, 'user_explicit_save'); } catch(_) {}
   }
@@ -184,12 +192,14 @@ async function saveCurrentProject() {
   if (window.logActivity) {
     try { logActivity("save_project", `${currentProject.name || currentProject.id || '?'}`); } catch(_) {}
   }
-
-  showToast(`💾 تم حفظ المخطط [${currentProject.name || 'المحدد'}] بنجاح (محلياً وسحابياً)، ولن يُحذف أو يتغير!`, "success");
 }
 
 // التراجع
 function undoLastStep() {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
   if (window.hasPermission && !window.hasPermission('btn_undo')) {
     showToast("⛔ ليس لديك صلاحية التراجع عن الخطوات", "error");
     return;
@@ -351,6 +361,10 @@ function deleteTransformerOrKioskDirectly(nodeId) {
 }
 
 function openEditElementModal(type, id) {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
   if (!currentProject) return;
   if (type === "annotation") {
     openEditAnnotationModal(id);
@@ -893,6 +907,10 @@ function handleDeleteAction() {
 
 // فتح نافذة الحذف الذكي مع الضبط التلقائي
 function openSmartDeleteModal(type, id) {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
   if (!currentProject) return;
   smartDeleteTarget = { type, id };
 
@@ -1206,6 +1224,10 @@ function deleteCurrentlySelectedElement() {
 }
 
 function openDeleteOptionsModal() {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
   const m = document.getElementById("delete-options-modal");
   if (m) m.classList.remove("hidden");
 }
@@ -1216,6 +1238,10 @@ function closeDeleteOptionsModal() {
 }
 
 function clearEntireSchematic() {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
   if (confirm("هل أنت متأكد من رغبتك في حذف ومسح المخطط بالكامل والبدء من جديد؟")) {
     saveHistoryState();
     currentProject = {
@@ -1410,6 +1436,10 @@ window.requireSubstationFirst = requireSubstationFirst;
 
 // --- نافذة إضافة محطة محولات أو لوحة توزيع ---
 function openSubstationModal() {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
   if (window.hasPermission && !window.hasPermission('btn_substation')) {
     showToast("⛔ ليس لديك صلاحية إضافة محطة أو لوحة", "error");
     return;
@@ -1492,6 +1522,10 @@ function submitSubstationModal() {
 
 // --- نافذة أخذ خط / تفريعة من خط مارر بين نقطتين أو رسم خط مباشر ---
 function openLineBetweenNodesModal() {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
   if (window.hasPermission && !window.hasPermission('btn_line_between')) {
     showToast("⛔ ليس لديك صلاحية أخذ خط من بين نقطتين", "error");
     return;
@@ -1979,6 +2013,10 @@ function submitLineBetweenNodesModal() {
 
 // نافذة رسم خط هوائي أو كابل أرضي
 function openLineDialog(type) {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
   const reqPerm = (type === "كابل") ? "btn_cable" : "btn_overhead";
   if (window.hasPermission && !window.hasPermission(reqPerm)) {
     showToast(`⛔ ليس لديك صلاحية رسم ${type === 'كابل' ? 'الكابل الأرضي' : 'الخط الهوائي'}`, "error");
@@ -2118,6 +2156,10 @@ function openTakeTapDialog() {
 
 // --- نافذة تفريع محول من محول آخر مع تحديد نود الأخذ ونود جديد ومنع التكرار ---
 function openCascadeTransformerDialog() {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
   if (window.hasPermission && !window.hasPermission('btn_cascade_trans')) {
     showToast("⛔ ليس لديك صلاحية تفريع محول من محول", "error");
     return;
@@ -2308,6 +2350,10 @@ function submitCascadeTransformerDialog() {
 
 // نافذة إضافة كشك من كشك آخر (تغذية متتالية بكابل أرضي متقطع)
 function openKioskFromKioskDialog() {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
   if (window.hasPermission && !window.hasPermission('btn_kiosk_from_kiosk')) {
     showToast("⛔ ليس لديك صلاحية إضافة كشك من كشك آخر", "error");
     return;
@@ -2609,8 +2655,11 @@ function onDlgAddSwitchChange() {
 window.onDlgAddSwitchChange = onDlgAddSwitchChange;
 
 // نافذة المحولات والأكشاك المتطورة مع ربط خط التغذية فوراً
-// نافذة المحولات والأكشاك المتطورة مع ربط خط التغذية فوراً
 function openTransformerDialog(type) {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
   const reqPerm = (type === "kiosk") ? "btn_kiosk" : "btn_trans";
   if (window.hasPermission && !window.hasPermission(reqPerm)) {
     showToast(`⛔ ليس لديك صلاحية إضافة ${type === 'kiosk' ? 'كشك محولات' : 'محول معلق'}`, "error");
@@ -4505,6 +4554,10 @@ window.onSwitchBetweenNodeAChange = onSwitchBetweenNodeAChange;
 
 // --- السكاكين الهوائية المفصلية المعتمدة - واجهة ديناميكية ذكية وسلسة ---
 function openSwitchModal(suggestedDir = 'down') {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
   if (window.hasPermission && !window.hasPermission('btn_switch')) {
     showToast("⛔ ليس لديك صلاحية إضافة سكينة هوائية", "error");
     return;
@@ -5194,6 +5247,10 @@ window.quickAddSwitchPrompt = quickAddSwitchPrompt;
 
 // --- نافذة ودوال رسم كوع (مسار منكسر 90°) بجميع الاتجاهات ---
 function openElbowModal() {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
   if (!requireSubstationFirst()) return;
   if (!currentProject.nodes) currentProject.nodes = [];
   if (!currentProject.sections) currentProject.sections = [];
@@ -5408,6 +5465,10 @@ window.submitElbowModal = submitElbowModal;
 
 // --- وحدة الربط الحلقي RMU (بدون كابلات، وتوصيل حسب الاتجاه فقط) ---
 function openRMUModal() {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
   if (window.hasPermission && !window.hasPermission('btn_rmu')) {
     showToast("⛔ ليس لديك صلاحية إضافة وحدة RMU", "error");
     return;
@@ -5488,6 +5549,10 @@ function submitRMUModal() {
 
 // --- منظم الجهد AVR (الحمل بالأمبير وسهم موجه ونقطتا توصيل بدون رقم نود) ---
 function openAVRModal() {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
   if (window.hasPermission && !window.hasPermission('btn_avr')) {
     showToast("⛔ ليس لديك صلاحية إضافة منظم AVR", "error");
     return;
@@ -5896,7 +5961,7 @@ async function loadProjectDataById(p_id) {
   return null;
 }
 
-// نافذة إدارة المشاريع والمخططات
+// نافذة إدارة المشاريع والمخططات (مزامنة سحابية فورية ومحدثة)
 async function openProjectsManager() {
   if (window.hasPermission && !window.hasPermission('btn_projects')) {
     showToast("⛔ ليس لديك صلاحية استعراض وإدارة المشاريع", "error");
@@ -5907,15 +5972,41 @@ async function openProjectsManager() {
   if (!modal || !container) return;
 
   modal.classList.remove("hidden");
-  container.innerHTML = "<p style='text-align:center; padding:20px; color:#a0aec0;'>جاري فحص وتحديث قائمة المشاريع...</p>";
+  container.innerHTML = "<p style='text-align:center; padding:20px; color:#a0aec0;'>جاري فحص وتحديث قائمة المشاريع ومزامنة السحابة...</p>";
+
+  const curAdmin = getCurrentAdminName();
+  const aKey = curAdmin.trim().replace(/\s+/g, '_');
+
+  // 1. جلب فوري من سحابة Firebase لمزامنة الكتالوج واستقبال أي مشاريع محولة فوراً
+  try {
+    const adminUrl = "https://sld-egypt-cloud-sync-default-rtdb.firebaseio.com/admins/" + encodeURIComponent(aKey) + "/catalog.json";
+    const catController = new AbortController();
+    const catTimeout = setTimeout(() => catController.abort(), 1600);
+    const catRes = await fetch(adminUrl, { signal: catController.signal });
+    clearTimeout(catTimeout);
+    if (catRes.ok) {
+      const cloudCat = await catRes.json();
+      if (Array.isArray(cloudCat) && cloudCat.length > 0) {
+        let localCat = getCatalogForAdmin(curAdmin) || [];
+        cloudCat.forEach(cp => {
+          if (cp && (!window.isProjectDeleted || !window.isProjectDeleted(cp.id, cp.name))) {
+            const idx = localCat.findIndex(lp => lp.id === cp.id || lp.name === cp.name);
+            if (idx >= 0) localCat[idx] = cp;
+            else localCat.unshift(cp);
+          }
+        });
+        saveCatalogForAdmin(localCat, curAdmin);
+      }
+    }
+  } catch(_) {}
 
   let projects = [];
   let isServerOnline = false;
 
-  // محاولة الجلب من الخادم
+  // 2. محاولة الجلب من الخادم المحلي إن وجد
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1200);
+    const timeoutId = setTimeout(() => controller.abort(), 1000);
     const res = await fetch("/api/projects", { signal: controller.signal });
     clearTimeout(timeoutId);
     if (res.ok) {
@@ -5927,7 +6018,7 @@ async function openProjectsManager() {
     }
   } catch(e) {}
 
-  // دمج المشاريع المحلية
+  // 3. دمج المشاريع المحلية والمزامنة
   const localCatalog = getLocalProjectsCatalog();
   if (projects.length === 0) {
     projects = [...localCatalog];
@@ -5964,6 +6055,10 @@ function renderProjectsTable(projects, isServerOnline) {
   const isAdmin = (typeof isCurrentUserAdmin === "function") ? isCurrentUserAdmin() : false;
   const loggedUser = (typeof _getLoggedInUser === "function") ? _getLoggedInUser() : null;
   const userAdmin = (loggedUser && loggedUser.administration) ? loggedUser.administration : curAdmin;
+
+  const canDeleteProject = (window.hasPermission && window.hasPermission('delete_project')) || isAdmin;
+  const canLockProject = (window.hasPermission && window.hasPermission('lock_project')) || isAdmin;
+  const canShareProject = (window.hasPermission && window.hasPermission('share_project')) || isAdmin;
 
   const adminList = [
     "بني مزار شرق",
@@ -6019,9 +6114,15 @@ function renderProjectsTable(projects, isServerOnline) {
     </div>
   `;
 
-  // تصفية المشاريع: إذا لم يكن مديراً عاماً، يُمنع تماماً من رؤية مشاريع الإدارات الأخرى
+  // تصفية المشاريع: إذا لم يكن مديراً عاماً، يُعرض له فقط المشاريع المسموح بعرضها في إدارته
   if (!isAdmin) {
-    projects = projects.filter(p => !p.administration || p.administration === userAdmin);
+    projects = projects.filter(p => {
+      if (!p) return false;
+      if (Array.isArray(p.visible_admins) && p.visible_admins.length > 0) {
+        return p.visible_admins.includes(userAdmin) || p.visible_admins.includes("__all__");
+      }
+      return !p.administration || p.administration === userAdmin;
+    });
   } else if (curAdmin === "__all__") {
     // جمع كافة المشاريع من كافة الفهارس
     const allProjectsMap = new Map();
@@ -6055,10 +6156,11 @@ function renderProjectsTable(projects, isServerOnline) {
             ${(isAdmin && curAdmin === "__all__") ? "<th>الإدارة التابع لها</th>" : ""}
             <th>المحطة الرئيسية</th>
             <th>الجهد</th>
+            <th>الحالة</th>
             <th>العقد</th>
             <th>المقاطع</th>
             <th>تاريخ التعديل</th>
-            <th style="min-width:250px; text-align:center;">الإجراءات</th>
+            <th style="min-width:270px; text-align:center;">الإجراءات</th>
           </tr>
         </thead>
         <tbody>
@@ -6071,22 +6173,33 @@ function renderProjectsTable(projects, isServerOnline) {
     const encId = encodeURIComponent(p.id);
     const encName = encodeURIComponent(p.name || p.id);
     const isCurrent = currentProject && (currentProject.id === p.id || currentProject.name === p.name);
+    const isLocked = !!p.is_locked;
     const rowBg = isCurrent ? "background:rgba(49, 130, 206, 0.15);" : "";
+
+    const statusBadgeHtml = isLocked 
+      ? `<span style="display:inline-block; font-size:10px; background:rgba(239,68,68,0.25); color:#fca5a5; border:1px solid #ef4444; padding:2px 7px; border-radius:10px; font-weight:bold;">🔒 موقوف (مجمد)</span>`
+      : `<span style="display:inline-block; font-size:10px; background:rgba(34,197,94,0.2); color:#86efac; border:1px solid #22c55e; padding:2px 7px; border-radius:10px; font-weight:bold;">🟢 متاح للعمل</span>`;
+
+    const multiAdminBadge = (Array.isArray(p.visible_admins) && p.visible_admins.length > 1)
+      ? `<span style="margin-right:4px; font-size:9.5px; background:rgba(139,92,246,0.25); color:#c4b5fd; border:1px solid #8b5cf6; padding:1px 5px; border-radius:8px;" title="مشترك في: ${p.visible_admins.join('، ')}">👥 مشترك (${p.visible_admins.length})</span>`
+      : '';
 
     html += `
       <tr style="${rowBg}">
         <td style="font-weight:bold; color:#fff; text-align:right; padding-right:12px;">
           ${displayName}
           ${isCurrent ? '<span style="margin-right:6px; font-size:10px; background:#3182ce; color:#fff; padding:2px 7px; border-radius:10px;">نشط حالياً</span>' : ''}
+          ${multiAdminBadge}
         </td>
         ${(isAdmin && curAdmin === "__all__") ? `<td style="color:#60a5fa; font-weight:600; font-size:11.5px;">${displayAdmin}</td>` : ""}
         <td>${displaySub}</td>
         <td style="color:#ecc94b; font-weight:bold;">${p.voltage_kv || 11} ك.ف</td>
+        <td>${statusBadgeHtml}</td>
         <td>${p.nodes_count !== undefined ? p.nodes_count : '-'}</td>
         <td>${p.sections_count !== undefined ? p.sections_count : '-'}</td>
         <td style="font-size:11px; color:#a0aec0;">${p.updated_at || '-'}</td>
         <td style="text-align:center;">
-          <div style="display:inline-flex; gap:5px; justify-content:center; flex-wrap:wrap;">
+          <div style="display:inline-flex; gap:4px; justify-content:center; flex-wrap:wrap; align-items:center;">
             <button class="btn btn-primary btn-sm" style="padding:3px 8px; font-size:11px;" onclick="loadProjectFromManager(decodeURIComponent('${encId}'))" title="فتح وعرض المخطط">
               <span>👁️ فتح</span>
             </button>
@@ -6095,15 +6208,27 @@ function renderProjectsTable(projects, isServerOnline) {
                 <span>🔄 تحويل</span>
               </button>
             ` : ''}
+            ${canShareProject ? `
+              <button class="btn btn-outline btn-sm" style="padding:3px 8px; font-size:11px; border-color:#8b5cf6; color:#c4b5fd;" onclick="openProjectSharingModal(decodeURIComponent('${encId}'))" title="تحديد الإدارات المصرح لها برؤية واستعراض هذا المشروع">
+                <span>👥 إدارات العرض</span>
+              </button>
+            ` : ''}
+            ${canLockProject ? (
+              isLocked 
+                ? `<button class="btn btn-sm" style="padding:3px 8px; font-size:11px; background:#15803d; border-color:#22c55e; color:#fff;" onclick="toggleProjectLock(decodeURIComponent('${encId}'), false)" title="تشغيل وإتاحة المشروع للمستخدمين للعمل عليه">🔓 تفعيل</button>`
+                : `<button class="btn btn-sm" style="padding:3px 8px; font-size:11px; background:#b91c1c; border-color:#ef4444; color:#fff;" onclick="toggleProjectLock(decodeURIComponent('${encId}'), true)" title="إيقاف وتجميد المشروع لمنع العبث به">🔒 إيقاف</button>`
+            ) : ''}
             <button class="btn btn-outline btn-sm" style="padding:3px 8px; font-size:11px; border-color:#ecc94b; color:#ecc94b;" onclick="exportProjectAsSLD(decodeURIComponent('${encId}'))" title="تنزيل كملف .sld">
               <span>💾 .sld</span>
             </button>
             <button class="btn btn-outline btn-sm" style="padding:3px 8px; font-size:11px; border-color:#48bb78; color:#9ae6b4;" onclick="printProjectFromManager(decodeURIComponent('${encId}'))" title="طباعة المخطط بالكامل">
               <span>🖨️ طباعة</span>
             </button>
-            <button class="btn btn-delete btn-sm" style="padding:3px 8px; font-size:11px;" onclick="deleteProjectFromManager(decodeURIComponent('${encId}'), decodeURIComponent('${encName}'))" title="حذف هذا المشروع">
-              <span>🗑️</span>
-            </button>
+            ${canDeleteProject ? `
+              <button class="btn btn-delete btn-sm" style="padding:3px 8px; font-size:11px;" onclick="deleteProjectFromManager(decodeURIComponent('${encId}'), decodeURIComponent('${encName}'))" title="حذف هذا المشروع نهائياً">
+                <span>🗑️</span>
+              </button>
+            ` : ''}
           </div>
         </td>
       </tr>
@@ -6151,6 +6276,7 @@ async function loadProjectFromManager(p_id) {
 
   if (window.clearSelection) clearSelection();
   updateFeederInputs();
+  if (typeof updateProjectLockUI === "function") updateProjectLockUI();
   renderNetwork();
   fitToScreen();
   closeProjectsManager();
@@ -6159,6 +6285,11 @@ async function loadProjectFromManager(p_id) {
 
 // حذف مشروع نهائياً والتأكد من عدم عودته
 async function deleteProjectFromManager(p_id, p_name) {
+  if (typeof isCurrentUserAdmin === "function" && !isCurrentUserAdmin() && window.hasPermission && !window.hasPermission('delete_project')) {
+    showToast("⛔ ليس لديك صلاحية حذف المشاريع", "error");
+    return;
+  }
+
   if (!confirm(`هل أنت متأكد من رغبتك في حذف المخطط [${p_name}] بشكل نهائي؟\n\nلن يظهر هذا المشروع مجدداً ولن يتم استرجاعه تلقائياً.`)) {
     return;
   }
@@ -7169,6 +7300,10 @@ let pendingAnnotationPos = null;
 window.isPickingAnnotationPos = false;
 
 function openAddAnnotationModal(initialX, initialY) {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
   currentEditingAnnotationId = null;
   const modal = document.getElementById("annotation-modal");
   if (!modal) return;
@@ -7212,6 +7347,10 @@ window.openAddAnnotationModal = openAddAnnotationModal;
 
 function openEditAnnotationModal(annoId, e) {
   if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
   if (!currentProject || !currentProject.annotations) return;
   const anno = currentProject.annotations.find(a => a.id === annoId);
   if (!anno) return;
@@ -8465,12 +8604,12 @@ window.applyHeaderLayout = function(mode) {
   const toggleLabel = document.getElementById("ribbon-mode-label");
   const toggleBtn = document.getElementById("btn-toggle-ribbon-layout");
 
-  if (toggleIcon) toggleIcon.textContent = isRibbon ? "📋" : "📐";
-  if (toggleLabel) toggleLabel.textContent = isRibbon ? "النمط الكلاسيكي" : "نمط الباور بوينت";
+  if (toggleIcon) toggleIcon.textContent = isRibbon ? "📋" : "✨";
+  if (toggleLabel) toggleLabel.textContent = isRibbon ? "النمط الكلاسيكي" : "نمط خاص";
   if (toggleBtn) {
     toggleBtn.title = isRibbon 
       ? "الرجوع فوراً للنمط الكلاسيكي الأصلي ذو الثلاثة صفوف" 
-      : "التبديل إلى نمط شريط الباور بوينت المبوب (PowerPoint Ribbon)";
+      : "التبديل إلى النمط الخاص المبوب";
   }
 
   // مراجع الحاويات
@@ -8615,7 +8754,7 @@ window.toggleHeaderLayoutMode = function() {
 
   if (typeof showToast === "function") {
     if (nextMode === "ribbon") {
-      showToast("📐 تم التبديل إلى نمط الباور بوينت المبوب (PowerPoint Ribbon)", "info");
+      showToast("✨ تم التبديل إلى النمط الخاص المبوب", "info");
     } else {
       showToast("📋 تم الرجوع إلى النمط الكلاسيكي الأصلي بنجاح", "info");
     }
@@ -8633,6 +8772,265 @@ if (document.readyState === "loading") {
 } else {
   window.initHeaderLayout();
 }
+
+/* ==========================================================================
+   Project Lock & Freeze Controller (إيقاف وتجميد المخطط لمنع العبث)
+   ========================================================================== */
+
+function isProjectLockedForUser() {
+  if (!currentProject || !currentProject.is_locked) return false;
+  if (typeof isCurrentUserAdmin === "function" && isCurrentUserAdmin()) return false;
+  return true;
+}
+window.isProjectLockedForUser = isProjectLockedForUser;
+
+function updateProjectLockUI() {
+  const banner = document.getElementById("project-locked-banner");
+  const unlockBtn = document.getElementById("btn-unlock-banner-action");
+  const isLocked = !!(currentProject && currentProject.is_locked);
+  const isAdmin = (typeof isCurrentUserAdmin === "function") && isCurrentUserAdmin();
+
+  if (banner) {
+    if (isLocked) {
+      banner.style.display = "flex";
+      if (unlockBtn) unlockBtn.style.display = isAdmin ? "inline-flex" : "none";
+    } else {
+      banner.style.display = "none";
+    }
+  }
+}
+window.updateProjectLockUI = updateProjectLockUI;
+
+async function toggleProjectLock(pId, shouldLock) {
+  if (typeof isCurrentUserAdmin === "function" && !isCurrentUserAdmin() && window.hasPermission && !window.hasPermission('lock_project')) {
+    showToast("⛔ صلاحية إيقاف وتفعيل المشاريع للمدير العام فقط", "error");
+    return;
+  }
+
+  let proj = (currentProject && (currentProject.id === pId || currentProject.name === pId)) ? currentProject : await loadProjectDataById(pId);
+  if (!proj) {
+    showToast("❌ تعذر العثور على بيانات المشروع", "error");
+    return;
+  }
+
+  proj.is_locked = !!shouldLock;
+  proj.locked_at = shouldLock ? Date.now() : null;
+  proj.locked_by = shouldLock ? ((window.currentUser && window.currentUser.name) || "المدير العام") : null;
+
+  // حفظ في المشروع المحلي
+  try {
+    localStorage.setItem("sld_proj_" + proj.id, JSON.stringify(proj));
+    if (currentProject && (currentProject.id === proj.id || currentProject.name === proj.name)) {
+      currentProject.is_locked = proj.is_locked;
+      saveFeederForAdmin(currentProject);
+      localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
+      updateProjectLockUI();
+    }
+  } catch(_) {}
+
+  // تحديث الكتالوج للإدارة
+  const adminName = proj.administration || getCurrentAdminName();
+  const catalog = getCatalogForAdmin(adminName);
+  const metaIdx = catalog.findIndex(c => c.id === proj.id || c.name === proj.name);
+  if (metaIdx >= 0) {
+    catalog[metaIdx].is_locked = proj.is_locked;
+    saveCatalogForAdmin(catalog, adminName);
+  }
+
+  // حفظ في التخزين والسحابة
+  if (typeof saveProjectToStorage === "function") {
+    saveProjectToStorage(proj).catch(() => {});
+  }
+
+  // بث سحابي عالي الأولوية لجميع الأجهزة
+  if (typeof window.broadcastProjectLockToggled === "function") {
+    window.broadcastProjectLockToggled(proj.id, proj.name, proj.is_locked, adminName);
+  } else if (typeof window.broadcastProjectUpdate === "function") {
+    try { window.broadcastProjectUpdate("lock_toggle", { id: proj.id, is_locked: proj.is_locked, admin: adminName }); } catch(_) {}
+  }
+
+  // تحديث جدول المشاريع إذا كانت نافذة المشاريع مفتوحة
+  const modal = document.getElementById("projects-manager-modal");
+  if (modal && !modal.classList.contains("hidden")) {
+    openProjectsManager();
+  }
+
+  if (shouldLock) {
+    showToast(`🔒 تم إيقاف وتجميد المشروع [${proj.name || proj.id}] بنجاح لمنع العبث به`, "warning");
+  } else {
+    showToast(`🔓 تم إعادة تفعيل وتشغيل المشروع [${proj.name || proj.id}] وإتاحته للمستخدمين للعمل عليه بنجاح`, "success");
+  }
+}
+window.toggleProjectLock = toggleProjectLock;
+
+function toggleCurrentProjectLock(shouldLock) {
+  if (currentProject) {
+    toggleProjectLock(currentProject.id, shouldLock);
+  }
+}
+window.toggleCurrentProjectLock = toggleCurrentProjectLock;
+
+/* ==========================================================================
+   Multi-Admin Sharing & Visibility Controller (مشاركة وإدارات عرض المشروع)
+   ========================================================================== */
+
+async function openProjectSharingModal(pId) {
+  if (typeof isCurrentUserAdmin === "function" && !isCurrentUserAdmin() && window.hasPermission && !window.hasPermission('share_project')) {
+    showToast("⛔ صلاحية مشاركة وتحديد إدارات عرض المشاريع للمدير العام فقط", "error");
+    return;
+  }
+
+  let proj = (currentProject && (currentProject.id === pId || currentProject.name === pId)) ? currentProject : await loadProjectDataById(pId);
+  if (!proj) {
+    showToast("❌ تعذر العثور على بيانات المشروع", "error");
+    return;
+  }
+
+  const modal = document.getElementById("project-sharing-modal");
+  const idInput = document.getElementById("sharing-project-id");
+  const nameLabel = document.getElementById("sharing-project-name");
+  const container = document.getElementById("sharing-admins-checkboxes-container");
+  if (!modal || !idInput || !nameLabel || !container) return;
+
+  idInput.value = proj.id;
+  nameLabel.textContent = proj.name || proj.id;
+
+  const adminList = [
+    "بني مزار شرق",
+    "بني مزار غرب",
+    "مغاغة",
+    "العدوة",
+    "مطاي",
+    "سمالوط شرق",
+    "سمالوط غرب"
+  ];
+
+  let currentVisible = (Array.isArray(proj.visible_admins) && proj.visible_admins.length > 0)
+    ? proj.visible_admins
+    : [proj.administration || getCurrentAdminName()];
+
+  if (currentVisible.includes("__all__")) {
+    currentVisible = [...adminList];
+  }
+
+  container.innerHTML = adminList.map(adm => {
+    const isChecked = currentVisible.includes(adm);
+    const isPrimary = (adm === proj.administration);
+    return `
+      <label style="display:flex; align-items:center; gap:8px; padding:6px 10px; background:rgba(30,41,59,0.7); border:1px solid ${isChecked ? '#3b82f6' : '#334155'}; border-radius:6px; cursor:pointer; font-size:12px; color:#f8fafc; transition:all 0.15s ease;">
+        <input type="checkbox" name="sharing_admin_cb" value="${adm}" ${isChecked ? "checked" : ""} style="width:16px; height:16px; accent-color:#3b82f6; cursor:pointer;">
+        <span>هندسة كهرباء ${adm} ${isPrimary ? '<span style="font-size:10px; color:#ecc94b;">(الفرع الأساسي)</span>' : ''}</span>
+      </label>
+    `;
+  }).join('');
+
+  modal.classList.remove("hidden");
+}
+window.openProjectSharingModal = openProjectSharingModal;
+
+function closeProjectSharingModal() {
+  const modal = document.getElementById("project-sharing-modal");
+  if (modal) modal.classList.add("hidden");
+}
+window.closeProjectSharingModal = closeProjectSharingModal;
+
+function selectAllSharingAdmins(isSelectAll) {
+  const cbs = document.querySelectorAll('input[name="sharing_admin_cb"]');
+  cbs.forEach(cb => { cb.checked = isSelectAll; });
+}
+window.selectAllSharingAdmins = selectAllSharingAdmins;
+
+async function saveProjectSharingSettings() {
+  const pId = document.getElementById("sharing-project-id").value;
+  const cbs = document.querySelectorAll('input[name="sharing_admin_cb"]:checked');
+  const selectedAdmins = Array.from(cbs).map(cb => cb.value);
+
+  if (selectedAdmins.length === 0) {
+    showToast("⚠️ يجب اختيار إدارة واحدة على الأقل لعرض المشروع", "warning");
+    return;
+  }
+
+  let proj = (currentProject && (currentProject.id === pId || currentProject.name === pId)) ? currentProject : await loadProjectDataById(pId);
+  if (!proj) {
+    showToast("❌ تعذر العثور على بيانات المشروع", "error");
+    return;
+  }
+
+  const allAdmins = [
+    "بني مزار شرق",
+    "بني مزار غرب",
+    "مغاغة",
+    "العدوة",
+    "مطاي",
+    "سمالوط شرق",
+    "سمالوط غرب"
+  ];
+
+  proj.visible_admins = selectedAdmins;
+
+  // حفظ بيانات المخطط
+  try {
+    localStorage.setItem("sld_proj_" + proj.id, JSON.stringify(proj));
+    if (currentProject && (currentProject.id === proj.id || currentProject.name === proj.name)) {
+      currentProject.visible_admins = selectedAdmins;
+      saveFeederForAdmin(currentProject);
+      localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
+    }
+  } catch(_) {}
+
+  const meta = {
+    id: proj.id,
+    name: proj.name || "مخطط شبكة",
+    substation: proj.substation || "",
+    voltage_kv: proj.voltage_kv || 11,
+    nodes_count: (proj.nodes || []).length,
+    sections_count: (proj.sections || []).length,
+    updated_at: proj.updated_at || new Date().toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' }),
+    saved_at: Date.now(),
+    administration: proj.administration,
+    sector: proj.sector,
+    is_locked: !!proj.is_locked,
+    visible_admins: selectedAdmins
+  };
+
+  // تحديث فهارس كافة الإدارات: المختارة يُضاف لها المشروع، وغير المختارة يُزال منها
+  allAdmins.forEach(adm => {
+    let cat = getCatalogForAdmin(adm);
+    const existingIdx = cat.findIndex(c => c.id === proj.id || c.name === proj.name);
+
+    if (selectedAdmins.includes(adm)) {
+      if (existingIdx >= 0) {
+        cat[existingIdx] = meta;
+      } else {
+        cat.unshift(meta);
+      }
+      saveCatalogForAdmin(cat, adm);
+    } else {
+      if (existingIdx >= 0) {
+        cat.splice(existingIdx, 1);
+        saveCatalogForAdmin(cat, adm);
+      }
+    }
+  });
+
+  // بث سحابي لتحديث الكتالوجات عبر الأجهزة
+  if (typeof window.broadcastProjectSharingUpdated === "function") {
+    try { window.broadcastProjectSharingUpdated(proj.id, selectedAdmins); } catch(_) {}
+  } else if (window.broadcastProjectUpdate) {
+    try { window.broadcastProjectUpdate("sharing_update", { id: proj.id, visible_admins: selectedAdmins }); } catch(_) {}
+  }
+
+  closeProjectSharingModal();
+
+  // تحديث جدول المشاريع
+  const projectsModal = document.getElementById("projects-manager-modal");
+  if (projectsModal && !projectsModal.classList.contains("hidden")) {
+    openProjectsManager();
+  }
+
+  showToast(`✅ تم حفظ إدارات العرض بنجاح [معروض في ${selectedAdmins.length} إدارة]`, "success");
+}
+window.saveProjectSharingSettings = saveProjectSharingSettings;
 
 
 

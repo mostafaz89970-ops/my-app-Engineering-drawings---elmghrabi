@@ -621,6 +621,16 @@ function initCanvas() {
     const nodeGroup = e.target.closest(".sld-node-group");
     const sectionGroup = e.target.closest(".sld-section-group");
 
+    // التحقق من حالة إيقاف وتجميد المشروع لمنع العبث بالرسم
+    if (deflectGroup || stretchGroup || (nodeGroup && !isSimulationActive) || (sectionGroup && !e.target.closest(".sld-length-pill"))) {
+      if (typeof window.isProjectLockedForUser === "function" && window.isProjectLockedForUser()) {
+        if (typeof showToast === "function") {
+          showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+        }
+        return;
+      }
+    }
+
     // مقبض انحراف مسار الخط لأعلى أو لأسفل
     if (deflectGroup) {
       e.preventDefault();
@@ -1286,7 +1296,23 @@ function initCanvasTheme() {
 // ─── نافذة وصفحة المطور ENG-MOSTAFA ELMGHRABY ────────────────────────────────
 function openDeveloperModal() {
   const modal = document.getElementById("developer-modal");
-  if (modal) modal.classList.remove("hidden");
+  if (modal) {
+    modal.classList.remove("hidden");
+    const u = (typeof _getLoggedInUser === "function") ? _getLoggedInUser() : (window.currentUser || null);
+    const uName = u ? (u.name || u.id) : "غير مسجل";
+    const uRole = u ? (u.role === 'admin' ? 'المدير العام (صلاحيات كاملة)' : (u.role === 'engineer' ? 'مهندس تشغيل وتخطيط' : (u.role || 'مستخدم'))) : "-";
+    const uAdmin = (u && u.administration) ? ("هندسة كهرباء " + u.administration) : (window.getCurrentAdminName ? ("هندسة كهرباء " + window.getCurrentAdminName()) : "-");
+    const uSector = (u && u.sector) ? ("قطاع " + u.sector) : "قطاع المنيا شمال";
+
+    const nameEl = document.getElementById("dev-active-user-name");
+    const roleEl = document.getElementById("dev-active-user-role");
+    const adminEl = document.getElementById("dev-active-user-admin");
+    const sectorEl = document.getElementById("dev-active-user-sector");
+    if (nameEl) nameEl.textContent = uName;
+    if (roleEl) roleEl.textContent = uRole;
+    if (adminEl) adminEl.textContent = uAdmin;
+    if (sectorEl) sectorEl.textContent = uSector;
+  }
 }
 
 function closeDeveloperModal() {
