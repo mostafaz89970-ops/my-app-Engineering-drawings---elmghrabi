@@ -6920,23 +6920,35 @@ let _backupPendingData = null; // بيانات الملف المحدد للاس�
 function updateBackupButtonVisibility() {
   const group = document.getElementById("backup-group");
   if (!group) return;
-  const isAdmin = currentUser && (currentUser.role === "admin" || (currentUser.permissions && currentUser.permissions.includes("all")));
+  // استخدم window.currentUser (المحدَّث من auth.js) أو currentUser المحلي
+  const user = window.currentUser || currentUser;
+  const isAdmin = user && (
+    user.role === "admin" ||
+    user.is_developer === true ||
+    (user.permissions && (user.permissions.includes("all") || user.permissions.includes("developer")))
+  );
   group.style.display = isAdmin ? "" : "none";
 }
 window.updateBackupButtonVisibility = updateBackupButtonVisibility;
 
 // ربط الاستدعاء بحدث تسجيل الدخول
 document.addEventListener("sld-user-logged-in", updateBackupButtonVisibility);
-// استدعاء فوري عند التحميل (إذا كان المستخدم مسجلاً مسبقاً)
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => setTimeout(updateBackupButtonVisibility, 800));
-} else {
-  setTimeout(updateBackupButtonVisibility, 800);
-}
+
+// polling دوري لإظهار الزر بمجرد تسجيل الدخول (يتوقف بعد الظهور)
+(function _pollBackupVisibility() {
+  let tries = 0;
+  const timer = setInterval(() => {
+    tries++;
+    updateBackupButtonVisibility();
+    const group = document.getElementById("backup-group");
+    // إذا ظهر الزر أو تجاوزنا 30 محاولة (15 ثانية) نوقف
+    if ((group && group.style.display !== "none") || tries >= 30) clearInterval(timer);
+  }, 500);
+})();
 
 /** فتح نافذة النسخ الاحتياطي */
 function openBackupModal() {
-  const isAdmin = currentUser && (currentUser.role === "admin" || (currentUser.permissions && currentUser.permissions.includes("all")));
+  const _cu = window.currentUser || currentUser; const isAdmin = _cu && (_cu.role === "admin" || _cu.is_developer === true || (_cu.permissions && (_cu.permissions.includes("all") || _cu.permissions.includes("developer"))));
   if (!isAdmin) {
     showToast("⛔ هذه الميزة مخصصة للمدير فقط", "error");
     return;
@@ -6971,7 +6983,7 @@ window.closeBackupModal = closeBackupModal;
 
 /** تصدير نسخة احتياطية JSON */
 function exportBackup(mode) {
-  const isAdmin = currentUser && (currentUser.role === "admin" || (currentUser.permissions && currentUser.permissions.includes("all")));
+  const _cu = window.currentUser || currentUser; const isAdmin = _cu && (_cu.role === "admin" || _cu.is_developer === true || (_cu.permissions && (_cu.permissions.includes("all") || _cu.permissions.includes("developer"))));
   if (!isAdmin) { showToast("⛔ غير مصرح", "error"); return; }
 
   let backupData;
@@ -7121,7 +7133,7 @@ function _processBackupFile(file) {
 
 /** استيراد النسخة الاحتياطية */
 function importBackup(mode) {
-  const isAdmin = currentUser && (currentUser.role === "admin" || (currentUser.permissions && currentUser.permissions.includes("all")));
+  const _cu = window.currentUser || currentUser; const isAdmin = _cu && (_cu.role === "admin" || _cu.is_developer === true || (_cu.permissions && (_cu.permissions.includes("all") || _cu.permissions.includes("developer"))));
   if (!isAdmin) { showToast("⛔ غير مصرح", "error"); return; }
   if (!_backupPendingData) { showToast("⚠️ لم يتم اختيار ملف بعد", "warning"); return; }
 
