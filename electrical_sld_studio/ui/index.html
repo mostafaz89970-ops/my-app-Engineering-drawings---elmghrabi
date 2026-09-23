@@ -358,6 +358,16 @@
             <span id="ribbon-sidebar-text">طي القائمة</span>
           </button>
         </div>
+
+        <div class="cad-ribbon-sep"></div>
+
+        <!-- مجموعة: النسخ الاحتياطي (للمدير فقط) -->
+        <div class="cad-group" id="backup-group" style="display:none;">
+          <span class="cad-group-tag">النسخ الاحتياطي</span>
+          <button class="cad-tool-btn" onclick="openBackupModal()" title="نسخ احتياطي واستعادة بيانات المشاريع — للمدير فقط" style="background:rgba(139,92,246,0.18); border-color:#8b5cf6; color:#c4b5fd; font-weight:bold;">
+            <span>💾 نسخ احتياطي</span>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -2514,6 +2524,83 @@
           <button class="btn btn-secondary" onclick="closeAnnotationModal()">إلغاء</button>
           <button class="btn btn-primary" onclick="saveAnnotationFromModal()">💾 حفظ التنويه على الرسم</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== نافذة النسخ الاحتياطي والاستيراد (للمدير فقط) ===== -->
+  <div id="backup-modal" class="modal-overlay hidden">
+    <div class="modal-dialog" style="max-width:560px;">
+      <div class="modal-header" style="background:linear-gradient(135deg,#4c1d95,#1e1b4b);">
+        <h3 style="color:#c4b5fd; font-size:16px;">💾 النسخ الاحتياطي والاستيراد — للمدير فقط</h3>
+        <button class="modal-close" onclick="closeBackupModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:20px;">
+
+        <!-- تصدير النسخة الاحتياطية -->
+        <div style="background:rgba(139,92,246,0.08); border:1px solid rgba(139,92,246,0.35); border-radius:8px; padding:14px; margin-bottom:16px;">
+          <div style="font-weight:bold; color:#c4b5fd; font-size:14px; margin-bottom:6px;">📤 تصدير نسخة احتياطية</div>
+          <div style="font-size:12px; color:#94a3b8; margin-bottom:12px; line-height:1.6;">
+            يُصدّر جميع بيانات المشاريع الحالية وإعدادات النظام في ملف JSON مشفّر يمكن استعادته لاحقاً.
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="exportBackup('current')" style="background:#7c3aed; border-color:#8b5cf6; font-size:13px;">
+              💾 نسخ المشروع الحالي
+            </button>
+            <button class="btn btn-primary" onclick="exportBackup('all')" style="background:#4c1d95; border-color:#6d28d9; font-size:13px;">
+              💾 نسخ جميع المشاريع
+            </button>
+          </div>
+          <div id="backup-export-status" style="margin-top:8px; font-size:11px; color:#68d391; display:none;"></div>
+        </div>
+
+        <!-- استيراد نسخة احتياطية -->
+        <div style="background:rgba(16,185,129,0.07); border:1px solid rgba(16,185,129,0.35); border-radius:8px; padding:14px; margin-bottom:16px;">
+          <div style="font-weight:bold; color:#6ee7b7; font-size:14px; margin-bottom:6px;">📥 استيراد نسخة احتياطية</div>
+          <div style="font-size:12px; color:#94a3b8; margin-bottom:10px; line-height:1.6;">
+            استيراد ملف نسخة احتياطية تم تصديره مسبقاً — سيتم دمج البيانات مع الإعدادات الحالية.
+          </div>
+
+          <!-- منطقة الإسقاط -->
+          <div id="backup-dropzone"
+               onclick="document.getElementById('backup-file-input').click()"
+               ondragover="handleBackupDragOver(event)"
+               ondragleave="handleBackupDragLeave(event)"
+               ondrop="handleBackupDrop(event)"
+               style="border:2px dashed rgba(16,185,129,0.5); border-radius:6px; padding:20px; text-align:center; cursor:pointer; transition:all 0.2s; margin-bottom:10px;">
+            <div style="font-size:28px; margin-bottom:6px;">📂</div>
+            <div style="font-size:13px; color:#a0aec0;">اسحب ملف النسخة الاحتياطية هنا أو <b style="color:#68d391;">انقر للاختيار</b></div>
+            <div style="font-size:11px; color:#718096; margin-top:4px;">يدعم: ملفات .json فقط</div>
+          </div>
+          <input type="file" id="backup-file-input" accept=".json" style="display:none;" onchange="handleBackupFileSelected(event)">
+
+          <div id="backup-file-preview" style="display:none; padding:10px; background:rgba(16,185,129,0.1); border-radius:6px; margin-bottom:10px;">
+            <div style="font-size:12px; color:#6ee7b7; font-weight:bold;" id="backup-file-name"></div>
+            <div style="font-size:11px; color:#94a3b8; margin-top:4px;" id="backup-file-info"></div>
+          </div>
+
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-secondary" id="btn-import-backup" onclick="importBackup()" disabled style="font-size:13px; opacity:0.5;">
+              📥 استيراد ودمج البيانات
+            </button>
+            <button class="btn btn-danger" id="btn-replace-backup" onclick="importBackup('replace')" disabled style="font-size:13px; opacity:0.5;">
+              ⚠️ استبدال كل البيانات
+            </button>
+          </div>
+          <div id="backup-import-status" style="margin-top:8px; font-size:11px; display:none;"></div>
+        </div>
+
+        <!-- معلومات النسخة الاحتياطية -->
+        <div style="background:rgba(15,23,42,0.6); border:1px solid #334155; border-radius:6px; padding:12px;">
+          <div style="font-size:11px; color:#64748b; line-height:1.7;">
+            🔒 <b style="color:#94a3b8;">خاص بالمدير فقط:</b> هذه الميزة محمية وتظهر فقط لحساب المدير العام.<br>
+            📁 الملف المُصدَّر: <b style="color:#c4b5fd;">SLD_Backup_[التاريخ].json</b><br>
+            ⚠️ <b style="color:#f59e0b;">تحذير:</b> خيار "استبدال كل البيانات" سيمسح جميع البيانات الحالية قبل الاستيراد.
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeBackupModal()">إغلاق</button>
       </div>
     </div>
   </div>

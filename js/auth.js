@@ -175,7 +175,7 @@ const DEFAULT_FALLBACK_USERS = [
     password_plain: "123450",
     is_active: true,
     is_developer: true,
-    permissions: ["all", "developer", "edit_network", "export", "settings", "manage_users", "btn_projects", "btn_save", "btn_print", "btn_excel", "btn_cable", "btn_overhead", "btn_line_between", "btn_quick_line", "btn_substation", "btn_switch", "btn_trans", "btn_cascade_trans", "btn_kiosk", "btn_kiosk_from_kiosk", "btn_rmu", "btn_avr", "btn_simulation", "btn_calculations", "btn_undo", "btn_delete", "btn_settings"]
+    permissions: ["all", "developer", "edit_network", "export", "settings", "manage_users"]
   },
   {
     id: "planning_eng",
@@ -441,6 +441,10 @@ async function handleLogin(e) {
   updateUserInfoUI();
   applyUserPermissions();
 
+  // إطلاق حدث لإظهار/إخفاء زر النسخ الاحتياطي
+  try { document.dispatchEvent(new CustomEvent("sld-user-logged-in", { detail: currentUser })); } catch(e) {}
+  if (typeof window.updateBackupButtonVisibility === "function") window.updateBackupButtonVisibility();
+
   if (window.initCanvas) {
     try { window.initCanvas(); } catch(e) { console.warn("initCanvas error:", e); }
   }
@@ -537,10 +541,7 @@ function handleLogout() {
 }
 
 function hasPermission(permKey) {
-  if (!currentUser) return true; // متاح إذا لم يتم تسجيل مستخدم
-  // المدير العام والمطور ومسؤول المنظومة يملكون كافة الصلاحيات دون أي استثناء
-  if (currentUser.role === "admin" || currentUser.id === "admin" || currentUser.is_developer) return true;
-  if (!currentUser.permissions) return true;
+  if (!currentUser || !currentUser.permissions) return false;
   const perms = currentUser.permissions;
   if (perms.includes("all")) return true;
   if (perms.includes(permKey)) return true;
@@ -566,22 +567,21 @@ function hasPermission(permKey) {
 
 function applyUserPermissions() {
   if (!currentUser) return;
-  const isAdmin = (currentUser.role === "admin" || currentUser.id === "admin" || currentUser.is_developer || (currentUser.permissions && currentUser.permissions.includes("all")));
   
   // تطبيق الصلاحيات على جميع العناصر التي تحمل data-perm
   document.querySelectorAll("[data-perm]").forEach(el => {
     const req = el.getAttribute("data-perm");
-    if (isAdmin || hasPermission(req)) {
-      el.style.display = "";
-    } else {
+    if (!hasPermission(req)) {
       el.style.display = "none";
+    } else {
+      el.style.display = "";
     }
   });
 
   // زر الإعدادات
   const btnSettings = document.getElementById("btn-settings");
   if (btnSettings) {
-    btnSettings.style.display = (isAdmin || hasPermission("btn_settings") || hasPermission("settings")) ? "" : "none";
+    btnSettings.style.display = (hasPermission("btn_settings") || hasPermission("settings")) ? "" : "none";
   }
 
   // زر وضع الصيانة (يظهر للمطور فقط حصراً — مخفي تماماً عن باقي المستخدمين)
@@ -671,12 +671,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   const savedToken = sessionStorage.getItem("sld_token");
   if (savedUser && savedToken) {
     currentUser = JSON.parse(savedUser);
-    if (currentUser && (currentUser.role === "admin" || currentUser.id === "admin")) {
-      currentUser.is_developer = true;
-      if (!currentUser.permissions || !currentUser.permissions.includes("all")) {
-        currentUser.permissions = ["all", "developer", "edit_network", "export", "settings", "manage_users", "btn_projects", "btn_save", "btn_print", "btn_excel", "btn_cable", "btn_overhead", "btn_line_between", "btn_quick_line", "btn_substation", "btn_switch", "btn_trans", "btn_cascade_trans", "btn_kiosk", "btn_kiosk_from_kiosk", "btn_rmu", "btn_avr", "btn_simulation", "btn_calculations", "btn_undo", "btn_delete", "btn_settings"];
-      }
-    }
     window.currentUser = currentUser;
     sessionToken = savedToken;
     updateUserInfoUI();

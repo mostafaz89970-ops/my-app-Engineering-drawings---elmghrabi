@@ -6907,6 +6907,279 @@ function finalizeAnnotationPick(x, y) {
 window.finalizeAnnotationPick = finalizeAnnotationPick;
 
 
+// =====================================================================
+// ==============  نظام النسخ الاحتياطي والاستيراد (للمدير فقط)  ======
+// =====================================================================
 
+let _backupPendingData = null; // بيانات الملف المحدد للاستيراد
+
+/**
+ * يُظهر/يُخفي زر النسخ الاحتياطي بناءً على دور المستخدم.
+ * يُستدعى بعد تسجيل الدخول.
+ */
+function updateBackupButtonVisibility() {
+  const group = document.getElementById("backup-group");
+  if (!group) return;
+  const isAdmin = currentUser && (currentUser.role === "admin" || (currentUser.permissions && currentUser.permissions.includes("all")));
+  group.style.display = isAdmin ? "" : "none";
+}
+window.updateBackupButtonVisibility = updateBackupButtonVisibility;
+
+// ربط الاستدعاء بحدث تسجيل الدخول
+document.addEventListener("sld-user-logged-in", updateBackupButtonVisibility);
+// استدعاء فوري عند التحميل (إذا كان المستخدم مسجلاً مسبقاً)
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => setTimeout(updateBackupButtonVisibility, 800));
+} else {
+  setTimeout(updateBackupButtonVisibility, 800);
+}
+
+/** فتح نافذة النسخ الاحتياطي */
+function openBackupModal() {
+  const isAdmin = currentUser && (currentUser.role === "admin" || (currentUser.permissions && currentUser.permissions.includes("all")));
+  if (!isAdmin) {
+    showToast("⛔ هذه الميزة مخصصة للمدير فقط", "error");
+    return;
+  }
+  _backupPendingData = null;
+  // إعادة ضبط واجهة الاستيراد
+  const preview = document.getElementById("backup-file-preview");
+  if (preview) preview.style.display = "none";
+  const importBtn  = document.getElementById("btn-import-backup");
+  const replaceBtn = document.getElementById("btn-replace-backup");
+  if (importBtn)  { importBtn.disabled  = true; importBtn.style.opacity  = "0.5"; }
+  if (replaceBtn) { replaceBtn.disabled = true; replaceBtn.style.opacity = "0.5"; }
+  const status = document.getElementById("backup-import-status");
+  if (status) status.style.display = "none";
+  const expStatus = document.getElementById("backup-export-status");
+  if (expStatus) expStatus.style.display = "none";
+  // إعادة ضبط input الملف
+  const fileInput = document.getElementById("backup-file-input");
+  if (fileInput) fileInput.value = "";
+
+  const modal = document.getElementById("backup-modal");
+  if (modal) { modal.classList.remove("hidden"); modal.style.display = "flex"; }
+}
+window.openBackupModal = openBackupModal;
+
+/** إغلاق نافذة النسخ الاحتياطي */
+function closeBackupModal() {
+  const modal = document.getElementById("backup-modal");
+  if (modal) { modal.classList.add("hidden"); modal.style.display = "none"; }
+}
+window.closeBackupModal = closeBackupModal;
+
+/** تصدير نسخة احتياطية JSON */
+function exportBackup(mode) {
+  const isAdmin = currentUser && (currentUser.role === "admin" || (currentUser.permissions && currentUser.permissions.includes("all")));
+  if (!isAdmin) { showToast("⛔ غير مصرح", "error"); return; }
+
+  let backupData;
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  let fileName;
+
+  if (mode === "all") {
+    // نسخ جميع المشاريع من localStorage + GunDB cache
+    const allProjects = [];
+    // من localStorage
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith("sld_project_") || key.startsWith("feeder_") || key === "sld_projects_list")) {
+        try {
+          const val = JSON.parse(localStorage.getItem(key));
+          if (val) allProjects.push({ key, data: val });
+        } catch(e) {}
+      }
+    }
+    // المشروع الحالي في الذاكرة
+    if (currentProject) {
+      const existsInList = allProjects.some(p => p.key === `sld_project_${currentProject.id}`);
+      if (!existsInList) allProjects.push({ key: `sld_project_${currentProject.id}`, data: currentProject });
+    }
+
+    backupData = {
+      _backup_type:    "all_projects",
+      _backup_version: "2.0",
+      _backup_date:    new Date().toISOString(),
+      _backup_by:      currentUser?.name || "المدير",
+      projects:        allProjects,
+      current_project: currentProject || null,
+    };
+    fileName = `SLD_FullBackup_${timestamp}.json`;
+
+  } else {
+    // نسخ المشروع الحالي فقط
+    if (!currentProject) { showToast("⚠️ لا يوجد مشروع مفتوح للنسخ", "warning"); return; }
+    backupData = {
+      _backup_type:    "single_project",
+      _backup_version: "2.0",
+      _backup_date:    new Date().toISOString(),
+      _backup_by:      currentUser?.name || "المدير",
+      project:         currentProject,
+    };
+    const safeName = (currentProject.name || currentProject.id || "Project").replace(/[\\/:*?"<>|]/g, "_");
+    fileName = `SLD_Backup_${safeName}_${timestamp}.json`;
+  }
+
+  // تحميل الملف
+  try {
+    const json    = JSON.stringify(backupData, null, 2);
+    const blob    = new Blob([json], { type: "application/json;charset=utf-8" });
+    const url     = URL.createObjectURL(blob);
+    const a       = document.createElement("a");
+    a.href        = url;
+    a.download    = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+    const status = document.getElementById("backup-export-status");
+    if (status) {
+      status.textContent = `✅ تم تصدير النسخة الاحتياطية بنجاح: ${fileName}`;
+      status.style.display = "block";
+    }
+    showToast(`💾 تم حفظ النسخة الاحتياطية: ${fileName}`, "success");
+  } catch(err) {
+    alert("تعذر تصدير النسخة الاحتياطية: " + err.message);
+  }
+}
+window.exportBackup = exportBackup;
+
+/** معالجة اختيار ملف الاستيراد */
+function handleBackupFileSelected(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  _processBackupFile(file);
+}
+window.handleBackupFileSelected = handleBackupFileSelected;
+
+/** drag over */
+function handleBackupDragOver(event) {
+  event.preventDefault();
+  const dz = document.getElementById("backup-dropzone");
+  if (dz) dz.style.borderColor = "#68d391";
+}
+window.handleBackupDragOver = handleBackupDragOver;
+
+/** drag leave */
+function handleBackupDragLeave(event) {
+  const dz = document.getElementById("backup-dropzone");
+  if (dz) dz.style.borderColor = "rgba(16,185,129,0.5)";
+}
+window.handleBackupDragLeave = handleBackupDragLeave;
+
+/** drop */
+function handleBackupDrop(event) {
+  event.preventDefault();
+  const dz = document.getElementById("backup-dropzone");
+  if (dz) dz.style.borderColor = "rgba(16,185,129,0.5)";
+  const file = event.dataTransfer?.files?.[0];
+  if (!file) return;
+  if (!file.name.endsWith(".json")) { showToast("⚠️ يجب اختيار ملف .json فقط", "warning"); return; }
+  _processBackupFile(file);
+}
+window.handleBackupDrop = handleBackupDrop;
+
+/** قراءة ومعاينة ملف النسخة الاحتياطية */
+function _processBackupFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data._backup_version) throw new Error("ملف غير صالح — ليس نسخة احتياطية SLD");
+
+      _backupPendingData = data;
+
+      // إظهار المعاينة
+      const preview = document.getElementById("backup-file-preview");
+      const nameEl  = document.getElementById("backup-file-name");
+      const infoEl  = document.getElementById("backup-file-info");
+      if (preview) preview.style.display = "block";
+      if (nameEl) nameEl.textContent = `📄 ${file.name}`;
+      if (infoEl) {
+        const projCount = data._backup_type === "all_projects"
+          ? `${(data.projects || []).length} مشروع`
+          : "مشروع واحد";
+        infoEl.textContent = `نوع النسخة: ${data._backup_type === "all_projects" ? "جميع المشاريع" : "مشروع واحد"} | عدد: ${projCount} | تاريخ: ${new Date(data._backup_date).toLocaleString("ar-EG")} | بواسطة: ${data._backup_by || "—"}`;
+      }
+
+      // تفعيل أزرار الاستيراد
+      const importBtn  = document.getElementById("btn-import-backup");
+      const replaceBtn = document.getElementById("btn-replace-backup");
+      if (importBtn)  { importBtn.disabled  = false; importBtn.style.opacity  = "1"; }
+      if (replaceBtn) { replaceBtn.disabled = false; replaceBtn.style.opacity = "1"; }
+
+      showToast("✅ تم قراءة ملف النسخة الاحتياطية — اختر طريقة الاستيراد", "success");
+    } catch(err) {
+      showToast("❌ تعذر قراءة الملف: " + err.message, "error");
+      _backupPendingData = null;
+    }
+  };
+  reader.readAsText(file, "utf-8");
+}
+
+/** استيراد النسخة الاحتياطية */
+function importBackup(mode) {
+  const isAdmin = currentUser && (currentUser.role === "admin" || (currentUser.permissions && currentUser.permissions.includes("all")));
+  if (!isAdmin) { showToast("⛔ غير مصرح", "error"); return; }
+  if (!_backupPendingData) { showToast("⚠️ لم يتم اختيار ملف بعد", "warning"); return; }
+
+  const data = _backupPendingData;
+  const statusEl = document.getElementById("backup-import-status");
+
+  if (mode === "replace") {
+    if (!confirm("⚠️ تحذير: سيتم مسح جميع بيانات المشاريع الحالية واستبدالها بالنسخة الاحتياطية.\n\nهل أنت متأكد؟")) return;
+    // مسح localStorage
+    const keysToDelete = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith("sld_project_") || k.startsWith("feeder_") || k === "sld_projects_list")) {
+        keysToDelete.push(k);
+      }
+    }
+    keysToDelete.forEach(k => localStorage.removeItem(k));
+  }
+
+  // استيراد البيانات
+  let imported = 0;
+  try {
+    if (data._backup_type === "all_projects" && Array.isArray(data.projects)) {
+      data.projects.forEach(({ key, data: pData }) => {
+        if (key && pData) { localStorage.setItem(key, JSON.stringify(pData)); imported++; }
+      });
+      // تحميل المشروع الحالي من النسخة الاحتياطية
+      if (data.current_project) {
+        currentProject = data.current_project;
+        window.currentProject = currentProject;
+        if (typeof renderNetwork === "function") renderNetwork();
+      }
+    } else if (data._backup_type === "single_project" && data.project) {
+      const proj = data.project;
+      localStorage.setItem(`sld_project_${proj.id}`, JSON.stringify(proj));
+      currentProject = proj;
+      window.currentProject = currentProject;
+      if (typeof renderNetwork === "function") renderNetwork();
+      imported = 1;
+    }
+
+    if (statusEl) {
+      statusEl.textContent = `✅ تم استيراد ${imported} مشروع بنجاح`;
+      statusEl.style.color   = "#68d391";
+      statusEl.style.display = "block";
+    }
+    showToast(`📥 تم استيراد النسخة الاحتياطية: ${imported} مشروع بنجاح`, "success");
+    _backupPendingData = null;
+
+  } catch(err) {
+    if (statusEl) {
+      statusEl.textContent = `❌ خطأ أثناء الاستيراد: ${err.message}`;
+      statusEl.style.color   = "#f87171";
+      statusEl.style.display = "block";
+    }
+    showToast("❌ تعذر الاستيراد: " + err.message, "error");
+  }
+}
+window.importBackup = importBackup;
 
 
