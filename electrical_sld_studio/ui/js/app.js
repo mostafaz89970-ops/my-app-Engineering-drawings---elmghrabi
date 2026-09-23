@@ -3160,27 +3160,34 @@ async function exportToExcel() {
     ];
 
     // ===== ورقة 2: النودات =====
-    const nodeHeaders = ["م", "رقم النود", "النوع", "الاسم", "الملكية", "القدرة (kVA)", "الإحداثي X", "الإحداثي Y", "الحالة", "الاتجاه"];
-    const nodeRows = nodes.map((n, i) => [
-      i + 1,
-      n.id,
-      n.type === "substation"  ? "محطة محولات" :
-      n.type === "transformer" ? "محول معلق"   :
-      n.type === "kiosk"       ? "كشك محولات"  :
-      n.type === "switch"      ? "سكينة هوائية":
-      n.type === "junction"    ? "نقطة ربط"    :
-      n.type === "rmu"         ? "وحدة RMU"    :
-      n.type === "avr"         ? "منظم AVR"    : n.type || "—",
-      n.name  || "—",
-      ["transformer", "kiosk"].includes(n.type) ? (n.ownership === "private" || n.ownership === "خاص" ? "خاص" : "عام") : (n.type === "substation" ? "عام" : "—"),
-      n.capacity ? `${n.capacity} kVA` : "—",
-      Math.round(n.x || 0),
-      Math.round(n.y || 0),
-      n.state     === "open"   ? "مفتوح (فصل)" :
-      n.state     === "closed" ? "مغلق (توصيل)": "—",
-      n.direction === "vertical"   ? "رأسي"   :
-      n.direction === "horizontal" ? "أفقي"   : "—",
-    ]);
+    const nodeHeaders = ["م", "رقم النود", "النوع", "الاسم", "الملكية", "القدرة (kVA)", "نسبة التحميل (%)", "الإحداثي X", "الإحداثي Y", "الحالة", "الاتجاه"];
+    const nodeRows = nodes.map((n, i) => {
+      const isLoadNode = ["transformer", "kiosk"].includes(n.type);
+      const pct = (n.loading_pct != null) ? n.loading_pct : 
+                  (n.load_pct != null) ? n.load_pct : 
+                  (n.load != null && !isNaN(parseFloat(n.load))) ? n.load : null;
+      return [
+        i + 1,
+        n.id,
+        n.type === "substation"  ? "محطة محولات" :
+        n.type === "transformer" ? "محول معلق"   :
+        n.type === "kiosk"       ? "كشك محولات"  :
+        n.type === "switch"      ? "سكينة هوائية":
+        n.type === "junction"    ? "نقطة ربط"    :
+        n.type === "rmu"         ? "وحدة RMU"    :
+        n.type === "avr"         ? "منظم AVR"    : n.type || "—",
+        n.name  || "—",
+        isLoadNode ? (n.ownership === "private" || n.ownership === "خاص" ? "خاص" : "عام") : (n.type === "substation" ? "عام" : "—"),
+        n.capacity ? `${n.capacity} kVA` : "—",
+        isLoadNode && pct != null ? `${pct}%` : "—",
+        Math.round(n.x || 0),
+        Math.round(n.y || 0),
+        n.state     === "open"   ? "مفتوح (فصل)" :
+        n.state     === "closed" ? "مغلق (توصيل)": "—",
+        n.direction === "vertical"   ? "رأسي"   :
+        n.direction === "horizontal" ? "أفقي"   : "—",
+      ];
+    });
 
     // ===== ورقة 3: الخطوط والكابلات =====
     const secHeaders = ["م", "رقم القطعة", "من نود", "إلى نود", "النوع", "المقطع", "الطول (متر)", "الاتجاه", "نمط الكوع"];
@@ -3203,20 +3210,29 @@ async function exportToExcel() {
 
     // ===== ورقة 4: المحولات والأكشاك =====
     const transNodes = nodes.filter(n => ["transformer","kiosk","substation"].includes(n.type));
-    const transHeaders = ["م", "رقم النود", "النوع", "الاسم", "الملكية", "القدرة (kVA)", "التحميل (kW)", "الجهد", "ملاحظات"];
-    const transRows = transNodes.map((n, i) => [
-      i + 1,
-      n.id,
-      n.type === "substation"  ? "محطة محولات" :
-      n.type === "transformer" ? "محول معلق"   :
-      n.type === "kiosk"       ? "كشك محولات"  : n.type,
-      n.name       || "—",
-      n.type === "substation"  ? "عام" : (n.ownership === "private" || n.ownership === "خاص" ? "خاص" : "عام"),
-      n.capacity   || "—",
-      n.load       || "—",
-      n.voltage    || "11/0.4 kV",
-      n.notes      || "—",
-    ]);
+    const transHeaders = ["م", "رقم النود", "النوع", "الاسم", "الملكية", "القدرة (kVA)", "نسبة التحميل (%)", "الحمل الفعلي (kVA)", "الجهد", "ملاحظات"];
+    const transRows = transNodes.map((n, i) => {
+      const capVal = parseFloat(n.capacity) || 0;
+      const pct = (n.loading_pct != null) ? parseFloat(n.loading_pct) : 
+                  (n.load_pct != null) ? parseFloat(n.load_pct) : 
+                  (n.load != null && !isNaN(parseFloat(n.load))) ? parseFloat(n.load) : null;
+      const actualLoad = (capVal > 0 && pct != null) ? Math.round((capVal * pct) / 100) : null;
+
+      return [
+        i + 1,
+        n.id,
+        n.type === "substation"  ? "محطة محولات" :
+        n.type === "transformer" ? "محول معلق"   :
+        n.type === "kiosk"       ? "كشك محولات"  : n.type,
+        n.name       || "—",
+        n.type === "substation"  ? "عام" : (n.ownership === "private" || n.ownership === "خاص" ? "خاص" : "عام"),
+        capVal > 0 ? `${capVal} kVA` : "—",
+        pct != null ? `${pct}%` : "—",
+        actualLoad != null ? `${actualLoad} kVA` : "—",
+        n.voltage    || "11/0.4 kV",
+        n.notes      || "—",
+      ];
+    });
 
     // ===== بناء Workbook =====
     const wb = XLSX.utils.book_new();
@@ -3458,18 +3474,23 @@ async function downloadProjectPPTX() {
         x: 0.5, y: 0.15, w: 12.5, h: 0.5,
         fontSize: 20, bold: true, color: "38BDF8", align: "center"
       });
-      const nodeHeader = ["م", "رقم النود", "النوع", "الاسم", "الملكية", "القدرة", "الحالة"];
+      const nodeHeader = ["م", "رقم النود", "النوع", "الاسم", "الملكية", "القدرة", "التحميل", "الحالة"];
       const nodeTableRows = [
         nodeHeader.map(h => ({ text: h, options: { bold: true, fontSize: 11, color: "FFFFFF", fill: { color: "1E40AF" }, align: "center" } })),
-        ...nodes.slice(0, 22).map((n, i) => [
-          { text: String(i+1) },
-          { text: n.id || "—" },
-          { text: n.type === "substation" ? "محطة" : n.type === "transformer" ? "محول" : n.type === "kiosk" ? "كشك" : n.type === "switch" ? "سكينة" : n.type === "junction" ? "ربط" : n.type || "—" },
-          { text: n.name || "—" },
-          { text: ["transformer", "kiosk"].includes(n.type) ? (n.ownership === "private" || n.ownership === "خاص" ? "خاص" : "عام") : (n.type === "substation" ? "عام" : "—") },
-          { text: n.capacity ? n.capacity + " kVA" : "—" },
-          { text: n.state === "open" ? "مفتوح" : n.state === "closed" ? "مغلق" : "—" },
-        ].map((cell, ci) => ({ ...cell, options: { fontSize: 10, color: "E2E8F0", fill: { color: i%2===0?"1E293B":"0F172A" }, align: "center" } })))
+        ...nodes.slice(0, 22).map((n, i) => {
+          const isLoadNode = ["transformer", "kiosk"].includes(n.type);
+          const pct = (n.loading_pct != null) ? n.loading_pct : (n.load_pct != null ? n.load_pct : (n.load != null ? n.load : null));
+          return [
+            { text: String(i+1) },
+            { text: n.id || "—" },
+            { text: n.type === "substation" ? "محطة" : n.type === "transformer" ? "محول" : n.type === "kiosk" ? "كشك" : n.type === "switch" ? "سكينة" : n.type === "junction" ? "ربط" : n.type || "—" },
+            { text: n.name || "—" },
+            { text: isLoadNode ? (n.ownership === "private" || n.ownership === "خاص" ? "خاص" : "عام") : (n.type === "substation" ? "عام" : "—") },
+            { text: n.capacity ? n.capacity + " kVA" : "—" },
+            { text: isLoadNode && pct != null ? `${pct}%` : "—" },
+            { text: n.state === "open" ? "مفتوح" : n.state === "closed" ? "مغلق" : "—" },
+          ].map((cell, ci) => ({ ...cell, options: { fontSize: 10, color: "E2E8F0", fill: { color: i%2===0?"1E293B":"0F172A" }, align: "center" } }));
+        })
       ];
       slideNodes.addTable(nodeTableRows, {
         x: 0.3, y: 0.75, w: 13, h: 6.5,
