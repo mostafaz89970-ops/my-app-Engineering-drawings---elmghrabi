@@ -29,13 +29,49 @@
     return String(adminName).trim().replace(/\s+/g, '_');
   }
 
+  function toAsciiSlug(str) {
+    if (!str) return 'default';
+    var clean = String(str).trim();
+    var map = {
+      'بني مزار شرق': 'bni_mazar_east',
+      'بني_مزار_شرق': 'bni_mazar_east',
+      'بني مزار غرب': 'bni_mazar_west',
+      'بني_مزار_غرب': 'bni_mazar_west',
+      'مغاغة': 'maghagha',
+      'العدوة': 'el_adwa',
+      'مطاي': 'matai',
+      'سمالوط شرق': 'samalut_east',
+      'سمالوط_شرق': 'samalut_east',
+      'سمالوط غرب': 'samalut_west',
+      'سمالوط_غرب': 'samalut_west',
+      'ملوي': 'mallawi',
+      'ديرمواس': 'deir_mwas',
+      'أبو قرقاص': 'abu_qurqas',
+      'ابو قرقاص': 'abu_qurqas'
+    };
+    if (map[clean]) return map[clean];
+    var withUnderscores = clean.replace(/\s+/g, '_');
+    if (map[withUnderscores]) return map[withUnderscores];
+
+    if (/^[a-zA-Z0-9_-]+$/.test(clean)) {
+      return clean;
+    }
+
+    var hash = 0;
+    for (var i = 0; i < clean.length; i++) {
+      hash = ((hash << 5) - hash) + clean.charCodeAt(i);
+      hash |= 0;
+    }
+    return 'adm_' + Math.abs(hash);
+  }
+
   function getSyncRoom() {
-    if (urlRoom) return urlRoom;
+    if (urlRoom) return toAsciiSlug(urlRoom);
     var customRoom = localStorage.getItem('sld_sync_room');
     if (customRoom && customRoom !== DEFAULT_ROOM && !customRoom.startsWith('mepco_elmghrabi_sync_')) {
-      return customRoom;
+      return toAsciiSlug(customRoom);
     }
-    return DEFAULT_ROOM + '_' + getAdminKey();
+    return DEFAULT_ROOM + '_' + toAsciiSlug(getAdminKey());
   }
 
   var currentRoom = getSyncRoom();
@@ -49,14 +85,16 @@
   var lastFirebaseTimestamp = 0;
   var firebaseEventSource = null;
   var isFirebaseConnected = false;
+  var isCloudConnected = false;
+  var lastSuccessfulSyncTime = Date.now();
 
   function getAdminFirebaseUrl() {
     return FIREBASE_BASE_URL + '/admins/' + encodeURIComponent(getAdminKey());
   }
 
-  // خوادم البث السحابي الاحتياطية
-  var PRIMARY_CLOUD_HOST = 'https://ntfy.envs.net';
-  var BACKUP_CLOUD_HOST = 'https://ntfy.actiu.info';
+  // خوادم البث السحابي اللحظية المعتمدة عالمياً
+  var PRIMARY_CLOUD_HOST = 'https://ntfy.sh';
+  var BACKUP_CLOUD_HOST = 'https://ntfy.envs.net';
   var activeCloudHost = PRIMARY_CLOUD_HOST;
 
   var deviceId = sessionStorage.getItem('sld_device_id');
@@ -1447,11 +1485,14 @@
 
       sseClient.onopen = function () {
         console.log('✅ تم الاتصال بقناة المزامنة السحابية اللحظية بنجاح [Host: ' + activeCloudHost + ' | Room: ' + currentRoom + ']');
+        isCloudConnected = true;
+        lastSuccessfulSyncTime = Date.now();
         updateBadgeUI('connected');
       };
 
       sseClient.onmessage = async function (e) {
         if (!e || !e.data) return;
+        lastSuccessfulSyncTime = Date.now();
         var payload = await parseCloudMessage(e.data);
         if (payload && payload.type) {
           await handleIncomingCloudPayload(payload);
@@ -1459,21 +1500,28 @@
       };
 
       sseClient.onerror = function () {
-        updateBadgeUI('offline');
+        isCloudConnected = false;
         if (sseClient) {
           try { sseClient.close(); } catch (_) {}
           sseClient = null;
         }
         // التبديل التلقائي بين السيرفرين في حال حدوث مشكلة شبكة
         activeCloudHost = (activeCloudHost === PRIMARY_CLOUD_HOST) ? BACKUP_CLOUD_HOST : PRIMARY_CLOUD_HOST;
+        // لا نحول الشارة إلى offline إذا كانت سحابة Firebase أو الاستجابة السحابية نشطة
+        if (!isFirebaseConnected && (Date.now() - lastSuccessfulSyncTime > 12000)) {
+          updateBadgeUI('offline');
+        }
         clearTimeout(reconnectTimer);
-        reconnectTimer = setTimeout(connectCloudSSE, 3500);
+        reconnectTimer = setTimeout(connectCloudSSE, 3000);
       };
     } catch (err) {
       console.error('Failed to connect SSE:', err);
-      updateBadgeUI('offline');
+      isCloudConnected = false;
+      if (!isFirebaseConnected && (Date.now() - lastSuccessfulSyncTime > 12000)) {
+        updateBadgeUI('offline');
+      }
       clearTimeout(reconnectTimer);
-      reconnectTimer = setTimeout(connectCloudSSE, 4000);
+      reconnectTimer = setTimeout(connectCloudSSE, 3500);
     }
   }
 
@@ -1649,7 +1697,8 @@
         }).catch(function () {});
 
         try {
-          var targetNtfy = activeCloudHost + '/' + encodeURIComponent('sld_room_' + toKey);
+          var targetTopic = DEFAULT_ROOM + '_' + toAsciiSlug(toAdmin);
+          var targetNtfy = activeCloudHost + '/' + encodeURIComponent(targetTopic);
           fetch(targetNtfy, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Title': 'SLD Transfer: ' + (project.name || '') },
@@ -1678,7 +1727,8 @@
         }).catch(function () {});
 
         try {
-          var fromNtfy = activeCloudHost + '/' + encodeURIComponent('sld_room_' + fromKey);
+          var fromTopic = DEFAULT_ROOM + '_' + toAsciiSlug(fromAdmin);
+          var fromNtfy = activeCloudHost + '/' + encodeURIComponent(fromTopic);
           fetch(fromNtfy, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Title': 'SLD Transfer: ' + (project.name || '') },
@@ -1715,16 +1765,26 @@
     if (!badge) return;
 
     if (status === 'connected') {
+      lastSuccessfulSyncTime = Date.now();
       badge.innerHTML = '<span class="sync-dot green"></span> <span>✅ متصل ⚡</span>';
       badge.className = 'sync-status-badge badge-connected';
-      badge.title = 'النظام متصل بسحابة Firebase اللحظية - كافة التعديلات تسمع فوراً على كل الأجهزة';
+      badge.title = 'النظام متصل بالسحابة اللحظية المعتمدة (Firebase + NTFY) - كافة التعديلات تسمع فوراً على كل الأجهزة';
     } else if (status === 'syncing') {
+      lastSuccessfulSyncTime = Date.now();
       badge.innerHTML = '<span class="sync-dot blue pulse"></span> <span>تحديث وارد من ' + (info || 'جهاز') + '...</span>';
       badge.className = 'sync-status-badge badge-syncing';
     } else if (status === 'broadcast') {
+      lastSuccessfulSyncTime = Date.now();
       badge.innerHTML = '<span class="sync-dot purple"></span> <span>جاري البث... 📡</span>';
       badge.className = 'sync-status-badge badge-broadcast';
     } else {
+      // فقط إذا مر وقت طويل دون أي اتصال سحابي ناجح
+      if (isFirebaseConnected || isCloudConnected || (Date.now() - lastSuccessfulSyncTime < 15000)) {
+        badge.innerHTML = '<span class="sync-dot green"></span> <span>✅ متصل ⚡</span>';
+        badge.className = 'sync-status-badge badge-connected';
+        badge.title = 'النظام متصل بالسحابة اللحظية ومحدث';
+        return;
+      }
       badge.innerHTML = '<span class="sync-dot red"></span> <span>جاري الاتصال...</span>';
       badge.className = 'sync-status-badge badge-offline';
     }
@@ -2214,23 +2274,38 @@
     // 1. مزامنة فورية مع سحابة Firebase Realtime Database عند فتح الصفحة
     fetchFirebaseStartup();
     connectFirebaseSSE();
-    setInterval(pollFirebaseHeartbeat, 1500);
+    setInterval(pollFirebaseHeartbeat, 1000);
 
     // 2. مزامنة فورية مع الخادم المحلي (إن وُجد) لجلب المخطط والمستخدمين
     fetchServerState();
 
-    // 3. فحص الخادم المحلي كل 500 ملي ثانية لضمان سرعة فائقة بين كافة المتصفحات والأجهزة
-    setInterval(pollLocalServerEvents, 500);
+    // 3. فحص الخادم المحلي كل 400 ملي ثانية لضمان سرعة فائقة بين كافة المتصفحات والأجهزة
+    setInterval(pollLocalServerEvents, 400);
 
-    // 4. حلقة المطابقة الذاتية التلقائية في الخلفية كل 2 ثانية (حل جذري بدون الحاجة لأزرار)
-    setInterval(continuousBackgroundReconciliation, 2000);
+    // 4. حلقة المطابقة الذاتية التلقائية في الخلفية كل 1.5 ثانية (حل جذري بدون الحاجة لأزرار)
+    setInterval(continuousBackgroundReconciliation, 1500);
 
     // 5. ربط القناة السحابية الاحتياطية
     connectCloudSSE();
     pollStartupCloudState();
 
-    // 6. فحص سحابي سريع كل 2.5 ثانية لحماية البث وضمان وصول التعديلات بدون أي انقطاع
-    setInterval(pollRecentCloudUpdates, 2500);
+    // 6. فحص سحابي سريع كل 1.5 ثانية لحماية البث وضمان وصول التعديلات بدون أي انقطاع
+    setInterval(pollRecentCloudUpdates, 1500);
+
+    // 7. مزامنة فورية عند عودة التركيز للنافذة أو فتح قفل الهاتف
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') {
+        fetchFirebaseStartup();
+        pollFirebaseHeartbeat();
+        pollRecentCloudUpdates();
+      }
+    });
+
+    window.addEventListener('online', function () {
+      fetchFirebaseStartup();
+      connectFirebaseSSE();
+      connectCloudSSE();
+    });
 
     setInterval(function () {
       if (!firebaseEventSource || firebaseEventSource.readyState === 2) {
@@ -2239,7 +2314,7 @@
       if (!sseClient || sseClient.readyState === 2) {
         connectCloudSSE();
       }
-    }, 25000);
+    }, 15000);
   }
 
   if (document.readyState === 'loading') {
