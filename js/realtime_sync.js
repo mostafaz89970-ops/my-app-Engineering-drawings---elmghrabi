@@ -1140,41 +1140,48 @@
       var metaRes = await fetch(adminUrl + '/meta.json');
       var remoteMeta = metaRes.ok ? await metaRes.json() : null;
 
-      // ترحيل تلقائي: إذا كانت الإدارة بني مزار شرق والمسار فارغ، نفحص إذا كان هناك مخطط في المسار القديم العام
-      if (!remoteMeta && (currentAdminKey === 'بني_مزار_شرق' || currentAdminKey === 'بني مزار شرق')) {
-        try {
-          var legacyMetaRes = await fetch(FIREBASE_BASE_URL + '/meta.json');
-          if (legacyMetaRes.ok) {
-            var legacyMeta = await legacyMetaRes.json();
-            if (legacyMeta) {
-              var legacyProjRes = await fetch(FIREBASE_BASE_URL + '/project.json');
-              if (legacyProjRes.ok) {
-                var legacyProj = await legacyProjRes.json();
-                if (legacyProj && legacyProj.nodes && legacyProj.nodes.length > 0) {
-                  remoteMeta = legacyMeta;
-                  await fetch(adminUrl + '/project.json', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(legacyProj)
-                  });
-                  await fetch(adminUrl + '/meta.json', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(legacyMeta)
-                  });
-                }
-              }
-            }
+      // فحص كتالوج مشاريع الإدارة للتأكد من وجود مشاريع فعلية غير محذوفة
+      var remoteCat = null;
+      try {
+        var catRes = await fetch(adminUrl + '/catalog.json');
+        if (catRes.ok) remoteCat = await catRes.json();
+      } catch (_) {}
+
+      var effectiveCatalog = [];
+      if (Array.isArray(remoteCat) && remoteCat.length > 0) {
+        effectiveCatalog = remoteCat;
+      } else if (typeof window.getCatalogForAdmin === 'function') {
+        effectiveCatalog = window.getCatalogForAdmin(currentAdminKey) || [];
+      }
+      if (Array.isArray(effectiveCatalog)) {
+        effectiveCatalog = effectiveCatalog.filter(function (p) {
+          return p && (!window.isProjectDeleted || !window.isProjectDeleted(p.id, p.name));
+        });
+      }
+
+      // إذا كانت الإدارة لا تملك أي مشاريع معتمدة على الإطلاق: تبقى اللوحة بيضاء فارغة تماماً
+      if (effectiveCatalog.length === 0) {
+        console.log('ℹ️ الإدارة [' + currentAdminKey + '] لا تملك أي مشاريع معتمدة، إبقاء اللوحة فارغة تماماً');
+        if (remoteMeta && remoteMeta.nodesCount > 0) {
+          try {
+            fetch(adminUrl + '/project.json', { method: 'DELETE' }).catch(function(){});
+            fetch(adminUrl + '/meta.json', { method: 'DELETE' }).catch(function(){});
+          } catch (_) {}
+        }
+        var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+        if (curLocal && curLocal.nodes && curLocal.nodes.length > 0) {
+          if (typeof window.createNewProjectDirectly === 'function') {
+            window.createNewProjectDirectly();
           }
-        } catch (_) {}
+        }
+        updateBadgeUI('connected');
+        return;
       }
 
       var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
       if (!curLocal || !curLocal.nodes || curLocal.nodes.length === 0) {
         if (typeof window.getSavedFeederForAdmin === 'function') {
           curLocal = window.getSavedFeederForAdmin();
-        } else {
-          try { curLocal = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
         }
       }
       var localNodesCount = (curLocal && Array.isArray(curLocal.nodes)) ? curLocal.nodes.length : 0;
@@ -1193,26 +1200,32 @@
 
       console.log('☁️ فحص سحابة Firebase للإدارة [' + currentAdminKey + ']: وقت الحفظ المحلي (' + localSavedTime + ') | وقت السحابة (' + remoteSavedTime + ') | محلي (' + localNodesCount + ' عقدة) | سحابي (' + remoteNodesCount + ' عقدة)');
 
-      // 1. إذا كان المخطط المحلي محفوظاً ومحدثاً أكثر أو مساوياً للسحابة -> المخطط المحلي مقدس ولا يُمس نهائياً
+      // 1. إذا كان المخطط المحلي محفوظاً ومحدثاً أكثر أو مساوياً للسحابة -> المخطط المحلي معتمد
       if (curLocal && localNodesCount > 0 && localSavedTime >= remoteSavedTime) {
         console.log('🔒 المخطط المحلي معتمد ومحفوظ حديثاً، رفع للسحابة لتحديثها دون لمس الرسم المحلي...');
         await syncProjectDirectToFirebase(curLocal, 'local_authoritative_sync');
       } 
-      // 2. إذا كان المخطط المحلي فارغاً ولكن السحابة تحتوي على رسم
+      // 2. إذا كان المخطط المحلي فارغاً ولكن السحابة تحتوي على رسم ينتمي لمشاريع الإدارة
       else if ((!curLocal || localNodesCount === 0) && remoteNodesCount > 0) {
         console.log('☁️ استلام المخطط السحابي للإدارة الفارغة محلياً (' + remoteNodesCount + ' عقدة)...');
         var projRes = await fetch(adminUrl + '/project.json');
         if (projRes.ok) {
           var remoteProj = await projRes.json();
-          if (remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
+          var isDeleted = false;
+          if (typeof window.isProjectDeleted === 'function' && remoteProj) {
+            isDeleted = window.isProjectDeleted(remoteProj.id, remoteProj.name);
+          }
+          var inCatalog = effectiveCatalog.some(function(p) {
+            return remoteProj && (p.id === remoteProj.id || p.name === remoteProj.name);
+          });
+
+          if (!isDeleted && inCatalog && remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
             isApplyingRemote = true;
             if (window.setCurrentProject) window.setCurrentProject(remoteProj);
             else window.currentProject = remoteProj;
 
             if (typeof window.saveFeederForAdmin === 'function') {
               window.saveFeederForAdmin(remoteProj);
-            } else {
-              try { localStorage.setItem('sld_saved_feeder', JSON.stringify(remoteProj)); } catch (_) {}
             }
 
             if (window.updateFeederInputs) window.updateFeederInputs();
@@ -1229,15 +1242,17 @@
         var projRes = await fetch(adminUrl + '/project.json');
         if (projRes.ok) {
           var remoteProj = await projRes.json();
-          if (remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
+          var isDeleted = false;
+          if (typeof window.isProjectDeleted === 'function' && remoteProj) {
+            isDeleted = window.isProjectDeleted(remoteProj.id, remoteProj.name);
+          }
+          if (!isDeleted && remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
             isApplyingRemote = true;
             if (window.setCurrentProject) window.setCurrentProject(remoteProj);
             else window.currentProject = remoteProj;
 
             if (typeof window.saveFeederForAdmin === 'function') {
               window.saveFeederForAdmin(remoteProj);
-            } else {
-              try { localStorage.setItem('sld_saved_feeder', JSON.stringify(remoteProj)); } catch (_) {}
             }
 
             if (window.updateFeederInputs) window.updateFeederInputs();
@@ -1379,6 +1394,21 @@
         if (projRes.ok) {
           var remoteProj = await projRes.json();
           if (remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
+            if (typeof window.isProjectDeleted === 'function' && window.isProjectDeleted(remoteProj.id, remoteProj.name)) {
+              console.log('🚫 المخطط السحابي في قائمة المحذوفات، تم تجاهله');
+              return;
+            }
+            if (typeof window.getCatalogForAdmin === 'function') {
+              var adminCat = window.getCatalogForAdmin(getAdminKey());
+              if (Array.isArray(adminCat)) {
+                var validAdminCat = adminCat.filter(function(p){ return p && (!window.isProjectDeleted || !window.isProjectDeleted(p.id, p.name)); });
+                if (validAdminCat.length === 0) {
+                  console.log('ℹ️ الإدارة لا تملك أي مشاريع معتمدة، تجاهل التحديث السحابي');
+                  return;
+                }
+              }
+            }
+
             var isLocalDeleted = false;
             if (typeof window.isProjectDeleted === 'function' && curLocal) {
               isLocalDeleted = window.isProjectDeleted(curLocal.id, curLocal.name);
