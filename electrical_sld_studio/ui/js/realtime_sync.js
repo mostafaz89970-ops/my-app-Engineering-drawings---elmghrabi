@@ -121,12 +121,20 @@
       var adminKey = getAdminKey();
       var adminName = (typeof window.getCurrentAdminName === 'function') ? window.getCurrentAdminName() : 'بني مزار شرق';
 
+      var isAdmin = (typeof window.isCurrentUserAdmin === 'function' ? window.isCurrentUserAdmin() : false);
+      if (!isAdmin && window.currentUser) {
+        var r = String(window.currentUser.role || window.currentUser.type || '').toLowerCase();
+        if (r === 'admin' || r === 'superadmin' || r === 'manager' || r === 'مدير') isAdmin = true;
+      }
+
       var payload = {
         type: type,
         senderId: deviceId,
         author: author,
         adminKey: adminKey,
         adminName: adminName,
+        isAdmin: isAdmin,
+        priority: isAdmin ? 'high' : 'normal',
         timestamp: Date.now(),
         reason: reason || '',
         data: data
@@ -167,12 +175,19 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(!!data.isActive)
           }).catch(function () {});
-        } else if (type === 'PROJECT_DELETED' && data.catalog) {
-          fetch(getAdminFirebaseUrl() + '/catalog.json', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data.catalog)
-          }).catch(function () {});
+        } else if (type === 'PROJECT_DELETED') {
+          if (data.catalog) {
+            fetch(getAdminFirebaseUrl() + '/catalog.json', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(data.catalog)
+            }).catch(function () {});
+          }
+          if (data.projectId) {
+            fetch(getAdminFirebaseUrl() + '/projects/' + encodeURIComponent(data.projectId) + '.json', {
+              method: 'DELETE'
+            }).catch(function () {});
+          }
         }
       } catch (_) {}
 
@@ -272,6 +287,16 @@
     var remoteAdmin = String(remoteProj.administration || '').trim();
     var localName = String(localProj.name || '').trim();
     var remoteName = String(remoteProj.name || '').trim();
+
+    // إذا كان المخطط المحلي محذوفاً في القائمة السوداء، نعتمد المخطط الوارد فوراً
+    if (typeof window.isProjectDeleted === 'function') {
+      if (window.isProjectDeleted(localId, localName)) {
+        return { merged: remoteProj, addedNodes: (remoteProj.nodes || []).length, addedSecs: (remoteProj.sections || []).length, localHadExtra: false };
+      }
+      if (window.isProjectDeleted(remoteId, remoteName)) {
+        return { merged: localProj, addedNodes: 0, addedSecs: 0, localHadExtra: false };
+      }
+    }
 
     // 1. إذا كانت المعرفات مختلفة، فهما مشروعان منفصلان تماماً -> لا تدمج أبداً!
     if (localId && remoteId && localId !== remoteId) {
@@ -465,9 +490,11 @@
       if (msgTime && msgTime < lastDrawingUpdateTimestamp) return;
       if (msgTime) lastDrawingUpdateTimestamp = msgTime;
 
-      // إذا كان المهندس يقوم بالرسم أو التعديل محلياً حالياً (خلال آخر 25 ثانية)، نحمي الرسم ولا نسمح باستبداله
+      var isAdminUpdate = (payload.isAdmin === true || payload.priority === 'high');
+
+      // إذا كان التعديل من المدير يتم تنفيذه فوراً دون أي تأخير، أما المهندس العادي فمهلة ثانيتين فقط
       var lastEdit = window._lastLocalEditTime || 0;
-      if (Date.now() - lastEdit < 25000) {
+      if (!isAdminUpdate && Date.now() - lastEdit < 2000) {
         console.log('⏳ المستخدم يقوم بالرسم محلياً حالياً، تأجيل التحديث السحابي لحماية الرسم الجاري');
         return;
       }
@@ -481,8 +508,26 @@
         }
       }
 
-      var mergeResult = smartMergeProjects(currentLocal, data.project);
-      var finalProj = mergeResult.merged;
+      var isLocalDeleted = false;
+      if (typeof window.isProjectDeleted === 'function' && currentLocal) {
+        isLocalDeleted = window.isProjectDeleted(currentLocal.id, currentLocal.name);
+      }
+
+      var incomingProj = data.project;
+      var localId = currentLocal ? String(currentLocal.id || '').trim() : '';
+      var incomingId = incomingProj ? String(incomingProj.id || '').trim() : '';
+      var localNodesCount = (currentLocal && Array.isArray(currentLocal.nodes)) ? currentLocal.nodes.length : 0;
+
+      var finalProj;
+      var mergeResult = { localHadExtra: false };
+
+      // إذا كان المخطط المحلي محذوفاً أو فارغاً، أو كان التحديث قادماً من المدير مع مشروع بديل:
+      if (isLocalDeleted || localNodesCount === 0 || (isAdminUpdate && localId !== incomingId) || payload.forceReplace) {
+        finalProj = incomingProj;
+      } else {
+        mergeResult = smartMergeProjects(currentLocal, incomingProj);
+        finalProj = mergeResult.merged;
+      }
 
       var projStr = JSON.stringify(finalProj);
       var hash = fastHash(projStr);
@@ -504,25 +549,26 @@
       if (window.updateFeederInputs) window.updateFeederInputs();
       if (window.renderNetwork) window.renderNetwork();
 
-      // تحديث شارة البث السحابي الهادئة دون إزعاج المستخدم برسائل متكررة
+      // تحديث شارة البث السحابي الهادئة
       updateBadgeUI('syncing', author);
 
       setTimeout(function () {
         isApplyingRemote = false;
         updateBadgeUI('connected');
 
-        if (mergeResult.localHadExtra) {
+        if (mergeResult.localHadExtra && !isAdminUpdate) {
           console.log('🔄 إرسال المخطط الموحد المكتمل للطرف الآخر لتحقيق التطابق التام 100%');
           broadcastLocalDrawing('auto_reconcile_parity');
         }
-      }, 800);
+      }, 500);
 
     } else if (type === 'DRAWING_CHUNK') {
       var chunkData = data;
       if (!chunkData || (!chunkData.nodes && !chunkData.sections)) return;
 
+      var isAdminUpdate = (payload.isAdmin === true || payload.priority === 'high');
       var lastEdit = window._lastLocalEditTime || 0;
-      if (Date.now() - lastEdit < 25000) {
+      if (!isAdminUpdate && Date.now() - lastEdit < 2000) {
         return;
       }
 
@@ -543,7 +589,7 @@
       if (!localSavedTime && curProj) {
         localSavedTime = curProj.user_saved_at || curProj.saved_at || curProj.timestamp || 0;
       }
-      if (localSavedTime > msgTime) return;
+      if (!isAdminUpdate && localSavedTime > msgTime) return;
 
       var partial = {
         id: (curProj && curProj.id) ? curProj.id : 'feeder_1789823077015',
@@ -569,21 +615,38 @@
       if (window.updateFeederInputs) window.updateFeederInputs();
       if (window.renderNetwork) window.renderNetwork();
 
-      // بدون رسائل مزعجة للقطع، فقط تحديث الشارة الهادئة
       updateBadgeUI('syncing', author);
 
       setTimeout(function () {
         isApplyingRemote = false;
         updateBadgeUI('connected');
-      }, 600);
+      }, 500);
 
     } else if (type === 'PROJECT_SAVED') {
       if (data.project && window.applySyncedProject) {
         if (msgTime) lastDrawingUpdateTimestamp = msgTime;
 
+        var isAdminUpdate = (payload.isAdmin === true || payload.priority === 'high');
         var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
-        var mRes = smartMergeProjects(curLocal, data.project);
-        var mergedP = mRes.merged;
+        var isLocalDeleted = false;
+        if (typeof window.isProjectDeleted === 'function' && curLocal) {
+          isLocalDeleted = window.isProjectDeleted(curLocal.id, curLocal.name);
+        }
+
+        var incomingP = data.project;
+        var curId = curLocal ? String(curLocal.id || '').trim() : '';
+        var incId = incomingP ? String(incomingP.id || '').trim() : '';
+        var curNodesCount = (curLocal && Array.isArray(curLocal.nodes)) ? curLocal.nodes.length : 0;
+
+        var mergedP;
+        var mRes = { localHadExtra: false };
+
+        if (isLocalDeleted || curNodesCount === 0 || (isAdminUpdate && curId !== incId) || payload.forceReplace) {
+          mergedP = incomingP;
+        } else {
+          mRes = smartMergeProjects(curLocal, incomingP);
+          mergedP = mRes.merged;
+        }
 
         window.applySyncedProject(mergedP, data.catalog);
         showSyncToast('💾 تم استلام ومطابقة مشروع [' + (mergedP.name || '') + '] من: ' + author, 'info', true);
@@ -591,19 +654,190 @@
 
         setTimeout(function () {
           updateBadgeUI('connected');
-          if (mRes.localHadExtra) {
+          if (mRes.localHadExtra && !isAdminUpdate) {
             broadcastLocalDrawing('auto_reconcile_parity');
           }
-        }, 800);
+        }, 500);
       }
 
     } else if (type === 'PROJECT_DELETED') {
+      var delId = data.projectId;
+      var delName = data.projectName;
+
+      // 1. تسجيل المشروع في القائمة السوداء لمنع عودته نهائياً
+      if (typeof window.markProjectAsDeleted === 'function') {
+        window.markProjectAsDeleted(delId, delName);
+      }
+
+      // 2. حذفه من التخزين المحلي
+      try {
+        if (delId) {
+          localStorage.removeItem('sld_proj_' + delId);
+          localStorage.removeItem('sld_project_' + delId);
+          localStorage.removeItem('sld_feeder_' + delId);
+        }
+        if (delName) {
+          localStorage.removeItem('sld_proj_' + delName);
+        }
+      } catch (_) {}
+
+      // 3. تحديث الفهرس
       if (data.catalog && window.applySyncedCatalog) {
         window.applySyncedCatalog(data.catalog);
-        showSyncToast('🗑️ تم تحديث قائمة المشاريع بعد حذف مشروع من: ' + author);
-        updateBadgeUI('syncing', author);
-        setTimeout(function () { updateBadgeUI('connected'); }, 800);
+      } else if (typeof window.getCatalogForAdmin === 'function' && typeof window.saveCatalogForAdmin === 'function') {
+        try {
+          var curCat = window.getCatalogForAdmin();
+          var filteredCat = curCat.filter(function (p) {
+            return p.id !== delId && p.name !== delName;
+          });
+          window.saveCatalogForAdmin(filteredCat);
+          if (window.applySyncedCatalog) window.applySyncedCatalog(filteredCat);
+        } catch (_) {}
       }
+
+      // 4. الحاسم: إذا كان هذا المشروع هو المفتوح حالياً على شاشة هذا الجهاز، إغلاقه وتفريغ اللوحة فوراً!
+      var curProj = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+      var isCurrentDeleted = false;
+      if (curProj) {
+        if (delId && (curProj.id === delId || curProj.remote_id === delId)) isCurrentDeleted = true;
+        if (delName && curProj.name === delName) isCurrentDeleted = true;
+      }
+
+      if (isCurrentDeleted) {
+        console.log('🗑️ المشروع المعروض حالياً تم حذفه من جهاز آخر، تفريغ اللوحة فوراً لمنع بقائه');
+        try {
+          localStorage.removeItem('sld_saved_feeder');
+          localStorage.removeItem('sld_feeder_' + currentAdminKey);
+        } catch (_) {}
+
+        if (typeof window.createNewProjectDirectly === 'function') {
+          window.createNewProjectDirectly();
+        } else if (window.setCurrentProject) {
+          window.setCurrentProject({
+            id: 'feeder_' + Date.now(),
+            name: 'مخطط جديد',
+            substation: '',
+            feeder_max_load_kva: 0,
+            voltage_kv: 11,
+            nodes: [],
+            sections: []
+          });
+        }
+        if (window.clearSelection) window.clearSelection();
+        if (window.updateFeederInputs) window.updateFeederInputs();
+        if (window.renderNetwork) window.renderNetwork();
+
+        showSyncToast('🗑️ قام المدير أو جهاز آخر بحذف هذا المشروع، وتم إغلاقه وتفريغ اللوحة فوراً', 'warning', true);
+      } else {
+        showSyncToast('🗑️ تم استلام أمر حذف مشروع وتحديث قائمة المشاريع من: ' + author);
+      }
+
+      updateBadgeUI('syncing', author);
+      setTimeout(function () { updateBadgeUI('connected'); }, 800);
+
+    } else if (type === 'PROJECT_TRANSFERRED_IN' || type === 'PROJECT_TRANSFERRED') {
+      var inProj = data.project;
+      var inCat = data.catalog;
+      var toAdminName = data.toAdmin || payload.adminName || '';
+      var toAdminKey = (toAdminName || '').trim().replace(/\s+/g, '_');
+      var fromAdm = data.fromAdmin || 'إدارة أخرى';
+
+      if (inProj && inProj.id) {
+        try {
+          localStorage.setItem('sld_proj_' + inProj.id, JSON.stringify(inProj));
+        } catch (_) {}
+      }
+
+      if (inCat && Array.isArray(inCat)) {
+        if (typeof window.saveCatalogForAdmin === 'function') {
+          try { window.saveCatalogForAdmin(inCat, toAdminName); } catch (_) {}
+        }
+        if (window.applySyncedCatalog && (currentAdminKey === toAdminKey || currentAdminKey === toAdminName)) {
+          window.applySyncedCatalog(inCat);
+        }
+      }
+
+      // إذا كان هذا الجهاز معنياً بالإدارة المنقول إليها
+      if (currentAdminKey === toAdminKey || currentAdminKey === toAdminName) {
+        var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+        var curNodesCount = (curLocal && Array.isArray(curLocal.nodes)) ? curLocal.nodes.length : 0;
+        if ((curNodesCount === 0 || (curLocal && (curLocal.id === inProj.id || curLocal.name === inProj.name))) && inProj) {
+          isApplyingRemote = true;
+          if (window.setCurrentProject) window.setCurrentProject(inProj);
+          else window.currentProject = inProj;
+
+          if (typeof window.saveFeederForAdmin === 'function') {
+            window.saveFeederForAdmin(inProj);
+          }
+          if (window.updateFeederInputs) window.updateFeederInputs();
+          if (window.renderNetwork) window.renderNetwork();
+          if (window.fitToScreen) setTimeout(window.fitToScreen, 300);
+          setTimeout(function () { isApplyingRemote = false; }, 800);
+        }
+
+        const modal = document.getElementById('projects-manager-modal');
+        if (modal && !modal.classList.contains('hidden') && typeof window.openProjectsManager === 'function') {
+          window.openProjectsManager();
+        }
+
+        showSyncToast('📥 تم استلام مشروع محول جديد [' + (inProj ? (inProj.name || inProj.id) : '') + '] من [' + fromAdm + ']', 'success', true);
+      }
+
+      updateBadgeUI('syncing', author);
+      setTimeout(function () { updateBadgeUI('connected'); }, 800);
+
+    } else if (type === 'PROJECT_TRANSFERRED_OUT') {
+      var outId = data.projectId;
+      var outName = data.projectName;
+      var outCat = data.catalog;
+      var fromAdminName = data.fromAdmin || payload.adminName || '';
+      var fromAdminKey = (fromAdminName || '').trim().replace(/\s+/g, '_');
+      var toAdm = data.toAdmin || 'إدارة أخرى';
+
+      if (outCat && Array.isArray(outCat)) {
+        if (typeof window.saveCatalogForAdmin === 'function') {
+          try { window.saveCatalogForAdmin(outCat, fromAdminName); } catch (_) {}
+        }
+        if (window.applySyncedCatalog && (currentAdminKey === fromAdminKey || currentAdminKey === fromAdminName)) {
+          window.applySyncedCatalog(outCat);
+        }
+      }
+
+      if (currentAdminKey === fromAdminKey || currentAdminKey === fromAdminName) {
+        var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+        if (curLocal && (curLocal.id === outId || curLocal.name === outName)) {
+          console.log('🔄 المشروع المعروض حالياً تم نقله لإدارة أخرى، إغلاقه');
+          try {
+            localStorage.removeItem('sld_saved_feeder');
+            localStorage.removeItem('sld_feeder_' + currentAdminKey);
+          } catch (_) {}
+
+          if (typeof window.createNewProjectDirectly === 'function') {
+            window.createNewProjectDirectly();
+          } else if (window.setCurrentProject) {
+            window.setCurrentProject({
+              id: 'feeder_' + Date.now(),
+              name: 'مخطط جديد',
+              substation: '',
+              feeder_max_load_kva: 0,
+              voltage_kv: 11,
+              nodes: [],
+              sections: []
+            });
+          }
+          if (window.clearSelection) window.clearSelection();
+          if (window.updateFeederInputs) window.updateFeederInputs();
+          if (window.renderNetwork) window.renderNetwork();
+
+          showSyncToast('🔄 قام المدير بتحويل هذا المشروع إلى فرع [' + toAdm + ']، وتم إخراجه من هذا الفرع', 'info', true);
+        }
+
+        const modal = document.getElementById('projects-manager-modal');
+        if (modal && !modal.classList.contains('hidden') && typeof window.openProjectsManager === 'function') {
+          window.openProjectsManager();
+        }
+      }
+      updateBadgeUI('connected');
 
     } else if (type === 'USERS_UPDATE') {
       if (Array.isArray(data.users) && data.users.length > 0 && window.applySyncedUsers) {
@@ -798,9 +1032,17 @@
       var adminName = (typeof window.getCurrentAdminName === 'function') ? window.getCurrentAdminName() : 'بني مزار شرق';
       var adminUrl = getAdminFirebaseUrl();
 
+      var isAdmin = (typeof window.isCurrentUserAdmin === 'function' ? window.isCurrentUserAdmin() : false);
+      if (!isAdmin && window.currentUser) {
+        var r = String(window.currentUser.role || window.currentUser.type || '').toLowerCase();
+        if (r === 'admin' || r === 'superadmin' || r === 'manager' || r === 'مدير') isAdmin = true;
+      }
+
       var meta = {
         senderId: deviceId,
         author: author,
+        isAdmin: isAdmin,
+        priority: isAdmin ? 'high' : 'normal',
         adminKey: adminKey,
         adminName: adminName,
         timestamp: Date.now(),
@@ -831,6 +1073,8 @@
         type: 'DRAWING_UPDATE',
         senderId: deviceId,
         author: author,
+        isAdmin: isAdmin,
+        priority: isAdmin ? 'high' : 'normal',
         adminKey: adminKey,
         adminName: adminName,
         timestamp: meta.timestamp,
@@ -1048,20 +1292,22 @@
     }
   }
 
-  // فحص نبض سحابة Firebase كل 3.5 ثانية لجلب أي تحديثات فورية للإدارة
+  // فحص نبض سحابة Firebase كل 1.5 ثانية لجلب أي تحديثات فورية للإدارة
   async function pollFirebaseHeartbeat() {
     try {
       if (isApplyingRemote) return;
-
-      // إذا كان المستخدم يرسم أو يعدل محلياً حالياً (خلال آخر 25 ثانية)، لا نسمح بتحديث الكانفاس من السحابة
-      var lastEdit = window._lastLocalEditTime || 0;
-      if (Date.now() - lastEdit < 25000) return;
 
       var adminUrl = getAdminFirebaseUrl();
       var res = await fetch(adminUrl + '/meta.json');
       if (!res.ok) return;
       var meta = await res.json();
       if (!meta || !meta.timestamp) return;
+
+      var isAdminUpdate = (meta.isAdmin === true || meta.priority === 'high');
+
+      // إذا كان التعديل من المدير يتم تنفيذه فوراً دون أي تأخير، أما المهندس العادي فمهلة ثانيتين فقط
+      var lastEdit = window._lastLocalEditTime || 0;
+      if (!isAdminUpdate && Date.now() - lastEdit < 2000) return;
 
       if (meta.timestamp > lastFirebaseTimestamp && meta.senderId !== deviceId) {
         lastFirebaseTimestamp = meta.timestamp;
@@ -1084,8 +1330,8 @@
           localSavedTime = curLocal.user_saved_at || curLocal.saved_at || curLocal.timestamp || 0;
         }
 
-        // إذا كان المخطط المحلي محفوظاً بوقت أحدث أو مساوٍ، لا نسمح باستبداله أو حذفه
-        if (localSavedTime >= meta.timestamp) {
+        // إذا كان المخطط المحلي محفوظاً بوقت أحدث ولم يكن التعديل من المدير، لا نسمح باستبداله
+        if (!isAdminUpdate && localSavedTime >= meta.timestamp) {
           return;
         }
 
@@ -1095,8 +1341,24 @@
         if (projRes.ok) {
           var remoteProj = await projRes.json();
           if (remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
-            var mRes = smartMergeProjects(curLocal, remoteProj);
-            var finalProj = mRes.merged;
+            var isLocalDeleted = false;
+            if (typeof window.isProjectDeleted === 'function' && curLocal) {
+              isLocalDeleted = window.isProjectDeleted(curLocal.id, curLocal.name);
+            }
+
+            var localId = curLocal ? String(curLocal.id || '').trim() : '';
+            var remoteId = remoteProj ? String(remoteProj.id || '').trim() : '';
+            var curNodesCount = (curLocal && Array.isArray(curLocal.nodes)) ? curLocal.nodes.length : 0;
+
+            var finalProj;
+            var mRes = { localHadExtra: false };
+
+            if (isLocalDeleted || curNodesCount === 0 || (isAdminUpdate && localId !== remoteId)) {
+              finalProj = remoteProj;
+            } else {
+              mRes = smartMergeProjects(curLocal, remoteProj);
+              finalProj = mRes.merged;
+            }
 
             var projStr = JSON.stringify(finalProj);
             var hash = fastHash(projStr);
@@ -1116,14 +1378,14 @@
             if (window.updateFeederInputs) window.updateFeederInputs();
             if (window.renderNetwork) window.renderNetwork();
 
-            // تحديث شارة السحابة بهدوء دون إزعاج المستخدم برسائل
+            // تحديث شارة السحابة
             updateBadgeUI('connected');
             setTimeout(function () {
               isApplyingRemote = false;
-              if (mRes.localHadExtra) {
+              if (mRes.localHadExtra && !isAdminUpdate) {
                 syncProjectDirectToFirebase(finalProj, 'auto_reconcile_parity');
               }
-            }, 800);
+            }, 500);
           }
         }
       }
@@ -1246,6 +1508,15 @@
     var proj = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
     if (!proj || !proj.nodes || proj.nodes.length === 0) return;
 
+    var isAdmin = (typeof window.isCurrentUserAdmin === 'function' ? window.isCurrentUserAdmin() : false);
+    if (!isAdmin && window.currentUser) {
+      var r = String(window.currentUser.role || window.currentUser.type || '').toLowerCase();
+      if (r === 'admin' || r === 'superadmin' || r === 'manager' || r === 'مدير') isAdmin = true;
+    }
+
+    // للمدير البث فوري وشبه لحظي (60 ملي ثانية) لتسمع التعديلات فوراً على كافة الأجهزة
+    var debounceDelay = (isAdmin || reason === 'admin_immediate' || reason === 'force_sync') ? 60 : 200;
+
     clearTimeout(syncDebounceTimer);
     syncDebounceTimer = setTimeout(function () {
       try {
@@ -1263,7 +1534,7 @@
       } catch (e) {
         console.warn('Error broadcasting drawing:', e);
       }
-    }, 350);
+    }, debounceDelay);
   }
 
   function broadcastProjectSaved(project, catalog) {
@@ -1280,8 +1551,153 @@
     postCloudEvent('PROJECT_SAVED', { project: cleanProj, catalog: catalog }, 'project_saved');
   }
 
-  function broadcastProjectDeleted(projectId, catalog) {
-    postCloudEvent('PROJECT_DELETED', { projectId: projectId, catalog: catalog }, 'project_deleted');
+  function broadcastProjectDeleted(projectId, projectName, catalog) {
+    if (typeof catalog === 'undefined' && Array.isArray(projectName)) {
+      catalog = projectName;
+      projectName = '';
+    }
+    // مسح فوري من قاعدة بيانات Firebase
+    try {
+      if (projectId) {
+        fetch(getAdminFirebaseUrl() + '/projects/' + encodeURIComponent(projectId) + '.json', {
+          method: 'DELETE'
+        }).catch(function () {});
+      }
+      if (catalog) {
+        fetch(getAdminFirebaseUrl() + '/catalog.json', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(catalog)
+        }).catch(function () {});
+      }
+    } catch (_) {}
+
+    postCloudEvent('PROJECT_DELETED', {
+      projectId: projectId,
+      projectName: projectName,
+      catalog: catalog
+    }, 'project_deleted');
+  }
+
+  // بث تحويل مشروع من إدارة لأخرى فورياً في كلا الإدارتين
+  function broadcastProjectTransferred(project, fromAdmin, toAdmin, targetCatalog, oldCatalog) {
+    if (!project) return;
+    try {
+      var cleanProj = compactProjectForCloud(project);
+      var toKey = (toAdmin || '').trim().replace(/\s+/g, '_');
+      var fromKey = (fromAdmin || '').trim().replace(/\s+/g, '_');
+      var author = (window.currentUser && window.currentUser.name) || 'المدير العام';
+
+      var transferInPayload = {
+        type: 'PROJECT_TRANSFERRED_IN',
+        senderId: deviceId,
+        author: author,
+        adminKey: toKey,
+        adminName: toAdmin,
+        timestamp: Date.now(),
+        isAdmin: true,
+        priority: 'high',
+        reason: 'project_transferred',
+        data: {
+          project: cleanProj,
+          catalog: targetCatalog,
+          fromAdmin: fromAdmin,
+          toAdmin: toAdmin
+        }
+      };
+
+      var transferOutPayload = {
+        type: 'PROJECT_TRANSFERRED_OUT',
+        senderId: deviceId,
+        author: author,
+        adminKey: fromKey,
+        adminName: fromAdmin,
+        timestamp: Date.now(),
+        isAdmin: true,
+        priority: 'high',
+        reason: 'project_transferred',
+        data: {
+          projectId: project.id,
+          projectName: project.name,
+          catalog: oldCatalog,
+          fromAdmin: fromAdmin,
+          toAdmin: toAdmin
+        }
+      };
+
+      // 1. بث لسحابة الإدارة المنقول إليها (Firebase + Live SSE)
+      if (toKey) {
+        var toUrl = FIREBASE_BASE_URL + '/admins/' + encodeURIComponent(toKey);
+        fetch(toUrl + '/projects/' + encodeURIComponent(project.id) + '.json', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cleanProj)
+        }).catch(function () {});
+
+        if (targetCatalog) {
+          fetch(toUrl + '/catalog.json', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(targetCatalog)
+          }).catch(function () {});
+        }
+
+        fetch(toUrl + '/live_event.json', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(transferInPayload)
+        }).catch(function () {});
+
+        try {
+          var targetNtfy = activeCloudHost + '/' + encodeURIComponent('sld_room_' + toKey);
+          fetch(targetNtfy, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Title': 'SLD Transfer: ' + (project.name || '') },
+            body: JSON.stringify(transferInPayload)
+          }).catch(function () {});
+        } catch (_) {}
+      }
+
+      // 2. بث لسحابة الإدارة المنقول منها (Firebase + Live SSE)
+      if (fromKey && oldCatalog) {
+        var fromUrl = FIREBASE_BASE_URL + '/admins/' + encodeURIComponent(fromKey);
+        fetch(fromUrl + '/projects/' + encodeURIComponent(project.id) + '.json', {
+          method: 'DELETE'
+        }).catch(function () {});
+
+        fetch(fromUrl + '/catalog.json', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(oldCatalog)
+        }).catch(function () {});
+
+        fetch(fromUrl + '/live_event.json', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(transferOutPayload)
+        }).catch(function () {});
+
+        try {
+          var fromNtfy = activeCloudHost + '/' + encodeURIComponent('sld_room_' + fromKey);
+          fetch(fromNtfy, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Title': 'SLD Transfer: ' + (project.name || '') },
+            body: JSON.stringify(transferOutPayload)
+          }).catch(function () {});
+        } catch (_) {}
+      }
+
+      // 3. البث المحلي للنوافذ المفتوحة
+      if (localBroadcastChannel) {
+        try { localBroadcastChannel.postMessage(transferInPayload); } catch (_) {}
+      }
+      try {
+        localStorage.setItem('sld_sync_bus', JSON.stringify({ payload: transferInPayload, r: Math.random(), t: Date.now() }));
+      } catch (_) {}
+
+    } catch (e) {
+      console.warn('Error in broadcastProjectTransferred:', e);
+    }
   }
 
   function broadcastUsersUpdate(users) {
@@ -1732,6 +2148,10 @@
             try { curLocal = JSON.parse(localStorage.getItem('sld_saved_feeder')); } catch (_) {}
           }
           if (curLocal && curLocal.nodes) {
+            if (typeof window.isProjectDeleted === 'function' && window.isProjectDeleted(curLocal.id, curLocal.name)) {
+              console.log('🗑️ الرسم المحلي الحالي في القائمة السوداء للمحذوفات، إلغاء اعتماده');
+              return;
+            }
             var mRes = smartMergeProjects(curLocal, data.project);
             if (mRes.addedNodes > 0 || mRes.addedSecs > 0) {
               console.log('⚡ تم استكمال ومطابقة عناصر ناقصة تلقائياً في الخلفية (+ ' + mRes.addedNodes + ' عقدة)');
@@ -1769,6 +2189,7 @@
   window.broadcastProjectUpdate = broadcastLocalDrawing;
   window.broadcastProjectSaved = broadcastProjectSaved;
   window.broadcastProjectDeleted = broadcastProjectDeleted;
+  window.broadcastProjectTransferred = broadcastProjectTransferred;
   window.broadcastUsersUpdate = broadcastUsersUpdate;
   window.broadcastMaintenanceState = broadcastMaintenanceState;
   window.openSyncModal = openSyncModal;
@@ -1793,23 +2214,23 @@
     // 1. مزامنة فورية مع سحابة Firebase Realtime Database عند فتح الصفحة
     fetchFirebaseStartup();
     connectFirebaseSSE();
-    setInterval(pollFirebaseHeartbeat, 3500);
+    setInterval(pollFirebaseHeartbeat, 1500);
 
     // 2. مزامنة فورية مع الخادم المحلي (إن وُجد) لجلب المخطط والمستخدمين
     fetchServerState();
 
-    // 3. فحص الخادم المحلي كل 750 ملي ثانية لضمان سرعة فائقة بين كافة المتصفحات والأجهزة
-    setInterval(pollLocalServerEvents, 750);
+    // 3. فحص الخادم المحلي كل 500 ملي ثانية لضمان سرعة فائقة بين كافة المتصفحات والأجهزة
+    setInterval(pollLocalServerEvents, 500);
 
-    // 4. حلقة المطابقة الذاتية التلقائية في الخلفية كل 2.5 ثانية (حل جذري بدون الحاجة لأزرار)
-    setInterval(continuousBackgroundReconciliation, 2500);
+    // 4. حلقة المطابقة الذاتية التلقائية في الخلفية كل 2 ثانية (حل جذري بدون الحاجة لأزرار)
+    setInterval(continuousBackgroundReconciliation, 2000);
 
     // 5. ربط القناة السحابية الاحتياطية
     connectCloudSSE();
     pollStartupCloudState();
 
-    // 6. فحص سحابي سريع كل 5 ثوانٍ لحماية البث وضمان وصول التعديلات بدون أي انقطاع
-    setInterval(pollRecentCloudUpdates, 5000);
+    // 6. فحص سحابي سريع كل 2.5 ثانية لحماية البث وضمان وصول التعديلات بدون أي انقطاع
+    setInterval(pollRecentCloudUpdates, 2500);
 
     setInterval(function () {
       if (!firebaseEventSource || firebaseEventSource.readyState === 2) {

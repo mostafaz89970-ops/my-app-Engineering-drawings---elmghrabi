@@ -6275,7 +6275,7 @@ async function deleteProjectFromManager(p_id, p_name) {
 
     // 5. إشعار المزامنة اللحظية بحذف المشروع
     if (typeof window.broadcastProjectDeleted === "function") {
-      try { window.broadcastProjectDeleted(p_id, curCatalog); } catch(e) {}
+      try { window.broadcastProjectDeleted(p_id, p_name, curCatalog); } catch(e) {}
     } else if (typeof window.broadcastProjectUpdate === "function") {
       try { window.broadcastProjectUpdate("delete"); } catch(e) {}
     }
@@ -6806,6 +6806,10 @@ window.quickEditSelectedSection = quickEditSelectedSection;
 // ─── استقبال ومزامنة المشاريع سحابياً فور وصولها من جهاز آخر ───────────────────
 function applySyncedProject(project, catalog) {
   if (project && project.id) {
+    if (typeof isProjectDeleted === "function" && isProjectDeleted(project.id, project.name)) {
+      console.warn("⛔ تم منع تطبيق مشروع محذوف وارد سحابياً:", project.id, project.name);
+      return;
+    }
     try {
       localStorage.setItem("sld_proj_" + project.id, JSON.stringify(project));
       saveFeederForAdmin(project);
@@ -6823,8 +6827,10 @@ function applySyncedProject(project, catalog) {
       saveCatalogForAdmin(catalog);
       localStorage.setItem("sld_projects_catalog", JSON.stringify(catalog));
       const modal = document.getElementById("projects-manager-modal");
-      if (modal && !modal.classList.contains("hidden") && typeof renderProjectsManagerList === "function") {
-        renderProjectsManagerList();
+      if (modal && !modal.classList.contains("hidden")) {
+        if (typeof openProjectsManager === "function") {
+          openProjectsManager();
+        }
       }
     } catch(e) {}
   }
@@ -6836,8 +6842,10 @@ function applySyncedCatalog(catalog) {
       saveCatalogForAdmin(catalog);
       localStorage.setItem("sld_projects_catalog", JSON.stringify(catalog));
       const modal = document.getElementById("projects-manager-modal");
-      if (modal && !modal.classList.contains("hidden") && typeof renderProjectsManagerList === "function") {
-        renderProjectsManagerList();
+      if (modal && !modal.classList.contains("hidden")) {
+        if (typeof openProjectsManager === "function") {
+          openProjectsManager();
+        }
       }
     } catch(e) {}
   }
@@ -8373,8 +8381,9 @@ async function submitTransferProject() {
   }
 
   // 2. إذا لم يتم تحديد الاحتفاظ بنسخة، نحذف المخطط تماماً من فهرس وبيانات الفرع القديم
+  let oldCatalog = null;
   if (!keepCopy && oldAdmin && oldAdmin !== newAdmin) {
-    let oldCatalog = getCatalogForAdmin(oldAdmin);
+    oldCatalog = getCatalogForAdmin(oldAdmin);
     oldCatalog = oldCatalog.filter(c => c.id !== updatedProj.id && c.name !== updatedProj.name);
     saveCatalogForAdmin(oldCatalog, oldAdmin);
 
@@ -8431,8 +8440,14 @@ async function submitTransferProject() {
   // 3. تسجيل لقطة زمنية للمخطط بعد التحويل
   captureTimelineSnapshot(`تم تحويل المخطط بنجاح إلى فرع [${newAdmin}]`, updatedProj);
 
-  // 4. البث عبر المزامنة
-  if (typeof window.broadcastProjectUpdate === "function") {
+  // 4. البث الفوري المباشر عبر المزامنة السحابية للإدارتين (المنقول منها والمنقول إليها)
+  if (typeof window.broadcastProjectTransferred === "function") {
+    try {
+      window.broadcastProjectTransferred(updatedProj, oldAdmin, newAdmin, targetCatalog, keepCopy ? null : oldCatalog);
+    } catch(e) {
+      console.warn("Transfer broadcast error:", e);
+    }
+  } else if (typeof window.broadcastProjectUpdate === "function") {
     try { window.broadcastProjectUpdate("transfer", { projectId: updatedProj.id, fromAdmin: oldAdmin, toAdmin: newAdmin }); } catch(_) {}
   }
 
