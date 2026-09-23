@@ -2952,29 +2952,198 @@ function quickAddElement(type) {
   showToast(`➕ تم إضافة ${newNode.name}`, "success");
 }
 
-async function updateLiveMetrics() {
-  if (!currentProject) return;
-  try {
-    const res = await fetch("/api/calculate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        nodes: currentProject.nodes,
-        sections: currentProject.sections,
-        voltage_kv: currentProject.voltage_kv || 11
-      })
-    });
-    const data = await res.json();
-    const sum = data.summary;
+// المواصفات الفنية القياسية للموصلات والكابلات في الحسابات الهندسية (المقاومة R والمفاعلة X والسعة الأمبيرية)
+const CONDUCTOR_SPECS_JS = {
+  "35/6":   { type: "هوائي", r_per_km: 0.85,  x_per_km: 0.38, max_amp: 170 },
+  "70/12":  { type: "هوائي", r_per_km: 0.428, x_per_km: 0.36, max_amp: 290 },
+  "150/25": { type: "هوائي", r_per_km: 0.204, x_per_km: 0.33, max_amp: 450 },
+  "سبيكة":  { type: "هوائي", r_per_km: 0.35,  x_per_km: 0.35, max_amp: 350 },
+  "3*70":   { type: "كابل",  r_per_km: 0.443, x_per_km: 0.11, max_amp: 200 },
+  "3*150":  { type: "كابل",  r_per_km: 0.206, x_per_km: 0.098, max_amp: 305 },
+  "3*240":  { type: "كابل",  r_per_km: 0.125, x_per_km: 0.09, max_amp: 395 },
+  "3*300":  { type: "كابل",  r_per_km: 0.100, x_per_km: 0.088, max_amp: 440 },
+};
 
-    document.getElementById("st-total-len").textContent = `${sum.total_feeder_length_m} م`;
-    document.getElementById("st-ohl-len").textContent = `${sum.total_ohl_length_m} م`;
-    document.getElementById("st-ugc-len").textContent = `${sum.total_ugc_length_m} م`;
-    document.getElementById("st-total-cap").textContent = `${sum.total_capacity_kva} KVA`;
-    document.getElementById("st-actual-load").textContent = `${sum.total_actual_load_kva} KVA`;
-    document.getElementById("st-feeder-amp").textContent = `${sum.total_feeder_current_a} A`;
-    
-    const dropEl = document.getElementById("st-max-drop");
+function normalizeSectionKeyJS(secStr) {
+  if (!secStr) return "70/12";
+  const s = String(secStr).replace(/\s+/g, "").replace(/[×Xx]/g, "*");
+  for (const k of Object.keys(CONDUCTOR_SPECS_JS)) {
+    if (s.includes(k)) return k;
+  }
+  return "70/12";
+}
+
+// محرك الحسابات الهندسية الشامل للخط بالكامل (إجمالي القدرات، نسبة التحميل الكلية، الأحمال، وتيار المغذي)
+function calculateFeederEngineering(project) {
+  if (!project) return { summary: { total_feeder_length_m: 0, total_ohl_length_m: 0, total_ugc_length_m: 0, total_capacity_kva: 0, total_actual_load_kva: 0, overall_loading_pct: 0, total_feeder_current_a: 0, max_voltage_drop_pct: 0, overloaded_count: 0, system_voltage_kv: 11 }, loads: [], sections: [], voltage_profile: [] };
+  const nodes = project.nodes || [];
+  const sections = project.sections || [];
+  const vNominal = parseFloat(project.voltage_kv || project.network_voltage_kv) || 11.0;
+  const vPhaseToPhase = vNominal * 1000.0;
+  const powerFactor = 0.85;
+
+  let totalOhlLen = 0.0;
+  let totalUgcLen = 0.0;
+  let totalFeederLen = 0.0;
+
+  const sectionsDetailed = [];
+  sections.forEach(sec => {
+    const len = parseFloat(sec.length) || 0;
+    const sType = sec.type || "هوائي";
+    const sSize = String(sec.size || "70/12");
+    if (sType === "هوائي") totalOhlLen += len;
+    else totalUgcLen += len;
+    totalFeederLen += len;
+
+    const normKey = normalizeSectionKeyJS(sSize);
+    const spec = CONDUCTOR_SPECS_JS[normKey] || { r_per_km: 0.3, x_per_km: 0.2, max_amp: 300 };
+    sectionsDetailed.push({
+      from_node: sec.from_node || "",
+      to_node: sec.to_node || "",
+      type: sType,
+      size: sSize,
+      length: len,
+      r_total: spec.r_per_km * (len / 1000.0),
+      x_total: spec.x_per_km * (len / 1000.0),
+      max_amp: spec.max_amp
+    });
+  });
+
+  const loadsDetailed = [];
+  let totalCapKva = 0.0;
+  let totalActualLoadKva = 0.0;
+  const overloadedTransformers = [];
+
+  nodes.forEach(node => {
+    if (["transformer", "kiosk"].includes(node.type) || (node.capacity && parseFloat(node.capacity) > 0)) {
+      const cap = parseFloat(node.capacity) || 0;
+      const pct = (node.loading_pct != null) ? parseFloat(node.loading_pct) :
+                  (node.load_pct != null) ? parseFloat(node.load_pct) :
+                  (node.load != null && !isNaN(parseFloat(node.load))) ? parseFloat(node.load) : 70.0;
+      const actualLoadKva = cap * (pct / 100.0);
+      const ratedCurrentMv = cap > 0 ? (cap / (Math.sqrt(3) * vNominal)) : 0;
+      const actualCurrentMv = actualLoadKva > 0 ? (actualLoadKva / (Math.sqrt(3) * vNominal)) : 0;
+
+      totalCapKva += cap;
+      totalActualLoadKva += actualLoadKva;
+
+      if (pct > 100.0) {
+        overloadedTransformers.push({
+          name: node.name || "",
+          node: node.id || "",
+          loading_pct: pct
+        });
+      }
+
+      loadsDetailed.push({
+        node_id: node.id || "",
+        name: node.name || "",
+        type: node.type === "transformer" ? "محول معلق" : (node.type === "kiosk" ? "كشك محولات" : node.type),
+        ownership: node.ownership || "public",
+        capacity_kva: cap,
+        loading_pct: Math.round(pct * 10) / 10,
+        actual_load_kva: Math.round(actualLoadKva * 10) / 10,
+        rated_amp_mv: Math.round(ratedCurrentMv * 10) / 10,
+        actual_amp_mv: Math.round(actualCurrentMv * 10) / 10,
+        switches_count: node.switches_count || 1
+      });
+    }
+  });
+
+  const totalFeederAmp = (vNominal > 0 && totalActualLoadKva > 0)
+    ? (totalActualLoadKva / (Math.sqrt(3) * vNominal))
+    : 0;
+
+  // نسبة تحميل الخط بالكامل = (إجمالي الحمل الفعلي ÷ إجمالي القدرات) * 100
+  const overallLoadingPct = totalCapKva > 0
+    ? Math.round((totalActualLoadKva / totalCapKva) * 1000) / 10
+    : 0;
+
+  const sinPhi = Math.sqrt(Math.max(0, 1 - powerFactor * powerFactor));
+  const cosPhi = powerFactor;
+
+  let cumDropV = 0.0;
+  const voltageProfile = [];
+  const remainingAmp = totalFeederAmp;
+
+  sectionsDetailed.forEach(sec => {
+    const secDrop = Math.sqrt(3) * remainingAmp * (sec.r_total * cosPhi + sec.x_total * sinPhi);
+    cumDropV += secDrop;
+    const dropPct = vPhaseToPhase > 0 ? (cumDropV / vPhaseToPhase) * 100.0 : 0;
+    voltageProfile.push({
+      from_node: sec.from_node,
+      to_node: sec.to_node,
+      length_m: sec.length,
+      section_drop_v: Math.round(secDrop * 10) / 10,
+      cum_drop_v: Math.round(cumDropV * 10) / 10,
+      drop_percentage: Math.round(dropPct * 100) / 100
+    });
+  });
+
+  const maxDropPct = voltageProfile.length > 0 ? voltageProfile[voltageProfile.length - 1].drop_percentage : 0.0;
+
+  return {
+    summary: {
+      total_feeder_length_m: Math.round(totalFeederLen * 10) / 10,
+      total_ohl_length_m: Math.round(totalOhlLen * 10) / 10,
+      total_ugc_length_m: Math.round(totalUgcLen * 10) / 10,
+      total_capacity_kva: Math.round(totalCapKva),
+      total_actual_load_kva: Math.round(totalActualLoadKva * 10) / 10,
+      overall_loading_pct: overallLoadingPct,
+      total_feeder_current_a: Math.round(totalFeederAmp * 10) / 10,
+      max_voltage_drop_pct: Math.round(maxDropPct * 100) / 100,
+      overloaded_count: overloadedTransformers.length,
+      system_voltage_kv: vNominal
+    },
+    loads: loadsDetailed,
+    sections: sectionsDetailed,
+    voltage_profile: voltageProfile,
+    overloaded_transformers: overloadedTransformers,
+    copyright: "جميع الحقوق محفوظة للمهندس مصطفى المغربي © ENG-MOSTAFAELMGHRABY"
+  };
+}
+
+// تحديث مؤشرات الخط اللحظية في الشريط العلوي فورياً
+function updateLiveMetrics() {
+  if (!currentProject) return;
+  const data = calculateFeederEngineering(currentProject);
+  const sum = data.summary;
+
+  const capEl = document.getElementById("st-total-cap");
+  if (capEl) capEl.textContent = `${sum.total_capacity_kva} kVA`;
+
+  const actEl = document.getElementById("st-actual-load");
+  if (actEl) actEl.textContent = `${sum.total_actual_load_kva} kVA`;
+
+  const loadEl = document.getElementById("st-feeder-loading");
+  if (loadEl) {
+    loadEl.textContent = `${sum.overall_loading_pct}%`;
+    if (sum.overall_loading_pct > 100) {
+      loadEl.style.color = "#EF4444";
+      loadEl.style.backgroundColor = "rgba(239, 68, 68, 0.25)";
+      loadEl.title = `⚠️ تحذير: نسبة تحميل الخط مفرطة وتتجاوز 100% (${sum.overall_loading_pct}%)!`;
+    } else if (sum.overall_loading_pct > 80) {
+      loadEl.style.color = "#F59E0B";
+      loadEl.style.backgroundColor = "rgba(245, 158, 11, 0.22)";
+      loadEl.title = `⚡ تنبيه: نسبة تحميل الخط مرتفعة (${sum.overall_loading_pct}%)`;
+    } else {
+      loadEl.style.color = "#38BDF8";
+      loadEl.style.backgroundColor = "rgba(56, 189, 248, 0.15)";
+      loadEl.title = `✅ نسبة تحميل الخط في النطاق الآمن (${sum.overall_loading_pct}%)`;
+    }
+  }
+
+  const lenEl = document.getElementById("st-total-len");
+  if (lenEl) lenEl.textContent = `${sum.total_feeder_length_m} م`;
+  const ohlEl = document.getElementById("st-ohl-len");
+  if (ohlEl) ohlEl.textContent = `${sum.total_ohl_length_m} م`;
+  const ugcEl = document.getElementById("st-ugc-len");
+  if (ugcEl) ugcEl.textContent = `${sum.total_ugc_length_m} م`;
+  const ampEl = document.getElementById("st-feeder-amp");
+  if (ampEl) ampEl.textContent = `${sum.total_feeder_current_a} A`;
+
+  const dropEl = document.getElementById("st-max-drop");
+  if (dropEl) {
     dropEl.textContent = `${sum.max_voltage_drop_pct}%`;
     if (sum.max_voltage_drop_pct > 5.0) {
       dropEl.style.color = "#E53E3E";
@@ -2982,11 +3151,10 @@ async function updateLiveMetrics() {
     } else {
       dropEl.style.color = "#63B3ED";
     }
-  } catch (err) {
-    console.warn("Metrics update failed", err);
   }
 }
 
+// عرض نافذة الحسابات الهندسية الشاملة
 async function openCalculationsModal() {
   if (window.hasPermission && !window.hasPermission('btn_calculations')) {
     showToast("⛔ ليس لديك صلاحية فتح جدول الحسابات الهندسية", "error");
@@ -2996,48 +3164,63 @@ async function openCalculationsModal() {
   const modal = document.getElementById("calc-modal");
   const content = document.getElementById("calc-content");
   modal.classList.remove("hidden");
-  content.innerHTML = "<p style='text-align:center; padding:20px;'>جاري تحليل الشبكة الكهربائية...</p>";
 
-  try {
-    const res = await fetch("/api/calculate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        nodes: currentProject.nodes,
-        sections: currentProject.sections,
-        voltage_kv: currentProject.voltage_kv || 11
-      })
-    });
-    const data = await res.json();
-    const sum = data.summary;
+  // الحساب الفوري بدون أي انتظار
+  const data = calculateFeederEngineering(currentProject);
+  const sum = data.summary;
 
-    let html = `
-      <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:20px;">
-        <div style="background:#1a202c; padding:12px; border-radius:6px; border:1px solid #2d3748; text-align:center;">
-          <div style="font-size:11px; color:#a0aec0;">طول المغذي الكلي</div>
-          <div style="font-size:18px; font-weight:bold; color:#63b3ed; margin-top:4px;">${sum.total_feeder_length_m} م</div>
-        </div>
-        <div style="background:#1a202c; padding:12px; border-radius:6px; border:1px solid #2d3748; text-align:center;">
-          <div style="font-size:11px; color:#a0aec0;">سعة المحولات الكلية</div>
-          <div style="font-size:18px; font-weight:bold; color:#48bb78; margin-top:4px;">${sum.total_capacity_kva} KVA</div>
-        </div>
-        <div style="background:#1a202c; padding:12px; border-radius:6px; border:1px solid #2d3748; text-align:center;">
-          <div style="font-size:11px; color:#a0aec0;">الحمل الفعلي المتوقع</div>
-          <div style="font-size:18px; font-weight:bold; color:#ecc94b; margin-top:4px;">${sum.total_actual_load_kva} KVA</div>
-        </div>
-        <div style="background:#1a202c; padding:12px; border-radius:6px; border:1px solid #2d3748; text-align:center;">
-          <div style="font-size:11px; color:#a0aec0;">أقصى هبوط جهد ΔV</div>
-          <div style="font-size:18px; font-weight:bold; color:${sum.max_voltage_drop_pct > 5 ? '#e53e3e' : '#63b3ed'}; margin-top:4px;">${sum.max_voltage_drop_pct}%</div>
-        </div>
+  let loadingBadgeColor = "#38bdf8";
+  let loadingBadgeBg = "rgba(56,189,248,0.15)";
+  if (sum.overall_loading_pct > 100) {
+    loadingBadgeColor = "#fc8181";
+    loadingBadgeBg = "rgba(239,68,68,0.25)";
+  } else if (sum.overall_loading_pct > 80) {
+    loadingBadgeColor = "#fbbf24";
+    loadingBadgeBg = "rgba(245,158,11,0.22)";
+  }
+
+  let html = `
+    <!-- كروت ملخص مؤشرات الخط الهندسية -->
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:20px;">
+      <div style="background:#1a202c; padding:12px; border-radius:8px; border:1px solid #2d3748; text-align:center;">
+        <div style="font-size:11px; color:#a0aec0;">⚡ سعة المحولات الكلية (القدرة)</div>
+        <div style="font-size:19px; font-weight:bold; color:#48bb78; margin-top:4px;">${sum.total_capacity_kva} KVA</div>
       </div>
+      <div style="background:#1a202c; padding:12px; border-radius:8px; border:1px solid #2d3748; text-align:center;">
+        <div style="font-size:11px; color:#a0aec0;">📊 الحمل الفعلي المتوقع للخط</div>
+        <div style="font-size:19px; font-weight:bold; color:#ecc94b; margin-top:4px;">${sum.total_actual_load_kva} KVA</div>
+      </div>
+      <div style="background:#1a202c; padding:12px; border-radius:8px; border:1px solid ${loadingBadgeColor}; text-align:center; box-shadow:0 0 10px ${loadingBadgeBg};">
+        <div style="font-size:11px; color:#cbd5e1;">📈 نسبة تحميل الخط بالكامل</div>
+        <div style="font-size:22px; font-weight:bold; color:${loadingBadgeColor}; margin-top:3px; background:${loadingBadgeBg}; padding:2px 8px; border-radius:6px; display:inline-block;">${sum.overall_loading_pct}%</div>
+      </div>
+      <div style="background:#1a202c; padding:12px; border-radius:8px; border:1px solid #2d3748; text-align:center;">
+        <div style="font-size:11px; color:#a0aec0;">🔌 تيار المغذي الكلي المتوقع</div>
+        <div style="font-size:19px; font-weight:bold; color:#68d391; margin-top:4px;">${sum.total_feeder_current_a} A</div>
+      </div>
+      <div style="background:#1a202c; padding:12px; border-radius:8px; border:1px solid #2d3748; text-align:center;">
+        <div style="font-size:11px; color:#a0aec0;">📏 طول المغذي الكلي</div>
+        <div style="font-size:19px; font-weight:bold; color:#63b3ed; margin-top:4px;">${sum.total_feeder_length_m} م</div>
+        <div style="font-size:10px; color:#718096; margin-top:2px;">${sum.total_ohl_length_m}م هوائي + ${sum.total_ugc_length_m}م كابل</div>
+      </div>
+      <div style="background:#1a202c; padding:12px; border-radius:8px; border:1px solid #2d3748; text-align:center;">
+        <div style="font-size:11px; color:#a0aec0;">⚠️ أقصى هبوط جهد ΔV</div>
+        <div style="font-size:19px; font-weight:bold; color:${sum.max_voltage_drop_pct > 5 ? '#e53e3e' : '#63b3ed'}; margin-top:4px;">${sum.max_voltage_drop_pct}%</div>
+      </div>
+    </div>
 
-      <h4 style="margin:16px 0 8px; color:#edf2f7;">📋 جدول أحمال المحولات والأكشاك (Loads)</h4>
-      <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:20px; text-align:center;">
-        <thead>
-          <tr style="background:#2b6cb0; color:#fff;">
+    <h4 style="margin:16px 0 8px; color:#edf2f7; display:flex; justify-content:space-between; align-items:center;">
+      <span>📋 جدول أحمال المحولات والأكشاك (Loads)</span>
+      <span style="font-size:12px; color:#a0aec0;">العدد: ${data.loads.length} وحدة</span>
+    </h4>
+    <div style="max-height:280px; overflow-y:auto; border:1px solid #2d3748; border-radius:6px; margin-bottom:20px;">
+      <table style="width:100%; border-collapse:collapse; font-size:12px; text-align:center;">
+        <thead style="position:sticky; top:0; background:#2b6cb0; color:#fff; z-index:2;">
+          <tr>
             <th style="padding:8px; border:1px solid #4a5568;">النود</th>
             <th style="padding:8px; border:1px solid #4a5568;">الاسم</th>
             <th style="padding:8px; border:1px solid #4a5568;">النوع</th>
+            <th style="padding:8px; border:1px solid #4a5568;">الملكية</th>
             <th style="padding:8px; border:1px solid #4a5568;">القدرة (KVA)</th>
             <th style="padding:8px; border:1px solid #4a5568;">نسبة التحميل</th>
             <th style="padding:8px; border:1px solid #4a5568;">الحمل الفعلي (KVA)</th>
@@ -3045,69 +3228,82 @@ async function openCalculationsModal() {
           </tr>
         </thead>
         <tbody>
-    `;
+  `;
 
-    data.loads.forEach(ld => {
-      html += `
-        <tr style="border-bottom:1px solid #2d3748;">
-          <td style="padding:6px; border:1px solid #2d3748;">${ld.node_id}</td>
-          <td style="padding:6px; border:1px solid #2d3748; text-align:right;">${ld.name}</td>
-          <td style="padding:6px; border:1px solid #2d3748;">${ld.type}</td>
-          <td style="padding:6px; border:1px solid #2d3748;">${ld.capacity_kva}</td>
-          <td style="padding:6px; border:1px solid #2d3748; color:${ld.loading_pct > 100 ? '#fc8181' : '#a0aec0'}; font-weight:bold;">${ld.loading_pct}%</td>
-          <td style="padding:6px; border:1px solid #2d3748;">${ld.actual_load_kva}</td>
-          <td style="padding:6px; border:1px solid #2d3748;">${ld.actual_amp_mv}</td>
-        </tr>
-      `;
-    });
-
+  data.loads.forEach(ld => {
+    const isPriv = (ld.ownership === 'private' || ld.ownership === 'خاص');
     html += `
+      <tr style="border-bottom:1px solid #2d3748;">
+        <td style="padding:6px; border:1px solid #2d3748; font-weight:bold; color:#90cdf4;">${ld.node_id}</td>
+        <td style="padding:6px; border:1px solid #2d3748; text-align:right;">${ld.name}</td>
+        <td style="padding:6px; border:1px solid #2d3748;">${ld.type}</td>
+        <td style="padding:6px; border:1px solid #2d3748; color:${isPriv ? '#fb923c' : '#86efac'}; font-weight:bold;">${isPriv ? 'خاص' : 'عام'}</td>
+        <td style="padding:6px; border:1px solid #2d3748; color:#48bb78; font-weight:bold;">${ld.capacity_kva}</td>
+        <td style="padding:6px; border:1px solid #2d3748; color:${ld.loading_pct > 100 ? '#fc8181' : (ld.loading_pct > 80 ? '#fbbf24' : '#a0aec0')}; font-weight:bold;">${ld.loading_pct}%</td>
+        <td style="padding:6px; border:1px solid #2d3748; color:#ecc94b; font-weight:bold;">${ld.actual_load_kva}</td>
+        <td style="padding:6px; border:1px solid #2d3748;">${ld.actual_amp_mv}</td>
+      </tr>
+    `;
+  });
+
+  // سطر الإجمالي الكلي للخط
+  html += `
+        <tr style="background:#1e293b; font-weight:bold; border-top:2px solid #4a5568;">
+          <td style="padding:8px; border:1px solid #4a5568; color:#63b3ed;" colspan="4">الإجمالي الكلي للخط والمحولات (${data.loads.length} وحدة)</td>
+          <td style="padding:8px; border:1px solid #4a5568; color:#48bb78; font-size:13px;">${sum.total_capacity_kva} KVA</td>
+          <td style="padding:8px; border:1px solid #4a5568; color:${loadingBadgeColor}; font-size:13px;">${sum.overall_loading_pct}%</td>
+          <td style="padding:8px; border:1px solid #4a5568; color:#ecc94b; font-size:13px;">${sum.total_actual_load_kva} KVA</td>
+          <td style="padding:8px; border:1px solid #4a5568; color:#68d391; font-size:13px;">${sum.total_feeder_current_a} A</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h4 style="margin:16px 0 8px; color:#edf2f7; display:flex; justify-content:space-between; align-items:center;">
+    <span>📏 جدول المقاطع وهبوط الجهد التراكمي (Sections & Voltage Profile)</span>
+    <span style="font-size:12px; color:#a0aec0;">العدد: ${data.sections.length} مقطع</span>
+  </h4>
+  <div style="max-height:260px; overflow-y:auto; border:1px solid #2d3748; border-radius:6px;">
+    <table style="width:100%; border-collapse:collapse; font-size:12px; text-align:center;">
+      <thead style="position:sticky; top:0; background:#1a365d; color:#fff; z-index:2;">
+        <tr>
+          <th style="padding:8px; border:1px solid #4a5568;">من نود</th>
+          <th style="padding:8px; border:1px solid #4a5568;">إلى نود</th>
+          <th style="padding:8px; border:1px solid #4a5568;">نوع الخط</th>
+          <th style="padding:8px; border:1px solid #4a5568;">المقطع</th>
+          <th style="padding:8px; border:1px solid #4a5568;">الطول (م)</th>
+          <th style="padding:8px; border:1px solid #4a5568;">هبوط الجهد (V)</th>
+          <th style="padding:8px; border:1px solid #4a5568;">الهبوط التراكمي (%)</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  data.sections.forEach((sc, idx) => {
+    const vProf = data.voltage_profile[idx] || {};
+    html += `
+      <tr style="border-bottom:1px solid #2d3748;">
+        <td style="padding:6px; border:1px solid #2d3748;">${sc.from_node}</td>
+        <td style="padding:6px; border:1px solid #2d3748;">${sc.to_node}</td>
+        <td style="padding:6px; border:1px solid #2d3748;">${sc.type === 'كابل' ? 'كابل (متقطع)' : 'هوائي (سليم)'}</td>
+        <td style="padding:6px; border:1px solid #2d3748;">${sc.size}</td>
+        <td style="padding:6px; border:1px solid #2d3748; font-weight:bold; color:#ecc94b;">${sc.length}</td>
+        <td style="padding:6px; border:1px solid #2d3748;">${vProf.section_drop_v || 0}</td>
+        <td style="padding:6px; border:1px solid #2d3748; font-weight:bold; color:${(vProf.drop_percentage || 0) > 5 ? '#fc8181' : '#63b3ed'};">${vProf.drop_percentage || 0}%</td>
+      </tr>
+    `;
+  });
+
+  html += `
         </tbody>
       </table>
+    </div>
+    <div style="margin-top:16px; text-align:left; font-size:11px; color:#718096; font-style:italic;">
+      جميع الحقوق محفوظة للمهندس مصطفى المغربي © ENG-MOSTAFAELMGHRABY
+    </div>
+  `;
 
-      <h4 style="margin:16px 0 8px; color:#edf2f7;">📏 جدول المقاطع وهبوط الجهد التراكمي (Sections & Voltage Profile)</h4>
-      <table style="width:100%; border-collapse:collapse; font-size:12px; text-align:center;">
-        <thead>
-          <tr style="background:#1a365d; color:#fff;">
-            <th style="padding:8px; border:1px solid #4a5568;">من نود</th>
-            <th style="padding:8px; border:1px solid #4a5568;">إلى نود</th>
-            <th style="padding:8px; border:1px solid #4a5568;">نوع الخط</th>
-            <th style="padding:8px; border:1px solid #4a5568;">المقطع</th>
-            <th style="padding:8px; border:1px solid #4a5568;">الطول (م)</th>
-            <th style="padding:8px; border:1px solid #4a5568;">هبوط الجهد (V)</th>
-            <th style="padding:8px; border:1px solid #4a5568;">الهبوط التراكمي (%)</th>
-          </tr>
-        </thead>
-        <tbody>
-    `;
-
-    data.sections.forEach((sc, idx) => {
-      const vProf = data.voltage_profile[idx] || {};
-      html += `
-        <tr style="border-bottom:1px solid #2d3748;">
-          <td style="padding:6px; border:1px solid #2d3748;">${sc.from_node}</td>
-          <td style="padding:6px; border:1px solid #2d3748;">${sc.to_node}</td>
-          <td style="padding:6px; border:1px solid #2d3748;">${sc.type === 'كابل' ? 'كابل (متقطع)' : 'هوائي (سليم)'}</td>
-          <td style="padding:6px; border:1px solid #2d3748;">${sc.size}</td>
-          <td style="padding:6px; border:1px solid #2d3748; font-weight:bold; color:#ecc94b;">${sc.length}</td>
-          <td style="padding:6px; border:1px solid #2d3748;">${vProf.section_drop_v || 0}</td>
-          <td style="padding:6px; border:1px solid #2d3748; font-weight:bold; color:${(vProf.drop_percentage || 0) > 5 ? '#fc8181' : '#63b3ed'};">${vProf.drop_percentage || 0}%</td>
-        </tr>
-      `;
-    });
-
-    html += `
-        </tbody>
-      </table>
-      <div style="margin-top:16px; text-align:left; font-size:11px; color:#718096; font-style:italic;">
-        جميع الحقوق محفوظة للمهندس مصطفى المغربي © ENG-MOSTAFAELMGHRABY
-      </div>
-    `;
-
-    content.innerHTML = html;
-  } catch (err) {
-    content.innerHTML = "<p style='color:#fc8181;'>تعذر حساب البيانات الكهربائية.</p>";
-  }
+  content.innerHTML = html;
 }
 
 function closeCalculationsModal() {
@@ -3139,24 +3335,29 @@ async function exportToExcel() {
     const proj     = currentProject;
 
     // ===== ورقة 1: معلومات المشروع =====
+    const eng = calculateFeederEngineering(currentProject);
+    const sum = eng.summary;
     const transList = nodes.filter(n => n.type === "transformer" || n.type === "kiosk");
     const transPublicCount = transList.filter(n => n.ownership !== "private" && n.ownership !== "خاص").length;
     const transPrivateCount = transList.filter(n => n.ownership === "private" || n.ownership === "خاص").length;
 
     const projRows = [
-      ["بيانات المشروع", ""],
-      ["اسم المشروع",    proj.name || "—"],
-      ["رقم المشروع",    proj.id   || "—"],
-      ["تاريخ التصدير",  new Date().toLocaleString("ar-EG")],
-      ["عدد النودات",    nodes.length],
-      ["عدد المقاطع",    sections.length],
+      ["بيانات المشروع والمغذي", ""],
+      ["اسم المشروع / المغذي",   proj.name || "—"],
+      ["رقم المشروع",           proj.id   || "—"],
+      ["تاريخ التصدير",         new Date().toLocaleString("ar-EG")],
+      ["عدد النودات",           nodes.length],
+      ["عدد المقاطع",           sections.length],
+      ["طول الخط الكلي",        `${sum.total_feeder_length_m} م (${sum.total_ohl_length_m} م هوائي + ${sum.total_ugc_length_m} م كابل)`],
       ["إجمالي المحولات والأكشاك", transList.length],
-      ["محولات وأكشاك (عام)", transPublicCount],
-      ["محولات وأكشاك (خاص)", transPrivateCount],
-      ["إجمالي السكاكين", nodes.filter(n => n.type === "switch").length],
-      ["إجمالي القدرة (kVA)",
-        nodes.filter(n => n.capacity).reduce((s, n) => s + (parseFloat(n.capacity) || 0), 0) + " kVA"
-      ],
+      ["محولات وأكشاك (عام)",   transPublicCount],
+      ["محولات وأكشاك (خاص)",   transPrivateCount],
+      ["إجمالي السكاكين",       nodes.filter(n => n.type === "switch").length],
+      ["⚡ إجمالي القدرات المركبة للخط", `${sum.total_capacity_kva} kVA`],
+      ["📊 إجمالي الحمل الفعلي المتوقع للخط", `${sum.total_actual_load_kva} kVA`],
+      ["📈 نسبة تحميل الخط بالكامل",     `${sum.overall_loading_pct}%`],
+      ["🔌 تيار المغذي الكلي المتوقع",    `${sum.total_feeder_current_a} A`],
+      ["⚠️ أقصى هبوط جهد تراكمي",         `${sum.max_voltage_drop_pct}%`],
     ];
 
     // ===== ورقة 2: النودات =====
@@ -3233,6 +3434,22 @@ async function exportToExcel() {
         n.notes      || "—",
       ];
     });
+
+    // سطر الإجمالي الكلي للخط في نهاية جدول المحولات
+    if (transRows.length > 0) {
+      transRows.push([
+        "الإجمالي",
+        "—",
+        "—",
+        `إجمالي محولات وأكشاك الخط (${transRows.length} وحدة)`,
+        "—",
+        `${sum.total_capacity_kva} kVA`,
+        `${sum.overall_loading_pct}%`,
+        `${sum.total_actual_load_kva} kVA`,
+        `${proj.voltage_kv || 11} kV`,
+        `نسبة تحميل الخط بالكامل: ${sum.overall_loading_pct}% (تيار: ${sum.total_feeder_current_a} A)`
+      ]);
+    }
 
     // ===== بناء Workbook =====
     const wb = XLSX.utils.book_new();
@@ -3426,25 +3643,28 @@ async function downloadProjectPPTX() {
       fontSize: 22, bold: true, color: "38BDF8", align: "center"
     });
 
+    const eng = calculateFeederEngineering(currentProject);
+    const sum = eng.summary;
     const transCount = nodes.filter(n => ["transformer","kiosk"].includes(n.type)).length;
     const transPub = nodes.filter(n => ["transformer","kiosk"].includes(n.type) && (n.ownership !== 'private' && n.ownership !== 'خاص')).length;
     const transPriv = nodes.filter(n => ["transformer","kiosk"].includes(n.type) && (n.ownership === 'private' || n.ownership === 'خاص')).length;
 
     const summaryData = [
       ["البند", "القيمة"],
-      ["اسم المشروع",        proj.name || "—"],
-      ["عدد النودات الكلي",  nodes.length + " نود"],
-      ["عدد الخطوط والكابلات", sections.length + " مقطع"],
+      ["اسم المشروع",           proj.name || "—"],
+      ["عدد النودات الكلي",     nodes.length + " نود"],
+      ["عدد الخطوط والكابلات",  sections.length + " مقطع (" + sum.total_feeder_length_m + " م)"],
       ["محولات وأكشاك (إجمالي)", transCount + " وحدة"],
-      ["محولات وأكشاك (عامة)", transPub + " وحدة"],
-      ["محولات وأكشاك (خاصة)", transPriv + " وحدة"],
-      ["سكاكين هوائية",     nodes.filter(n => n.type === "switch").length + " سكينة"],
-      ["إجمالي القدرة",
-        nodes.filter(n => n.capacity).reduce((s, n) => s + (parseFloat(n.capacity)||0), 0) + " kVA"
-      ],
-      ["خطوط هوائية",       sections.filter(s => s.type === "هوائي").length + " خط"],
-      ["كابلات أرضية",      sections.filter(s => s.type === "كابل").length + " كابل"],
-      ["تاريخ التصدير",     new Date().toLocaleDateString("ar-EG")],
+      ["محولات وأكشاك (عامة)",  transPub + " وحدة"],
+      ["محولات وأكشاك (خاصة)",  transPriv + " وحدة"],
+      ["سكاكين هوائية",        nodes.filter(n => n.type === "switch").length + " سكينة"],
+      ["إجمالي القدرات المركبة للخط", `${sum.total_capacity_kva} kVA`],
+      ["إجمالي الحمل الفعلي المتوقع للخط", `${sum.total_actual_load_kva} kVA`],
+      ["نسبة تحميل الخط بالكامل", `${sum.overall_loading_pct}%`],
+      ["تيار المغذي الكلي المتوقع", `${sum.total_feeder_current_a} A`],
+      ["خطوط هوائية",          sections.filter(s => s.type === "هوائي").length + " خط (" + sum.total_ohl_length_m + " م)"],
+      ["كابلات أرضية",         sections.filter(s => s.type === "كابل").length + " كابل (" + sum.total_ugc_length_m + " م)"],
+      ["تاريخ التصدير",        new Date().toLocaleDateString("ar-EG")],
     ];
 
     const tableRows = summaryData.map((row, i) => row.map(cell => ({
