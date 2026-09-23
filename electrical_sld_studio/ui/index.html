@@ -227,6 +227,24 @@
           </div>
         </div>
 
+        <!-- كبسولة إجمالي القدرات ونسبة تحميل الخط بالكامل اللحظية -->
+        <div class="feeder-metrics-capsule" id="feeder-metrics-capsule" onclick="openCalculationsModal()" title="انقر لفتح تفاصيل الحسابات الهندسية الكاملة" style="cursor:pointer; display:inline-flex; align-items:center; gap:8px; background:rgba(15,23,42,0.85); border:1px solid #334155; border-radius:8px; padding:4px 10px; font-size:12px; transition:border-color 0.2s;" onmouseenter="this.style.borderColor='#38BDF8'" onmouseleave="this.style.borderColor='#334155'">
+          <div class="capsule-item" title="إجمالي القدرة المركبة لكافة المحولات والأكشاك على الخط">
+            <span style="color:#A0AEC0; font-size:11px;">⚡ القدرة:</span>
+            <strong id="st-total-cap" style="color:#4ADE80; font-size:12px; margin-right:4px;">0 kVA</strong>
+          </div>
+          <div class="capsule-divider" style="width:1px; height:18px; background:#334155;"></div>
+          <div class="capsule-item" title="الحمل الفعلي المتوقع لكافة المحولات بناءً على نسب التحميل">
+            <span style="color:#A0AEC0; font-size:11px;">📊 الحمل:</span>
+            <strong id="st-actual-load" style="color:#ECC94B; font-size:12px; margin-right:4px;">0 kVA</strong>
+          </div>
+          <div class="capsule-divider" style="width:1px; height:18px; background:#334155;"></div>
+          <div class="capsule-item" title="نسبة تحميل الخط والمغذي بالكامل (إجمالي الحمل الفعلي ÷ إجمالي القدرات)">
+            <span style="color:#A0AEC0; font-size:11px;">📈 تحميل الخط:</span>
+            <strong id="st-feeder-loading" style="color:#38BDF8; font-size:12px; margin-right:4px; padding:1px 6px; border-radius:4px; background:rgba(56,189,248,0.15);">0%</strong>
+          </div>
+        </div>
+
         <div class="cad-ribbon-sep"></div>
 
         <!-- كبسولة البحث الفوري عن النود والمعدات في الرسم (Ctrl+F) -->
@@ -2639,14 +2657,14 @@
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <!-- PptxGenJS: تصدير PowerPoint مباشرة من المتصفح بدون خادم -->
   <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-  <script src="js/default_projects.js?v=26.1"></script>
-  <script src="js/auth.js?v=26.1"></script>
-  <script src="js/realtime_sync.js?v=26.1"></script>
-  <script src="js/components.js?v=26.1"></script>
-  <script src="js/simulation.js?v=26.1"></script>
-  <script src="js/canvas.js?v=26.1"></script>
-  <script src="js/app.js?v=26.1"></script>
-  <script src="js/settings.js?v=26.1"></script>
+  <script src="js/default_projects.js?v=26.2"></script>
+  <script src="js/auth.js?v=26.2"></script>
+  <script src="js/realtime_sync.js?v=26.2"></script>
+  <script src="js/components.js?v=26.2"></script>
+  <script src="js/simulation.js?v=26.2"></script>
+  <script src="js/canvas.js?v=26.2"></script>
+  <script src="js/app.js?v=26.2"></script>
+  <script src="js/settings.js?v=26.2"></script>
 </body>
 </html>
 

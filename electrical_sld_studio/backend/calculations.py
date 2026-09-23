@@ -138,6 +138,8 @@ def calculate_network_metrics(nodes, sections, nominal_voltage_kv=11.0):
 
     max_drop_pct = voltage_profile[-1]["drop_percentage"] if voltage_profile else 0.0
 
+    overall_loading_pct = round((total_actual_load_kva / total_capacity_kva * 100.0), 2) if total_capacity_kva > 0 else 0.0
+
     return {
         "summary": {
             "total_feeder_length_m": round(total_feeder_len, 2),
@@ -145,6 +147,7 @@ def calculate_network_metrics(nodes, sections, nominal_voltage_kv=11.0):
             "total_ugc_length_m": round(total_ugc_len, 2),
             "total_capacity_kva": round(total_capacity_kva, 2),
             "total_actual_load_kva": round(total_actual_load_kva, 2),
+            "overall_loading_pct": overall_loading_pct,
             "total_feeder_current_a": round(total_feeder_amp, 2),
             "max_voltage_drop_pct": round(max_drop_pct, 2),
             "overloaded_count": len(overloaded_transformers),
