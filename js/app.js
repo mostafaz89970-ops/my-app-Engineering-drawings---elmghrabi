@@ -5698,7 +5698,7 @@ function loadAdminWorkspace(adminName) {
 
   let proj = getSavedFeederForAdmin(adminName);
   if (!proj || !proj.nodes || proj.nodes.length === 0) {
-    if (adminName === "بني مزار شرق" && window.DEFAULT_BUNDLED_PROJECTS && window.DEFAULT_BUNDLED_PROJECTS.length > 0) {
+    if (adminName === "بني مزار شرق" && window.DEFAULT_BUNDLED_PROJECTS && window.DEFAULT_BUNDLED_PROJECTS.length > 0 && !isProjectDeleted(window.DEFAULT_BUNDLED_PROJECTS[0].id, window.DEFAULT_BUNDLED_PROJECTS[0].name)) {
       proj = JSON.parse(JSON.stringify(window.DEFAULT_BUNDLED_PROJECTS[0]));
     } else {
       proj = initAdminDefaultProject(adminName);
@@ -5722,20 +5722,59 @@ function loadAdminWorkspace(adminName) {
   }
 }
 
+// ─── إدارة السجل الأسود للمشاريع المحذوفة نهائياً لمنع عودة المشاريع التجريبية ───
+function getDeletedProjectsList() {
+  try {
+    const raw = localStorage.getItem("sld_deleted_projects_blacklist");
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return arr;
+    }
+  } catch(e) {}
+  return [];
+}
+
+function markProjectAsDeleted(p_id, p_name) {
+  try {
+    const list = getDeletedProjectsList();
+    if (p_id && !list.includes(String(p_id))) list.push(String(p_id));
+    if (p_name && !list.includes(String(p_name))) list.push(String(p_name));
+    localStorage.setItem("sld_deleted_projects_blacklist", JSON.stringify(list));
+  } catch(e) {}
+}
+
+function isProjectDeleted(p_id, p_name) {
+  const list = getDeletedProjectsList();
+  if (!list || list.length === 0) return false;
+  if (p_id && list.includes(String(p_id))) return true;
+  if (p_name && list.includes(String(p_name))) return true;
+  return false;
+}
+window.getDeletedProjectsList = getDeletedProjectsList;
+window.markProjectAsDeleted = markProjectAsDeleted;
+window.isProjectDeleted = isProjectDeleted;
+
 window.loadAdminWorkspace = loadAdminWorkspace;
 window.getSavedFeederForAdmin = getSavedFeederForAdmin;
 window.saveFeederForAdmin = saveFeederForAdmin;
 window.getCatalogForAdmin = getCatalogForAdmin;
 window.saveCatalogForAdmin = saveCatalogForAdmin;
 
-// استرجاع الفهرس المحلي للمشاريع من التخزين (مخصص للإدارة الحالية)
+// استرجاع الفهرس المحلي للمشاريع من التخزين (مخصص للإدارة الحالية ومصفى من أي مشاريع محذوفة)
 function getLocalProjectsCatalog() {
   let catalog = getCatalogForAdmin();
   if (!Array.isArray(catalog)) catalog = [];
 
-  // دمج المشاريع المدمجة الافتراضية إذا كانت الإدارة بني مزار شرق
+  // تصفية أي مشروع تم حذفه مسبقاً
+  catalog = catalog.filter(p => !isProjectDeleted(p.id, p.name));
+
+  // دمج المشاريع المدمجة الافتراضية إذا كانت الإدارة بني مزار شرق بشرط ألا تكون قد حُذفت عمداً
   if (getCurrentAdminKey() === "بني_مزار_شرق" && window.DEFAULT_BUNDLED_PROJECTS && Array.isArray(window.DEFAULT_BUNDLED_PROJECTS)) {
+    let changed = false;
     window.DEFAULT_BUNDLED_PROJECTS.forEach(bp => {
+      // إذا كان المشروع التجريبي قد حذفه المستخدم عمداً، لا يُعاد أبداً!
+      if (isProjectDeleted(bp.id, bp.name)) return;
+
       const exists = catalog.some(p => p.id === bp.id || p.name === bp.name);
       if (!exists) {
         catalog.push({
@@ -5745,8 +5784,10 @@ function getLocalProjectsCatalog() {
           voltage_kv: bp.voltage_kv || 11,
           nodes_count: (bp.nodes || []).length,
           sections_count: (bp.sections || []).length,
-          updated_at: bp.updated_at || "مخطط معتمد"
+          updated_at: bp.updated_at || "مخطط معتمد",
+          administration: "بني مزار شرق"
         });
+        changed = true;
         try {
           if (!localStorage.getItem("sld_proj_" + bp.id)) {
             localStorage.setItem("sld_proj_" + bp.id, JSON.stringify(bp));
@@ -5754,7 +5795,9 @@ function getLocalProjectsCatalog() {
         } catch(e) {}
       }
     });
-    saveCatalogForAdmin(catalog);
+    if (changed) {
+      saveCatalogForAdmin(catalog);
+    }
   }
   return catalog;
 }
@@ -5849,9 +5892,9 @@ async function loadProjectDataById(p_id) {
     }
   } catch(e) {}
 
-  // 2. فحص المشاريع الافتراضية المدمجة
-  if (window.DEFAULT_BUNDLED_PROJECTS && Array.isArray(window.DEFAULT_BUNDLED_PROJECTS)) {
-    const bundled = window.DEFAULT_BUNDLED_PROJECTS.find(p => p.id === p_id || p.name === p_id);
+  // 2. فحص المشاريع الافتراضية المدمجة بشرط ألا تكون محذوفة
+  if (!isProjectDeleted(p_id) && window.DEFAULT_BUNDLED_PROJECTS && Array.isArray(window.DEFAULT_BUNDLED_PROJECTS)) {
+    const bundled = window.DEFAULT_BUNDLED_PROJECTS.find(p => (p.id === p_id || p.name === p_id) && !isProjectDeleted(p.id, p.name));
     if (bundled) return JSON.parse(JSON.stringify(bundled));
   }
 
@@ -5921,17 +5964,23 @@ async function openProjectsManager() {
     });
   }
 
-  // ضمان عدم فراغ القائمة عبر المشاريع المدمجة
+  // تصفية المشاريع المحذوفة نهائياً ومنع عودتها
+  projects = projects.filter(p => !isProjectDeleted(p.id, p.name));
+
+  // ضمان عدم فراغ القائمة عبر المشاريع المدمجة غير المحذوفة فقط
   if (projects.length === 0 && window.DEFAULT_BUNDLED_PROJECTS) {
-    projects = window.DEFAULT_BUNDLED_PROJECTS.map(bp => ({
-      id: bp.id,
-      name: bp.name || bp.id,
-      substation: bp.substation || "محطة محولات",
-      voltage_kv: bp.voltage_kv || 11,
-      nodes_count: (bp.nodes || []).length,
-      sections_count: (bp.sections || []).length,
-      updated_at: bp.updated_at || "مخطط معتمد"
-    }));
+    projects = window.DEFAULT_BUNDLED_PROJECTS
+      .filter(bp => !isProjectDeleted(bp.id, bp.name))
+      .map(bp => ({
+        id: bp.id,
+        name: bp.name || bp.id,
+        substation: bp.substation || "محطة محولات",
+        voltage_kv: bp.voltage_kv || 11,
+        nodes_count: (bp.nodes || []).length,
+        sections_count: (bp.sections || []).length,
+        updated_at: bp.updated_at || "مخطط معتمد",
+        administration: "بني مزار شرق"
+      }));
   }
 
   renderProjectsTable(projects, isServerOnline);
@@ -6149,34 +6198,109 @@ async function loadProjectFromManager(p_id) {
   showToast(`📁 تم فتح المخطط [${currentProject.name || 'المحدد'}] بنجاح!`, "success");
 }
 
-// حذف مشروع
+// حذف مشروع نهائياً والتأكد من عدم عودته
 async function deleteProjectFromManager(p_id, p_name) {
-  if (!confirm(`هل أنت متأكد من رغبتك في حذف المخطط [${p_name}]؟`)) {
+  if (!confirm(`هل أنت متأكد من رغبتك في حذف المخطط [${p_name}] بشكل نهائي؟\n\nلن يظهر هذا المشروع مجدداً ولن يتم استرجاعه تلقائياً.`)) {
     return;
   }
-  // 1. حذف من التخزين المحلي
+
+  // 1. تسجيل المشروع في القائمة السوداء للمشاريع المحذوفة لمنع عودة المشاريع التجريبية والافتراضية
+  markProjectAsDeleted(p_id, p_name);
+
+  const adminList = [
+    "بني مزار شرق",
+    "بني مزار غرب",
+    "مغاغة",
+    "العدوة",
+    "مطاي",
+    "سمالوط شرق",
+    "سمالوط غرب"
+  ];
+
+  // 2. الحذف الشامل من التخزين المحلي وكافة فهارس الإدارات
   try {
-    let catalog = JSON.parse(localStorage.getItem("sld_projects_catalog") || "[]");
-    catalog = catalog.filter(p => p.id !== p_id && p.name !== p_name && p.name !== p_id);
-    localStorage.setItem("sld_projects_catalog", JSON.stringify(catalog));
+    // حذف من الفهرس القديم
+    let legacyCatalog = JSON.parse(localStorage.getItem("sld_projects_catalog") || "[]");
+    legacyCatalog = legacyCatalog.filter(p => p.id !== p_id && p.name !== p_name && p.name !== p_id);
+    localStorage.setItem("sld_projects_catalog", JSON.stringify(legacyCatalog));
+
+    // حذف من فهرس الإدارة الحالية
+    const curAdmin = getCurrentAdminName();
+    let curCatalog = getCatalogForAdmin(curAdmin);
+    curCatalog = curCatalog.filter(p => p.id !== p_id && p.name !== p_name && p.name !== p_id);
+    saveCatalogForAdmin(curCatalog, curAdmin);
+
+    // فحص وحذف من كافة فهارس الإدارات الأخرى
+    adminList.forEach(adm => {
+      let cat = getCatalogForAdmin(adm);
+      const filtered = cat.filter(p => p.id !== p_id && p.name !== p_name && p.name !== p_id);
+      if (filtered.length !== cat.length) {
+        saveCatalogForAdmin(filtered, adm);
+      }
+    });
+
+    // 3. حذف ملفات ومفاتيح المشروع الفردية من LocalStorage
     localStorage.removeItem("sld_proj_" + p_id);
-
-    if (typeof window.broadcastProjectDeleted === "function") {
-      try { window.broadcastProjectDeleted(p_id, catalog); } catch(e) {}
+    localStorage.removeItem("sld_project_" + p_id);
+    localStorage.removeItem("sld_feeder_" + p_id);
+    if (p_name) {
+      localStorage.removeItem("sld_proj_" + p_name);
     }
-  } catch(e) {}
 
-  // 2. حذف من الخادم إن وجد
+    // 4. إذا كان هذا المشروع هو المفتوح حالياً على لوحة الرسم
+    if (currentProject && (currentProject.id === p_id || currentProject.name === p_name || currentProject.name === p_id)) {
+      if (typeof createNewProjectDirectly === "function") {
+        createNewProjectDirectly();
+      } else {
+        currentProject = {
+          id: "feeder_" + Date.now(),
+          name: "مخطط جديد",
+          substation: "",
+          feeder_max_load_kva: 0,
+          voltage_kv: 11,
+          nodes: [],
+          sections: []
+        };
+        window.currentProject = currentProject;
+        if (window.clearSelection) clearSelection();
+        if (typeof updateFeederInputs === "function") updateFeederInputs();
+        if (typeof renderNetwork === "function") renderNetwork();
+      }
+      try {
+        localStorage.removeItem("sld_saved_feeder");
+        const aKey = getCurrentAdminName().trim().replace(/\s+/g, '_');
+        localStorage.removeItem("sld_feeder_" + aKey);
+      } catch(_) {}
+    }
+
+    // 5. إشعار المزامنة اللحظية بحذف المشروع
+    if (typeof window.broadcastProjectDeleted === "function") {
+      try { window.broadcastProjectDeleted(p_id, curCatalog); } catch(e) {}
+    } else if (typeof window.broadcastProjectUpdate === "function") {
+      try { window.broadcastProjectUpdate("delete"); } catch(e) {}
+    }
+  } catch(e) {
+    console.error("Project deletion error:", e);
+  }
+
+  // 6. حذف من الخادم إن وجد
   try {
     const encodedId = encodeURIComponent(p_id);
     await fetch(`/api/delete-project/${encodedId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user: currentUser || {} })
+      body: JSON.stringify({ id: p_id, name: p_name, user: currentUser || {} })
     });
   } catch(e) {}
 
-  showToast(`🗑️ تم حذف المشروع [${p_name}]`, "warning");
+  // 7. حذف من سحابة Firebase إن كانت متصلة
+  try {
+    const curKey = getCurrentAdminName().trim().replace(/\s+/g, '_');
+    const url = `https://elmghrabyelectric-default-rtdb.firebaseio.com/sld_studio/admins/${encodeURIComponent(curKey)}/projects/${encodeURIComponent(p_id)}.json`;
+    fetch(url, { method: "DELETE" }).catch(() => {});
+  } catch(_) {}
+
+  showToast(`🗑️ تم حذف المشروع [${p_name}] نهائياً بنجاح!`, "warning");
   openProjectsManager();
 }
 
