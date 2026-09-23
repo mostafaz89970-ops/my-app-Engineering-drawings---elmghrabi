@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>شركة مصر الوسطى لتوزيع الكهرباء | ENG-MOSTAFAELMGHRABY</title>
-  <link rel="stylesheet" href="css/style.css?v=5.3">
-  <link rel="stylesheet" href="css/canvas.css?v=5.3">
-  <link rel="stylesheet" href="css/settings.css?v=5.3">
+  <link rel="stylesheet" href="css/style.css?v=25.0">
+  <link rel="stylesheet" href="css/canvas.css?v=25.0">
+  <link rel="stylesheet" href="css/settings.css?v=25.0">
 </head>
 <body>
 
@@ -106,59 +106,67 @@
           <span class="copyright-tag">م. مصطفى المغربي</span>
         </div>
 
-        <!-- أدوات النظام والمشاريع -->
+        <!-- أدوات النظام والمشاريع مقسمة في مجموعات كبسولات منسقة -->
         <div class="header-system-actions">
-          <button class="btn-sys" data-perm="btn_projects" onclick="createNewProjectDirectly()" title="بدء وفتح مشروع ومخطط جديد فارغ مباشرة">
-            <span>➕ مشروع جديد</span>
-          </button>
-          <button class="btn-sys" data-perm="btn_projects" onclick="openProjectsManager()" title="صفحة إدارة واستعراض وتعديل المشاريع والخطوط">
-            <span>📁 المشاريع</span>
-          </button>
-          <button class="btn-sys btn-sys-save" data-perm="btn_save" onclick="saveCurrentProject()" title="حفظ المخطط الحالي فوراً">
-            <span>💾 حفظ</span>
-          </button>
-          <!-- زر مطابقة واستكمال الرسم الناقص بين كافة الأجهزة فوراً (مكان بارز ومباشر) -->
-          <button id="btn-reconcile-sync" class="btn-sys" onclick="reconcileAndSyncAllDevices()" title="فحص ومطابقة الرسم واستكمال أي عناصر ناقصة بين كافة الأجهزة فوراً" style="background: linear-gradient(135deg, #059669, #047857); border: 1px solid #34d399; font-weight: bold; color: #ffffff; box-shadow: 0 0 10px rgba(16,185,129,0.35);">
-            <span>🔄 مطابقة الرسم</span>
-          </button>
-          <!-- زر نسخ رابط البث المباشر للمراجعة الفورية مع أي شخص آخر -->
-          <button id="btn-share-live" class="btn-sys" onclick="copyLiveStreamLink()" title="نسخ رابط البث المباشر لإرساله لأي مهندس ليفتح المخطط ويتابع معك الرسم لحظياً" style="background: linear-gradient(135deg, #1d4ed8, #2563eb); border: 1px solid #60a5fa; color: #ffffff; font-weight: bold; box-shadow: 0 0 10px rgba(37,99,235,0.35);">
-            <span>📡 رابط البث المباشر</span>
-          </button>
-          <!-- زري النسخ واللصق الفوري لكود الرسم لنقل 64+ عقدة ومقطع بين أي متصفح في ثانية واحدة -->
-          <button id="btn-copy-drawing-code" class="btn-sys" onclick="copyDrawingCodeToClipboard()" title="نسخ كود الرسم الحالي بالكامل لنقله لمتصفح فايرفوكس أو أي جهاز آخر فوراً" style="background: rgba(14, 165, 233, 0.2); border: 1px solid #0284c7; color: #38bdf8; font-weight: bold;">
-            <span>📋 نسخ الرسم</span>
-          </button>
-          <button id="btn-paste-drawing-code" class="btn-sys" onclick="pasteDrawingCodeFromClipboard()" title="لصق واستيراد كود الرسم المنقول فوراً وظهوره على الشاشة" style="background: rgba(168, 85, 247, 0.2); border: 1px solid #9333ea; color: #c084fc; font-weight: bold;">
-            <span>📥 لصق الرسم</span>
-          </button>
-          <button class="btn-sys" data-perm="btn_print" onclick="printFullSchematic()" title="طباعة المخطط والخرطوشة والتقرير">
-            <span>🖨️ طباعة</span>
-          </button>
-          <button class="btn-sys" data-perm="btn_excel" onclick="exportToExcel()" title="تصدير تقرير إكسيل هندسي">
-            <span>📥 Excel</span>
-          </button>
-          <button class="btn-sys btn-sys-primary" id="btn-download-project" data-perm="btn_excel" onclick="downloadProjectPPTX()" title="تحميل المشروع بالكامل كملف باور بوينت (.pptx) بنفس التنسيق والاحتواء التلقائي لفتحه في PowerPoint" style="background: linear-gradient(135deg, #1e3a8a, #2563eb); border-color: #3b82f6; font-weight: bold; box-shadow: 0 2px 8px rgba(37,99,235,0.35);">
-            <span>📥 تحميل المشروع</span>
-          </button>
-          <button class="btn-sys" id="btn-import-pptx" data-perm="btn_excel" onclick="openImportPowerPointDialog()" title="استيراد شبكة ومخطط من عرض باور بوينت (.pptx) وترتيب كل شيء تلقائياً بنظام هندسي">
-            <span>📥 استيراد PowerPoint</span>
-          </button>
+          <!-- مجموعة المشاريع -->
+          <div class="sys-btn-group" title="إدارة ملفات ومشاريع المخطط">
+            <button class="btn-sys" data-perm="btn_projects" onclick="createNewProjectDirectly()" title="بدء وفتح مشروع ومخطط جديد فارغ مباشرة">
+              <span>➕ مشروع جديد</span>
+            </button>
+            <button class="btn-sys" data-perm="btn_projects" onclick="openProjectsManager()" title="صفحة إدارة واستعراض وتعديل المشاريع والخطوط">
+              <span>📁 المشاريع</span>
+            </button>
+            <button class="btn-sys btn-sys-save" data-perm="btn_save" onclick="saveCurrentProject()" title="حفظ المخطط الحالي فوراً">
+              <span>💾 حفظ</span>
+            </button>
+          </div>
 
-          <!-- زر تبديل لون خلفية الرسم إلى أبيض / داكن -->
-          <button id="btn-toggle-bg" class="btn-sys" onclick="toggleCanvasBackground()" title="تغيير لون خلفية مساحة الرسم إلى أبيض / داكن">
-            <span id="btn-toggle-bg-text">🎨 خلفية بيضاء</span>
-          </button>
+          <!-- مجموعة المزامنة والمشاركة اللحظية -->
+          <div class="sys-btn-group" title="المزامنة والنقل اللحظي بين المتصفحات">
+            <button id="btn-reconcile-sync" class="btn-sys" onclick="reconcileAndSyncAllDevices()" title="فحص ومطابقة الرسم واستكمال أي عناصر ناقصة بين كافة الأجهزة فوراً" style="background: linear-gradient(135deg, #059669, #047857); border: 1px solid #34d399; font-weight: bold; color: #ffffff;">
+              <span>🔄 مطابقة الرسم</span>
+            </button>
+            <button id="btn-share-live" class="btn-sys" onclick="copyLiveStreamLink()" title="نسخ رابط البث المباشر لإرساله لأي مهندس ليفتح المخطط ويتابع معك الرسم لحظياً" style="background: linear-gradient(135deg, #1d4ed8, #2563eb); border: 1px solid #60a5fa; color: #ffffff; font-weight: bold;">
+              <span>📡 بث مباشر</span>
+            </button>
+            <button id="btn-copy-drawing-code" class="btn-sys" onclick="copyDrawingCodeToClipboard()" title="نسخ كود الرسم الحالي بالكامل لنقله لمتصفح فايرفوكس أو أي جهاز آخر فوراً" style="background: rgba(14, 165, 233, 0.2); border: 1px solid #0284c7; color: #38bdf8;">
+              <span>📋 نسخ</span>
+            </button>
+            <button id="btn-paste-drawing-code" class="btn-sys" onclick="pasteDrawingCodeFromClipboard()" title="لصق واستيراد كود الرسم المنقول فوراً وظهوره على الشاشة" style="background: rgba(168, 85, 247, 0.2); border: 1px solid #9333ea; color: #c084fc;">
+              <span>📥 لصق</span>
+            </button>
+          </div>
 
-          <!-- زر صفحة المطور ENG-MOSTAFA ELMGHRABY -->
-          <button id="btn-dev-profile" class="btn-sys" onclick="openDeveloperModal()" title="صفحة المطور والمهندس المصمم للنظام ENG-MOSTAFA ELMGHRABY" style="background:rgba(43,108,176,0.25);border:1px solid #3182ce;color:#63b3ed;">
-            <span>👨‍💻 المطور</span>
-          </button>
+          <!-- مجموعة التصدير والطباعة -->
+          <div class="sys-btn-group" title="تصدير وطباعة المخطط الهندسي">
+            <button class="btn-sys" data-perm="btn_print" onclick="printFullSchematic()" title="طباعة المخطط والخرطوشة والتقرير">
+              <span>🖨️ طباعة</span>
+            </button>
+            <button class="btn-sys" data-perm="btn_excel" onclick="exportToExcel()" title="تصدير تقرير إكسيل هندسي مباشر">
+              <span>📊 Excel</span>
+            </button>
+            <button class="btn-sys btn-sys-primary" id="btn-download-project" data-perm="btn_excel" onclick="downloadProjectPPTX()" title="تحميل المشروع بالكامل كملف باور بوينت (.pptx) بنفس التنسيق والاحتواء التلقائي لفتحه في PowerPoint" style="background: linear-gradient(135deg, #1e3a8a, #2563eb); border-color: #3b82f6; font-weight: bold;">
+              <span>📥 PowerPoint</span>
+            </button>
+            <button class="btn-sys" id="btn-import-pptx" data-perm="btn_excel" onclick="openImportPowerPointDialog()" title="استيراد شبكة ومخطط من عرض باور بوينت (.pptx) وترتيب كل شيء تلقائياً بنظام هندسي">
+              <span>📥 استيراد PPT</span>
+            </button>
+          </div>
+
+          <!-- مجموعة العرض والمظهر -->
+          <div class="sys-btn-group">
+            <button id="btn-toggle-bg" class="btn-sys" onclick="toggleCanvasBackground()" title="تغيير لون خلفية مساحة الرسم إلى أبيض / داكن">
+              <span id="btn-toggle-bg-text">🎨 خلفية بيضاء</span>
+            </button>
+            <button id="btn-dev-profile" class="btn-sys" onclick="openDeveloperModal()" title="صفحة المطور والمهندس المصمم للنظام ENG-MOSTAFA ELMGHRABY" style="background:rgba(43,108,176,0.25);border:1px solid #3182ce;color:#63b3ed;">
+              <span>👨‍💻 المطور</span>
+            </button>
+          </div>
 
           <!-- شارة وزر المزامنة السحابية اللحظية بين كافة الأجهزة -->
           <div id="cloud-sync-badge" class="sync-status-badge badge-connected" onclick="openSyncModal()" title="انقر لعرض تفاصيل المزامنة السحابية اللحظية بين كافة الأجهزة">
             <span class="sync-dot green"></span>
-            <span>مزامنة سحابية لحظية ⚡</span>
+            <span>✅ متصل ⚡</span>
           </div>
         </div>
 
@@ -195,10 +203,10 @@
         </div>
       </div>
 
-      <!-- الصف الثاني: شريط أدوات الخطوط والمحطات وبيانات المغذي -->
-      <div class="header-tools-ribbon">
+      <!-- الصف الثاني: بيانات المغذي، البحث الفوري، الخطوط، المحطات، والسكاكين والأكشاك -->
+      <div class="header-tools-ribbon header-ribbon-row2">
         <!-- شريط بيانات المغذي السريعة الموحد العصري -->
-        <div class="feeder-capsule">
+        <div class="feeder-capsule" title="بيانات المغذي ومحطة التغذية الرئيسية">
           <div class="capsule-item">
             <span class="capsule-label">🔌 المغذي:</span>
             <input type="text" id="feeder-name-input" value="مغذي التوزيع 1" class="capsule-input" oninput="updateFeederInfo(true)" onchange="updateFeederInfo(false)" title="اسم مغذي التوزيع">
@@ -235,6 +243,7 @@
         </div>
 
         <div class="cad-ribbon-sep"></div>
+
         <!-- مجموعة 1: الخطوط والكابلات -->
         <div class="cad-group">
           <span class="cad-group-tag">الخطوط والكابلات</span>
@@ -246,11 +255,8 @@
             <span class="indicator-overhead"></span>
             <span>➖ خط هوائي</span>
           </button>
-          <button class="cad-tool-btn" data-perm="btn_line_between" onclick="openLineBetweenNodesModal()" title="أخذ خط أو تفريعة من خط مارر بين نقطتين ويتجه بالمسار المطلوب">
-            <span>⚡ خط من بين نقطتين</span>
-          </button>
-          <button class="cad-tool-btn" data-perm="btn_line_between" onclick="openLineBetweenNodesModal()" title="أخذ مناول أو تفريعة جديدة من خط مارر بين نقطتين">
-            <span>⚡ أخذ مناول</span>
+          <button class="cad-tool-btn" data-perm="btn_line_between" onclick="openLineBetweenNodesModal()" title="أخذ تفريعة أو مناول جديد من خط مارر بين نقطتين ويتجه بالمسار المطلوب">
+            <span>⚡ أخذ مناول / تفريعة</span>
           </button>
           <button class="cad-tool-btn" onclick="openElbowModal()" title="رسم مسار منكسر بزاوية 90° بجميع الاتجاهات" style="background: rgba(14, 165, 233, 0.15); border-color: #38bdf8; color: #38bdf8; font-weight: bold;">
             <span>📐 نصف دائرة</span>
@@ -275,31 +281,7 @@
 
         <div class="cad-ribbon-sep"></div>
 
-        <!-- مجموعة: التنويهات والملاحظات الهندسية -->
-        <div class="cad-group">
-          <span class="cad-group-tag">تنويهات المخطط</span>
-          <button class="cad-tool-btn" onclick="openAddAnnotationModal()" title="إضافة كارت تنويه أو ملاحظة هندسية حرة في أي مكان بالرسم" style="background: rgba(245, 158, 11, 0.18); border-color: #f59e0b; color: #fbbf24; font-weight: bold;">
-            <span>📝 إضافة تنويه</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- الصف الثالث: شريط المحولات والأكشاك والتحكم والمحاكاة (CAD Ribbon: Transformers, Kiosks & Controls) -->
-      <div class="header-tools-ribbon header-ribbon-row3">
-        <!-- مجموعة 3: المحولات -->
-        <div class="cad-group">
-          <span class="cad-group-tag">المحولات</span>
-          <button class="cad-tool-btn" data-perm="btn_trans" onclick="openTransformerDialog('transformer')" title="إضافة محول معلق مع القدرة والتحميل">
-            <span>⚙️ محول معلق</span>
-          </button>
-          <button class="cad-tool-btn" data-perm="btn_cascade_trans" onclick="openCascadeTransformerDialog()" title="إضافة تفريع محول من محول آخر">
-            <span>🔄 تفريع محول</span>
-          </button>
-        </div>
-
-        <div class="cad-ribbon-sep"></div>
-
-        <!-- مجموعة 4: الأكشاك -->
+        <!-- مجموعة 3: الأكشاك (موقع متناسق لاستغلال مساحة الصف الثاني) -->
         <div class="cad-group">
           <span class="cad-group-tag">الأكشاك</span>
           <button class="cad-tool-btn" data-perm="btn_kiosk" onclick="openTransformerDialog('kiosk')" title="إضافة كشك محولات بتنسيق المثلث الهندسي">
@@ -307,6 +289,28 @@
           </button>
           <button class="cad-tool-btn" data-perm="btn_kiosk_from_kiosk" onclick="openKioskFromKioskDialog()" title="إضافة كشك من كشك آخر متتالي بكابل أرضي">
             <span>🔺➔🔺 كشك من كشك</span>
+          </button>
+        </div>
+
+        <!-- مجموعة: التنويهات والملاحظات الهندسية (تتمدد إلى نهاية الصف لاستغلال كامل المساحة) -->
+        <div class="cad-group cad-group-end">
+          <span class="cad-group-tag">تنويهات المخطط</span>
+          <button class="cad-tool-btn" onclick="openAddAnnotationModal()" title="إضافة كارت تنويه أو ملاحظة هندسية حرة في أي مكان بالرسم" style="background: rgba(245, 158, 11, 0.18); border-color: #f59e0b; color: #fbbf24; font-weight: bold;">
+            <span>📝 إضافة تنويه</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- الصف الثالث: شريط المحولات ووحدات الربط والنسخ الاحتياطي والمحاكاة وأدوات التحكم -->
+      <div class="header-tools-ribbon header-ribbon-row3">
+        <!-- مجموعة 4: المحولات -->
+        <div class="cad-group">
+          <span class="cad-group-tag">المحولات</span>
+          <button class="cad-tool-btn" data-perm="btn_trans" onclick="openTransformerDialog('transformer')" title="إضافة محول معلق مع القدرة والتحميل">
+            <span>⚙️ محول معلق</span>
+          </button>
+          <button class="cad-tool-btn" data-perm="btn_cascade_trans" onclick="openCascadeTransformerDialog()" title="إضافة تفريع محول من محول آخر">
+            <span>🔄 تفريع محول</span>
           </button>
         </div>
 
@@ -325,12 +329,19 @@
 
         <div class="cad-ribbon-sep"></div>
 
-        <!-- مجموعة 6: التحليل والمحاكاة والتحكم -->
-        <div class="cad-group">
-          <span class="cad-group-tag">التحكم والمحاكاة</span>
-          <button class="cad-tool-btn" onclick="reconcileAndSyncAllDevices()" title="فحص ومطابقة واستكمال الرسم الناقص بين كافة الأجهزة فوراً" style="background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #6ee7b7; font-weight: bold;">
-            <span>🔄 مطابقة الرسم</span>
+        <!-- مجموعة: النسخ الاحتياطي (للمدير فقط) -->
+        <div class="cad-group" id="backup-group" style="display:none;">
+          <span class="cad-group-tag">النسخ الاحتياطي</span>
+          <button class="cad-tool-btn" onclick="openBackupModal()" title="نسخ احتياطي واستعادة بيانات المشاريع — للمدير فقط" style="background:rgba(139,92,246,0.18); border-color:#8b5cf6; color:#c4b5fd; font-weight:bold;">
+            <span>💾 نسخ احتياطي</span>
           </button>
+        </div>
+
+        <div class="cad-ribbon-sep"></div>
+
+        <!-- مجموعة 6: المحاكاة والمناورات -->
+        <div class="cad-group">
+          <span class="cad-group-tag">المحاكاة والمناورات</span>
           <button id="btn-sim-mode" class="cad-tool-btn btn-outline" data-perm="btn_simulation" onclick="toggleSimulationMode()" title="تشغيل وضع محاكاة الفصل والتوصيل وتلوين الخطوط المكهربة">
             <span id="sim-icon">⚡</span>
             <span>محاكاة</span>
@@ -344,6 +355,11 @@
           <button class="cad-tool-btn" data-perm="btn_calculations" onclick="openCalculationsModal()" title="عرض جدول الحسابات وهبوط الجهد">
             <span>📊 الحسابات</span>
           </button>
+        </div>
+
+        <!-- مجموعة 7: أدوات التعديل والتحكم والطي (تتمدد إلى نهاية الصف بالكامل لتغطية أقصى اليسار) -->
+        <div class="cad-group cad-group-end">
+          <span class="cad-group-tag">التحكم والتعديل</span>
           <button class="cad-tool-btn" data-perm="btn_undo" onclick="undoLastStep()" title="تراجع عن آخر خطوة (Ctrl+Z)">
             <span>↩️ تراجع</span>
           </button>
@@ -356,16 +372,6 @@
           <button class="cad-tool-btn" id="btn-ribbon-toggle-sidebar" onclick="toggleSidebarCollapse()" title="طي أو فرد القائمة الجانبية ومكتبة العناصر">
             <span id="ribbon-sidebar-icon">◀</span>
             <span id="ribbon-sidebar-text">طي القائمة</span>
-          </button>
-        </div>
-
-        <div class="cad-ribbon-sep"></div>
-
-        <!-- مجموعة: النسخ الاحتياطي (للمدير فقط) -->
-        <div class="cad-group" id="backup-group" style="display:none;">
-          <span class="cad-group-tag">النسخ الاحتياطي</span>
-          <button class="cad-tool-btn" onclick="openBackupModal()" title="نسخ احتياطي واستعادة بيانات المشاريع — للمدير فقط" style="background:rgba(139,92,246,0.18); border-color:#8b5cf6; color:#c4b5fd; font-weight:bold;">
-            <span>💾 نسخ احتياطي</span>
           </button>
         </div>
       </div>
@@ -2610,14 +2616,14 @@
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <!-- PptxGenJS: تصدير PowerPoint مباشرة من المتصفح بدون خادم -->
   <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-  <script src="js/default_projects.js?v=23.0"></script>
-  <script src="js/auth.js?v=23.0"></script>
-  <script src="js/realtime_sync.js?v=23.0"></script>
-  <script src="js/components.js?v=23.0"></script>
-  <script src="js/simulation.js?v=23.0"></script>
-  <script src="js/canvas.js?v=23.0"></script>
-  <script src="js/app.js?v=23.0"></script>
-  <script src="js/settings.js?v=23.0"></script>
+  <script src="js/default_projects.js?v=25.0"></script>
+  <script src="js/auth.js?v=25.0"></script>
+  <script src="js/realtime_sync.js?v=25.0"></script>
+  <script src="js/components.js?v=25.0"></script>
+  <script src="js/simulation.js?v=25.0"></script>
+  <script src="js/canvas.js?v=25.0"></script>
+  <script src="js/app.js?v=25.0"></script>
+  <script src="js/settings.js?v=25.0"></script>
 </body>
 </html>
 
