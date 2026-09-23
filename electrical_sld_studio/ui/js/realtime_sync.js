@@ -1264,17 +1264,17 @@
     if (!badge) return;
 
     if (status === 'connected') {
-      badge.innerHTML = '<span class="sync-dot green"></span> <span>☁️ سحابة Firebase متصلة ⚡</span>';
+      badge.innerHTML = '<span class="sync-dot green"></span> <span>✅ متصل ⚡</span>';
       badge.className = 'sync-status-badge badge-connected';
       badge.title = 'النظام متصل بسحابة Firebase اللحظية - كافة التعديلات تسمع فوراً على كل الأجهزة';
     } else if (status === 'syncing') {
-      badge.innerHTML = '<span class="sync-dot blue pulse"></span> <span>تحديث سحابي وارد من ' + (info || 'جهاز') + '...</span>';
+      badge.innerHTML = '<span class="sync-dot blue pulse"></span> <span>تحديث وارد من ' + (info || 'جهاز') + '...</span>';
       badge.className = 'sync-status-badge badge-syncing';
     } else if (status === 'broadcast') {
-      badge.innerHTML = '<span class="sync-dot purple"></span> <span>جاري البث لسحابة Firebase... 📡</span>';
+      badge.innerHTML = '<span class="sync-dot purple"></span> <span>جاري البث... 📡</span>';
       badge.className = 'sync-status-badge badge-broadcast';
     } else {
-      badge.innerHTML = '<span class="sync-dot red"></span> <span>جاري الاتصال بسحابة Firebase...</span>';
+      badge.innerHTML = '<span class="sync-dot red"></span> <span>جاري الاتصال...</span>';
       badge.className = 'sync-status-badge badge-offline';
     }
   }
