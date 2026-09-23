@@ -557,7 +557,7 @@ function hasPermission(permKey) {
     if (editPerms.includes(permKey)) return true;
   }
   if (perms.includes("export") && (permKey === "btn_excel" || permKey === "btn_print")) return true;
-  if (perms.includes("calculations") && permKey === "btn_calculations") return true;
+  if ((perms.includes("calculations") || perms.includes("view") || perms.includes("all")) && permKey === "btn_calculations") return true;
   if (perms.includes("simulate_switching") && permKey === "btn_simulation") return true;
   if (perms.includes("settings") && (permKey === "btn_settings" || permKey === "settings")) return true;
   if (perms.includes("manage_users") && permKey === "manage_users") return true;

@@ -225,6 +225,12 @@
               <option value="33">33 ك.ف</option>
             </select>
           </div>
+          <div class="capsule-divider"></div>
+          <div class="capsule-item" title="أقصى حمل مصرح به للمغذي (kVA)">
+            <span class="capsule-label">🚨 أقصى سعة:</span>
+            <input type="number" id="feeder-max-load-input" value="5000" step="500" min="100" class="capsule-input" style="width:72px; text-align:center; font-weight:bold; color:#ECC94B;" oninput="updateFeederInfo(true)" onchange="updateFeederInfo(false)">
+            <span style="font-size:10px; color:#A0AEC0;">kVA</span>
+          </div>
         </div>
 
         <!-- كبسولة إجمالي القدرات ونسبة تحميل الخط بالكامل اللحظية -->
@@ -743,6 +749,13 @@
           <label>رقم العقدة (النود):</label>
           <input type="text" id="sub-node-id" class="form-control" value="N1">
         </div>
+        <div class="form-group">
+          <label style="color:#ECC94B; font-weight:bold;">⚡ أقصى حمل مصرح به للمغذي (kVA):</label>
+          <input type="number" id="sub-max-load" class="form-control" value="5000" step="500" min="100" style="border-color:#ECC94B; font-weight:bold;" placeholder="5000">
+          <div style="font-size:11px; color:#A0AEC0; margin-top:3px;">
+            💡 السعة القصوى المصرح بها لتغذية هذا المغذي بالكامل (الافتراضي 5000 kVA بما يعادل تيار ~260 أمبير على جهد 11 ك.ف).
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeSubstationModal()">إلغاء</button>
@@ -1108,6 +1121,14 @@
             <label>المقطع:</label>
             <select id="dlg-size" class="form-control"></select>
           </div>
+        </div>
+
+        <div class="form-group" id="dlg-feeder-max-load-group" style="background:rgba(236,201,75,0.08); border:1px solid rgba(236,201,75,0.3); border-radius:6px; padding:8px 12px; margin-bottom:12px;">
+          <label style="color:#ECC94B; font-weight:bold; font-size:12.5px; display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <span>⚡ أقصى سعة حمل للمغذي (kVA):</span>
+            <span style="font-size:10.5px; color:#A0AEC0; font-weight:normal;">(سعة المغذي الكلية)</span>
+          </label>
+          <input type="number" id="dlg-feeder-max-load" class="form-control" value="5000" step="500" min="100" style="border-color:#ECC94B; font-weight:bold;">
         </div>
 
         <div class="form-group">
@@ -2657,14 +2678,14 @@
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <!-- PptxGenJS: تصدير PowerPoint مباشرة من المتصفح بدون خادم -->
   <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-  <script src="js/default_projects.js?v=26.2"></script>
-  <script src="js/auth.js?v=26.2"></script>
-  <script src="js/realtime_sync.js?v=26.2"></script>
-  <script src="js/components.js?v=26.2"></script>
-  <script src="js/simulation.js?v=26.2"></script>
-  <script src="js/canvas.js?v=26.2"></script>
-  <script src="js/app.js?v=26.2"></script>
-  <script src="js/settings.js?v=26.2"></script>
+  <script src="js/default_projects.js?v=27.0"></script>
+  <script src="js/auth.js?v=27.0"></script>
+  <script src="js/realtime_sync.js?v=27.0"></script>
+  <script src="js/components.js?v=27.0"></script>
+  <script src="js/simulation.js?v=27.0"></script>
+  <script src="js/canvas.js?v=27.0"></script>
+  <script src="js/app.js?v=27.0"></script>
+  <script src="js/settings.js?v=27.0"></script>
 </body>
 </html>
 

@@ -1278,10 +1278,12 @@ function updateFeederInputs() {
   const fNameInput = document.getElementById("feeder-name-input");
   const subInput = document.getElementById("substation-name-input");
   const voltSelect = document.getElementById("feeder-voltage-select");
+  const maxLoadInput = document.getElementById("feeder-max-load-input");
 
   if (fNameInput) fNameInput.value = currentProject.name || "مغذي رئيسي";
   if (subInput) subInput.value = currentProject.substation || "محطة محولات";
   if (voltSelect) voltSelect.value = currentProject.voltage_kv || 11;
+  if (maxLoadInput) maxLoadInput.value = currentProject.feeder_max_load_kva || 5000;
 
   const tbName = document.getElementById("tb-project-name");
   if (tbName) tbName.textContent = currentProject.name || "مخطط شبكة الجهد المتوسط (SLD)";
@@ -1303,14 +1305,17 @@ function updateFeederInfo(isLive = false) {
   const fNameInput = document.getElementById("feeder-name-input");
   const subInput = document.getElementById("substation-name-input");
   const voltSelect = document.getElementById("feeder-voltage-select");
+  const maxLoadInput = document.getElementById("feeder-max-load-input");
 
   const nameVal = fNameInput ? fNameInput.value.trim() : (currentProject.name || "");
   const subVal = subInput ? subInput.value.trim() : (currentProject.substation || "");
   const voltVal = voltSelect ? (parseFloat(voltSelect.value) || 11) : (currentProject.voltage_kv || 11);
+  const maxLoadVal = maxLoadInput ? (parseFloat(maxLoadInput.value) || 5000) : (currentProject.feeder_max_load_kva || 5000);
 
   currentProject.name = nameVal;
   currentProject.substation = subVal;
   currentProject.voltage_kv = voltVal;
+  currentProject.feeder_max_load_kva = maxLoadVal;
 
   // تحديث الخرطوشة الهندسية في الرسم فوراً
   const tbName = document.getElementById("tb-project-name");
@@ -1384,6 +1389,19 @@ function populateNodeDropdowns() {
   }
 }
 
+// دالة التأكد من وجود لوحة توزيع أو محطة محولات كبداية للتغذية قبل السماح بأي إضافات
+function requireSubstationFirst() {
+  if (!currentProject || !currentProject.nodes || currentProject.nodes.length === 0 || !currentProject.nodes.some(n => n.type === 'substation' || n.type === 'source')) {
+    showToast("⚠️ يجب إضافة لوحة توزيع أو محطة محولات أولاً لتكون نقطة بداية التغذية!", "warning");
+    if (typeof openSubstationModal === 'function') {
+      openSubstationModal();
+    }
+    return false;
+  }
+  return true;
+}
+window.requireSubstationFirst = requireSubstationFirst;
+
 // --- نافذة إضافة محطة محولات أو لوحة توزيع ---
 function openSubstationModal() {
   if (window.hasPermission && !window.hasPermission('btn_substation')) {
@@ -1395,15 +1413,23 @@ function openSubstationModal() {
   if (currentProject) {
     document.getElementById("sub-name").value = currentProject.substation || "محطة محولات غرب";
     document.getElementById("sub-voltage").value = currentProject.voltage_kv || 11;
+    const maxLoadEl = document.getElementById("sub-max-load");
+    if (maxLoadEl && currentProject.feeder_max_load_kva) {
+      maxLoadEl.value = currentProject.feeder_max_load_kva;
+    }
   }
   const nextId = (currentProject && currentProject.nodes.length > 0) ? "N" + (currentProject.nodes.length + 1) : "N1";
   document.getElementById("sub-node-id").value = nextId;
   modal.classList.remove("hidden");
+  modal.style.display = "flex";
 }
 
 function closeSubstationModal() {
   const modal = document.getElementById("substation-modal");
-  if (modal) modal.classList.add("hidden");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.style.display = "none";
+  }
 }
 
 function submitSubstationModal() {
@@ -1412,6 +1438,8 @@ function submitSubstationModal() {
   const subType = document.getElementById("sub-type").value;
   const voltage = parseFloat(document.getElementById("sub-voltage").value) || 11;
   const nodeId = document.getElementById("sub-node-id").value.trim().toUpperCase() || "N1";
+  const maxLoadEl = document.getElementById("sub-max-load");
+  const maxLoadVal = maxLoadEl ? (parseFloat(maxLoadEl.value) || 5000) : 5000;
 
   if (!currentProject) {
     currentProject = {
@@ -1419,6 +1447,7 @@ function submitSubstationModal() {
       name: "مغذي جديد",
       substation: name,
       voltage_kv: voltage,
+      feeder_max_load_kva: maxLoadVal,
       nodes: [],
       sections: []
     };
@@ -1426,6 +1455,7 @@ function submitSubstationModal() {
 
   currentProject.substation = name;
   currentProject.voltage_kv = voltage;
+  currentProject.feeder_max_load_kva = maxLoadVal;
 
   let node = currentProject.nodes.find(n => n.id === nodeId);
   if (node) {
@@ -1451,7 +1481,7 @@ function submitSubstationModal() {
   closeSubstationModal();
   updateFeederInputs();
   renderNetwork();
-  showToast(`🏭 تم ضبط وإضافة ${name} (${voltage} ك.ف)`, "success");
+  showToast(`🏭 تم ضبط وإضافة ${name} (${voltage} ك.ف) - أقصى سعة: ${maxLoadVal} kVA`, "success");
 }
 
 // --- نافذة أخذ خط / تفريعة من خط مارر بين نقطتين أو رسم خط مباشر ---
@@ -1460,10 +1490,7 @@ function openLineBetweenNodesModal() {
     showToast("⛔ ليس لديك صلاحية أخذ خط من بين نقطتين", "error");
     return;
   }
-  if (!currentProject || !currentProject.nodes || currentProject.nodes.length === 0) {
-    alert("الرجاء إضافة محطة محولات أو خط أولاً.");
-    return;
-  }
+  if (!requireSubstationFirst()) return;
   const modal = document.getElementById("line-between-nodes-modal");
   populateNodeDropdowns();
 
@@ -1951,10 +1978,7 @@ function openLineDialog(type) {
     showToast(`⛔ ليس لديك صلاحية رسم ${type === 'كابل' ? 'الكابل الأرضي' : 'الخط الهوائي'}`, "error");
     return;
   }
-  if (!currentProject || currentProject.nodes.length === 0) {
-    alert("الرجاء إضافة محطة محولات أولاً.");
-    return;
-  }
+  if (!requireSubstationFirst()) return;
   currentLineDialogType = type;
   const isCable = (type === "كابل");
 
@@ -1985,6 +2009,12 @@ function openLineDialog(type) {
 
   populateNodeDropdowns();
 
+  // ضبط أقصى سعة للمغذي في الحقل
+  const maxLoadEl = document.getElementById("dlg-feeder-max-load");
+  if (maxLoadEl && currentProject) {
+    maxLoadEl.value = currentProject.feeder_max_load_kva || 5000;
+  }
+
   // اقتراح آخر نود كافتراضي
   const lastNode = currentProject.nodes[currentProject.nodes.length - 1];
   const nextNum = currentProject.nodes.length + 1;
@@ -2011,6 +2041,7 @@ function openLineDialog(type) {
 
   onLineFromNodeChange();
   modal.classList.remove("hidden");
+  modal.style.display = "flex";
 }
 
 // تعبئة dropdown النودات القائمة لاختيار الوجهة
@@ -2066,7 +2097,11 @@ function onLineFromNodeChange() {
 }
 
 function closeLineDialog() {
-  document.getElementById("line-dialog-modal").classList.add("hidden");
+  const modal = document.getElementById("line-dialog-modal");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.style.display = "none";
+  }
 }
 
 // أخذ مناول من أي خط أو نود
@@ -2081,10 +2116,7 @@ function openCascadeTransformerDialog() {
     showToast("⛔ ليس لديك صلاحية تفريع محول من محول", "error");
     return;
   }
-  if (!currentProject || !currentProject.nodes || currentProject.nodes.length === 0) {
-    alert("الرجاء إضافة محطة محولات أو نود بالمخطط أولاً.");
-    return;
-  }
+  if (!requireSubstationFirst()) return;
 
   // فرز العقد المتاحة للأخذ: المحولات، الأكشاك، المحطات، ونقاط الربط
   const allSources = currentProject.nodes.filter(n => n.type === 'transformer' || n.type === 'kiosk' || n.type === 'substation' || n.type === 'junction');
@@ -2274,7 +2306,7 @@ function openKioskFromKioskDialog() {
     showToast("⛔ ليس لديك صلاحية إضافة كشك من كشك آخر", "error");
     return;
   }
-  if (!currentProject || !currentProject.nodes) return;
+  if (!requireSubstationFirst()) return;
   const kiosksAndSubs = currentProject.nodes.filter(n => n.type === 'kiosk' || n.type === 'substation' || n.type === 'rmu');
 
   if (kiosksAndSubs.length === 0) {
@@ -2385,6 +2417,14 @@ function submitLineDialog() {
   const size = document.getElementById("dlg-size").value;
   const dirEl = document.querySelector('input[name="dlg-dir"]:checked');
   const dir = dirEl ? dirEl.value : "down";
+
+  // حفظ سعة المغذي إن وُجدت
+  const maxLoadEl = document.getElementById("dlg-feeder-max-load");
+  if (maxLoadEl && parseFloat(maxLoadEl.value) > 0) {
+    currentProject.feeder_max_load_kva = parseFloat(maxLoadEl.value);
+    const topMax = document.getElementById("feeder-max-load-input");
+    if (topMax) topMax.value = currentProject.feeder_max_load_kva;
+  }
 
   // --- تحديد وضع الوجهة: نود قائم أو جديد ---
   const toMode = document.querySelector('input[name="dlg-to-mode"]:checked')?.value || "new";
@@ -2570,10 +2610,7 @@ function openTransformerDialog(type) {
     showToast(`⛔ ليس لديك صلاحية إضافة ${type === 'kiosk' ? 'كشك محولات' : 'محول معلق'}`, "error");
     return;
   }
-  if (!currentProject || currentProject.nodes.length === 0) {
-    alert("الرجاء إضافة محطة محولات أو لوحة توزيع أولاً.");
-    return;
-  }
+  if (!requireSubstationFirst()) return;
   currentTransDialogType = type;
   const isKiosk = (type === "kiosk");
   const modal = document.getElementById("trans-dialog-modal");
@@ -2863,7 +2900,7 @@ function addQuickSection() {
     showToast("⛔ ليس لديك صلاحية رسم خط من الشريط الجانبي", "error");
     return;
   }
-  if (!currentProject || currentProject.nodes.length === 0) return;
+  if (!requireSubstationFirst()) return;
   saveHistoryState();
   const nodes = currentProject.nodes;
   
@@ -3059,6 +3096,11 @@ function calculateFeederEngineering(project) {
     ? Math.round((totalActualLoadKva / totalCapKva) * 1000) / 10
     : 0;
 
+  const maxFeederCap = parseFloat(project.feeder_max_load_kva) || (project.feeder_max_capacity_kva ? parseFloat(project.feeder_max_capacity_kva) : 5000.0);
+  const feederCapacityLoadingPct = maxFeederCap > 0
+    ? Math.round((totalActualLoadKva / maxFeederCap) * 1000) / 10
+    : 0;
+
   const sinPhi = Math.sqrt(Math.max(0, 1 - powerFactor * powerFactor));
   const cosPhi = powerFactor;
 
@@ -3088,8 +3130,10 @@ function calculateFeederEngineering(project) {
       total_ohl_length_m: Math.round(totalOhlLen * 10) / 10,
       total_ugc_length_m: Math.round(totalUgcLen * 10) / 10,
       total_capacity_kva: Math.round(totalCapKva),
+      feeder_max_load_kva: Math.round(maxFeederCap),
       total_actual_load_kva: Math.round(totalActualLoadKva * 10) / 10,
       overall_loading_pct: overallLoadingPct,
+      feeder_capacity_loading_pct: feederCapacityLoadingPct,
       total_feeder_current_a: Math.round(totalFeederAmp * 10) / 10,
       max_voltage_drop_pct: Math.round(maxDropPct * 100) / 100,
       overloaded_count: overloadedTransformers.length,
@@ -3108,6 +3152,8 @@ function updateLiveMetrics() {
   if (!currentProject) return;
   const data = calculateFeederEngineering(currentProject);
   const sum = data.summary;
+  const maxFeederCap = parseFloat(currentProject.feeder_max_load_kva) || sum.feeder_max_load_kva || 5000;
+  const feederCapPct = sum.feeder_capacity_loading_pct || (maxFeederCap > 0 ? Math.round((sum.total_actual_load_kva / maxFeederCap) * 1000) / 10 : 0);
 
   const capEl = document.getElementById("st-total-cap");
   if (capEl) capEl.textContent = `${sum.total_capacity_kva} kVA`;
@@ -3118,18 +3164,18 @@ function updateLiveMetrics() {
   const loadEl = document.getElementById("st-feeder-loading");
   if (loadEl) {
     loadEl.textContent = `${sum.overall_loading_pct}%`;
-    if (sum.overall_loading_pct > 100) {
+    if (sum.overall_loading_pct > 100 || feederCapPct > 100) {
       loadEl.style.color = "#EF4444";
       loadEl.style.backgroundColor = "rgba(239, 68, 68, 0.25)";
-      loadEl.title = `⚠️ تحذير: نسبة تحميل الخط مفرطة وتتجاوز 100% (${sum.overall_loading_pct}%)!`;
-    } else if (sum.overall_loading_pct > 80) {
+      loadEl.title = `⚠️ تحذير: نسبة تحميل الخط مفرطة وتتجاوز 100% (${sum.overall_loading_pct}%) | سعة المغذي: ${feederCapPct}%`;
+    } else if (sum.overall_loading_pct > 80 || feederCapPct > 80) {
       loadEl.style.color = "#F59E0B";
       loadEl.style.backgroundColor = "rgba(245, 158, 11, 0.22)";
-      loadEl.title = `⚡ تنبيه: نسبة تحميل الخط مرتفعة (${sum.overall_loading_pct}%)`;
+      loadEl.title = `⚡ تنبيه: نسبة تحميل الخط مرتفعة (${sum.overall_loading_pct}%) | سعة المغذي: ${feederCapPct}%`;
     } else {
       loadEl.style.color = "#38BDF8";
       loadEl.style.backgroundColor = "rgba(56, 189, 248, 0.15)";
-      loadEl.title = `✅ نسبة تحميل الخط في النطاق الآمن (${sum.overall_loading_pct}%)`;
+      loadEl.title = `✅ نسبة تحميل الخط: ${sum.overall_loading_pct}% (من قدرات المحولات ${sum.total_capacity_kva} kVA)\n🚨 نسبة استهلاك سعة المغذي: ${feederCapPct}% (من أقصى سعة ${maxFeederCap} kVA)`;
     }
   }
 
@@ -3160,39 +3206,69 @@ async function openCalculationsModal() {
     showToast("⛔ ليس لديك صلاحية فتح جدول الحسابات الهندسية", "error");
     return;
   }
-  if (!currentProject) return;
+  if (!currentProject) {
+    showToast("⚠️ لا يوجد مشروع مفتوح حالياً", "warning");
+    return;
+  }
   const modal = document.getElementById("calc-modal");
   const content = document.getElementById("calc-content");
+  if (!modal || !content) return;
   modal.classList.remove("hidden");
+  modal.style.display = "flex";
 
   // الحساب الفوري بدون أي انتظار
   const data = calculateFeederEngineering(currentProject);
   const sum = data.summary;
+  const maxFeederCap = sum.feeder_max_load_kva || 5000;
+  const feederCapPct = sum.feeder_capacity_loading_pct || 0;
 
   let loadingBadgeColor = "#38bdf8";
   let loadingBadgeBg = "rgba(56,189,248,0.15)";
-  if (sum.overall_loading_pct > 100) {
+  if (sum.overall_loading_pct > 100 || feederCapPct > 100) {
     loadingBadgeColor = "#fc8181";
     loadingBadgeBg = "rgba(239,68,68,0.25)";
-  } else if (sum.overall_loading_pct > 80) {
+  } else if (sum.overall_loading_pct > 80 || feederCapPct > 80) {
     loadingBadgeColor = "#fbbf24";
     loadingBadgeBg = "rgba(245,158,11,0.22)";
   }
 
-  let html = `
+  let html = "";
+
+  if (data.loads.length === 0 && data.sections.length === 0) {
+    html += `
+      <div style="background:rgba(59,130,246,0.12); border:1px solid #3b82f6; border-radius:8px; padding:16px 20px; margin-bottom:20px; text-align:center; color:#93c5fd;">
+        <span style="font-size:24px; display:block; margin-bottom:6px;">⚡</span>
+        <b style="font-size:15px;">لا توجد محولات أو مقاطع خطوط مضافة بعد في المخطط.</b>
+        <p style="margin:6px 0 0; font-size:12.5px; color:#cbd5e1; line-height:1.6;">
+          لبدء الحسابات: تأكد من إضافة <b>لوحة توزيع / محطة محولات</b> أولاً، ثم ارسم خطوط التغذية وأضف الأكشاك أو المحولات.<br>
+          ستظهر جميع مؤشرات الحمل، وتيار الخط، وهبوط الجهد التراكمي تلقائياً هنا وبدقة هندسية كاملة.
+        </p>
+      </div>
+    `;
+  }
+
+  html += `
     <!-- كروت ملخص مؤشرات الخط الهندسية -->
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:20px;">
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; margin-bottom:20px;">
       <div style="background:#1a202c; padding:12px; border-radius:8px; border:1px solid #2d3748; text-align:center;">
         <div style="font-size:11px; color:#a0aec0;">⚡ سعة المحولات الكلية (القدرة)</div>
         <div style="font-size:19px; font-weight:bold; color:#48bb78; margin-top:4px;">${sum.total_capacity_kva} KVA</div>
       </div>
+      <div style="background:#1a202c; padding:12px; border-radius:8px; border:1px solid #ecc94b; text-align:center; box-shadow:0 0 8px rgba(236,201,75,0.15);">
+        <div style="font-size:11px; color:#ecc94b;">🚨 أقصى سعة مصرح بها للمغذي</div>
+        <div style="font-size:19px; font-weight:bold; color:#ecc94b; margin-top:4px;">${maxFeederCap} KVA</div>
+      </div>
       <div style="background:#1a202c; padding:12px; border-radius:8px; border:1px solid #2d3748; text-align:center;">
         <div style="font-size:11px; color:#a0aec0;">📊 الحمل الفعلي المتوقع للخط</div>
-        <div style="font-size:19px; font-weight:bold; color:#ecc94b; margin-top:4px;">${sum.total_actual_load_kva} KVA</div>
+        <div style="font-size:19px; font-weight:bold; color:#38bdf8; margin-top:4px;">${sum.total_actual_load_kva} KVA</div>
       </div>
       <div style="background:#1a202c; padding:12px; border-radius:8px; border:1px solid ${loadingBadgeColor}; text-align:center; box-shadow:0 0 10px ${loadingBadgeBg};">
-        <div style="font-size:11px; color:#cbd5e1;">📈 نسبة تحميل الخط بالكامل</div>
-        <div style="font-size:22px; font-weight:bold; color:${loadingBadgeColor}; margin-top:3px; background:${loadingBadgeBg}; padding:2px 8px; border-radius:6px; display:inline-block;">${sum.overall_loading_pct}%</div>
+        <div style="font-size:11px; color:#cbd5e1;">📈 استهلاك سعة المغذي القصوى</div>
+        <div style="font-size:22px; font-weight:bold; color:${loadingBadgeColor}; margin-top:3px; background:${loadingBadgeBg}; padding:2px 8px; border-radius:6px; display:inline-block;">${feederCapPct}%</div>
+      </div>
+      <div style="background:#1a202c; padding:12px; border-radius:8px; border:1px solid #2d3748; text-align:center;">
+        <div style="font-size:11px; color:#a0aec0;">📈 نسبة تحميل المحولات</div>
+        <div style="font-size:19px; font-weight:bold; color:#a78bfa; margin-top:4px;">${sum.overall_loading_pct}%</div>
       </div>
       <div style="background:#1a202c; padding:12px; border-radius:8px; border:1px solid #2d3748; text-align:center;">
         <div style="font-size:11px; color:#a0aec0;">🔌 تيار المغذي الكلي المتوقع</div>
@@ -3230,21 +3306,29 @@ async function openCalculationsModal() {
         <tbody>
   `;
 
-  data.loads.forEach(ld => {
-    const isPriv = (ld.ownership === 'private' || ld.ownership === 'خاص');
+  if (data.loads.length === 0) {
     html += `
-      <tr style="border-bottom:1px solid #2d3748;">
-        <td style="padding:6px; border:1px solid #2d3748; font-weight:bold; color:#90cdf4;">${ld.node_id}</td>
-        <td style="padding:6px; border:1px solid #2d3748; text-align:right;">${ld.name}</td>
-        <td style="padding:6px; border:1px solid #2d3748;">${ld.type}</td>
-        <td style="padding:6px; border:1px solid #2d3748; color:${isPriv ? '#fb923c' : '#86efac'}; font-weight:bold;">${isPriv ? 'خاص' : 'عام'}</td>
-        <td style="padding:6px; border:1px solid #2d3748; color:#48bb78; font-weight:bold;">${ld.capacity_kva}</td>
-        <td style="padding:6px; border:1px solid #2d3748; color:${ld.loading_pct > 100 ? '#fc8181' : (ld.loading_pct > 80 ? '#fbbf24' : '#a0aec0')}; font-weight:bold;">${ld.loading_pct}%</td>
-        <td style="padding:6px; border:1px solid #2d3748; color:#ecc94b; font-weight:bold;">${ld.actual_load_kva}</td>
-        <td style="padding:6px; border:1px solid #2d3748;">${ld.actual_amp_mv}</td>
+      <tr>
+        <td colspan="8" style="padding:16px; color:#a0aec0; font-style:italic;">لا توجد محولات أو أكشاك مسجلة على هذا المغذي حتى الآن</td>
       </tr>
     `;
-  });
+  } else {
+    data.loads.forEach(ld => {
+      const isPriv = (ld.ownership === 'private' || ld.ownership === 'خاص');
+      html += `
+        <tr style="border-bottom:1px solid #2d3748;">
+          <td style="padding:6px; border:1px solid #2d3748; font-weight:bold; color:#90cdf4;">${ld.node_id}</td>
+          <td style="padding:6px; border:1px solid #2d3748; text-align:right;">${ld.name}</td>
+          <td style="padding:6px; border:1px solid #2d3748;">${ld.type}</td>
+          <td style="padding:6px; border:1px solid #2d3748; color:${isPriv ? '#fb923c' : '#86efac'}; font-weight:bold;">${isPriv ? 'خاص' : 'عام'}</td>
+          <td style="padding:6px; border:1px solid #2d3748; color:#48bb78; font-weight:bold;">${ld.capacity_kva}</td>
+          <td style="padding:6px; border:1px solid #2d3748; color:${ld.loading_pct > 100 ? '#fc8181' : (ld.loading_pct > 80 ? '#fbbf24' : '#a0aec0')}; font-weight:bold;">${ld.loading_pct}%</td>
+          <td style="padding:6px; border:1px solid #2d3748; color:#ecc94b; font-weight:bold;">${ld.actual_load_kva}</td>
+          <td style="padding:6px; border:1px solid #2d3748;">${ld.actual_amp_mv}</td>
+        </tr>
+      `;
+    });
+  }
 
   // سطر الإجمالي الكلي للخط
   html += `
@@ -3279,20 +3363,28 @@ async function openCalculationsModal() {
       <tbody>
   `;
 
-  data.sections.forEach((sc, idx) => {
-    const vProf = data.voltage_profile[idx] || {};
+  if (data.sections.length === 0) {
     html += `
-      <tr style="border-bottom:1px solid #2d3748;">
-        <td style="padding:6px; border:1px solid #2d3748;">${sc.from_node}</td>
-        <td style="padding:6px; border:1px solid #2d3748;">${sc.to_node}</td>
-        <td style="padding:6px; border:1px solid #2d3748;">${sc.type === 'كابل' ? 'كابل (متقطع)' : 'هوائي (سليم)'}</td>
-        <td style="padding:6px; border:1px solid #2d3748;">${sc.size}</td>
-        <td style="padding:6px; border:1px solid #2d3748; font-weight:bold; color:#ecc94b;">${sc.length}</td>
-        <td style="padding:6px; border:1px solid #2d3748;">${vProf.section_drop_v || 0}</td>
-        <td style="padding:6px; border:1px solid #2d3748; font-weight:bold; color:${(vProf.drop_percentage || 0) > 5 ? '#fc8181' : '#63b3ed'};">${vProf.drop_percentage || 0}%</td>
+      <tr>
+        <td colspan="7" style="padding:16px; color:#a0aec0; font-style:italic;">لا توجد مقاطع خطوط مسجلة حتى الآن</td>
       </tr>
     `;
-  });
+  } else {
+    data.sections.forEach((sc, idx) => {
+      const vProf = data.voltage_profile[idx] || {};
+      html += `
+        <tr style="border-bottom:1px solid #2d3748;">
+          <td style="padding:6px; border:1px solid #2d3748;">${sc.from_node}</td>
+          <td style="padding:6px; border:1px solid #2d3748;">${sc.to_node}</td>
+          <td style="padding:6px; border:1px solid #2d3748;">${sc.type === 'كابل' ? 'كابل (متقطع)' : 'هوائي (سليم)'}</td>
+          <td style="padding:6px; border:1px solid #2d3748;">${sc.size}</td>
+          <td style="padding:6px; border:1px solid #2d3748; font-weight:bold; color:#ecc94b;">${sc.length}</td>
+          <td style="padding:6px; border:1px solid #2d3748;">${vProf.section_drop_v || 0}</td>
+          <td style="padding:6px; border:1px solid #2d3748; font-weight:bold; color:${(vProf.drop_percentage || 0) > 5 ? '#fc8181' : '#63b3ed'};">${vProf.drop_percentage || 0}%</td>
+        </tr>
+      `;
+    });
+  }
 
   html += `
         </tbody>
@@ -3307,8 +3399,14 @@ async function openCalculationsModal() {
 }
 
 function closeCalculationsModal() {
-  document.getElementById("calc-modal").classList.add("hidden");
+  const modal = document.getElementById("calc-modal");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.style.display = "none";
+  }
 }
+window.openCalculationsModal = openCalculationsModal;
+window.closeCalculationsModal = closeCalculationsModal;
 
 async function exportToExcel() {
   if (window.hasPermission && !window.hasPermission('btn_excel')) {
@@ -3354,8 +3452,10 @@ async function exportToExcel() {
       ["محولات وأكشاك (خاص)",   transPrivateCount],
       ["إجمالي السكاكين",       nodes.filter(n => n.type === "switch").length],
       ["⚡ إجمالي القدرات المركبة للخط", `${sum.total_capacity_kva} kVA`],
+      ["🚨 أقصى سعة مصرح بها للمغذي", `${sum.feeder_max_load_kva || 5000} kVA`],
       ["📊 إجمالي الحمل الفعلي المتوقع للخط", `${sum.total_actual_load_kva} kVA`],
-      ["📈 نسبة تحميل الخط بالكامل",     `${sum.overall_loading_pct}%`],
+      ["📈 استهلاك سعة المغذي القصوى",   `${sum.feeder_capacity_loading_pct || 0}%`],
+      ["📈 نسبة تحميل المحولات الكلية",  `${sum.overall_loading_pct}%`],
       ["🔌 تيار المغذي الكلي المتوقع",    `${sum.total_feeder_current_a} A`],
       ["⚠️ أقصى هبوط جهد تراكمي",         `${sum.max_voltage_drop_pct}%`],
     ];
@@ -4399,6 +4499,12 @@ window.onSwitchBetweenNodeAChange = onSwitchBetweenNodeAChange;
 
 // --- السكاكين الهوائية المفصلية المعتمدة - واجهة ديناميكية ذكية وسلسة ---
 function openSwitchModal(suggestedDir = 'down') {
+  if (window.hasPermission && !window.hasPermission('btn_switch')) {
+    showToast("⛔ ليس لديك صلاحية إضافة سكينة هوائية", "error");
+    return;
+  }
+  if (!requireSubstationFirst()) return;
+
   window._lastSuggestedSwitchDir = suggestedDir;
   const modal = document.getElementById("switch-modal");
   if (!modal) {
@@ -4414,29 +4520,8 @@ function openSwitchModal(suggestedDir = 'down') {
   modal.style.setProperty("z-index", "99999", "important");
 
   try {
-    // إذا لم يكن هناك مشروع، ننشئ مشروعاً جديداً تلقائياً
-    if (!currentProject) {
-      if (typeof createNewProjectDirectly === 'function') {
-        createNewProjectDirectly();
-      } else {
-        currentProject = { id: "feeder_" + Date.now(), name: "مخطط جديد", nodes: [], sections: [] };
-        window.currentProject = currentProject;
-      }
-    }
     if (!currentProject.nodes) currentProject.nodes = [];
     if (!currentProject.sections) currentProject.sections = [];
-
-    // إذا لم تكن هناك أي نقطة بالرسم، ننشئ محطة/نقطة بداية افتراضية حتى تتوفر نقطة ربط
-    if (currentProject.nodes.length === 0) {
-      currentProject.nodes.push({
-        id: "N1",
-        type: "substation",
-        name: "محطة محولات",
-        x: 400,
-        y: (window.drawingFlowDirection === 'up') ? 800 : 100
-      });
-      if (typeof renderNetwork === 'function') renderNetwork();
-    }
 
     try { populateNodeDropdowns(); } catch (e) { console.warn("populateNodeDropdowns:", e); }
 
@@ -5103,28 +5188,9 @@ window.quickAddSwitchPrompt = quickAddSwitchPrompt;
 
 // --- نافذة ودوال رسم كوع (مسار منكسر 90°) بجميع الاتجاهات ---
 function openElbowModal() {
-  if (!currentProject || !currentProject.nodes || currentProject.nodes.length === 0) {
-    if (typeof createNewProjectDirectly === 'function') {
-      createNewProjectDirectly();
-    } else {
-      currentProject = { id: "feeder_" + Date.now(), name: "مخطط جديد", nodes: [], sections: [] };
-      window.currentProject = currentProject;
-    }
-  }
+  if (!requireSubstationFirst()) return;
   if (!currentProject.nodes) currentProject.nodes = [];
   if (!currentProject.sections) currentProject.sections = [];
-
-  // إذا كان المشروع فارغاً ننشئ محطة كبداية
-  if (currentProject.nodes.length === 0) {
-    currentProject.nodes.push({
-      id: "N1",
-      type: "substation",
-      name: "محطة محولات",
-      x: 400,
-      y: (window.drawingFlowDirection === 'up') ? 800 : 100
-    });
-    if (typeof renderNetwork === 'function') renderNetwork();
-  }
 
   const modal = document.getElementById("elbow-modal");
   if (!modal) return;
@@ -5340,10 +5406,7 @@ function openRMUModal() {
     showToast("⛔ ليس لديك صلاحية إضافة وحدة RMU", "error");
     return;
   }
-  if (!currentProject || currentProject.nodes.length === 0) {
-    alert("الرجاء إضافة محطة محولات أولاً.");
-    return;
-  }
+  if (!requireSubstationFirst()) return;
   const modal = document.getElementById("rmu-modal");
   populateNodeDropdowns();
   document.getElementById("rmu-name").value = "لوحة RMU " + (currentProject.nodes.filter(n => n.type === 'rmu').length + 1);
@@ -5423,10 +5486,7 @@ function openAVRModal() {
     showToast("⛔ ليس لديك صلاحية إضافة منظم AVR", "error");
     return;
   }
-  if (!currentProject || currentProject.nodes.length === 0) {
-    alert("الرجاء إضافة محطة محولات أولاً.");
-    return;
-  }
+  if (!requireSubstationFirst()) return;
   const modal = document.getElementById("avr-modal");
   populateNodeDropdowns();
   document.getElementById("avr-name").value = "منظم جهد AVR " + (currentProject.nodes.filter(n => n.type === 'avr').length + 1);
@@ -6135,11 +6195,10 @@ function createNewProjectDirectly() {
   currentProject = {
     id: "feeder_" + Date.now(),
     name: "مخطط جديد",
-    substation: "محطة محولات غرب",
+    substation: "",
     voltage_kv: 11,
-    nodes: [
-      { id: "N1", type: "substation", name: "محطة محولات غرب", x: 400, y: (window.drawingFlowDirection === 'up') ? 1000 : 80 }
-    ],
+    feeder_max_load_kva: 5000,
+    nodes: [],
     sections: []
   };
   window.currentProject = currentProject;
@@ -6148,7 +6207,7 @@ function createNewProjectDirectly() {
   renderNetwork();
   resetZoom();
   closeProjectsManager();
-  showToast("✨ تم فتح مشروع جديد مباشر - جاهز للرسم والعمل فوراً", "success");
+  showToast("✨ تم إنشاء مشروع جديد فارغ — ابدأ بإضافة لوحة توزيع أو محطة محولات", "success");
 }
 
 function createNewProjectFromManager() {
@@ -7198,8 +7257,8 @@ let _backupPendingData = null; // بيانات الملف المحدد للاس�
 function updateBackupButtonVisibility() {
   const group = document.getElementById("backup-group");
   if (!group) return;
-  // استخدم window.currentUser (المحدَّث من auth.js) أو currentUser المحلي
-  const user = window.currentUser || currentUser;
+  // استخدم window.currentUser أو currentUser بشكل آمن
+  const user = (typeof window !== 'undefined' && window.currentUser) ? window.currentUser : (typeof currentUser !== 'undefined' ? currentUser : null);
   const isAdmin = user && (
     user.role === "admin" ||
     user.is_developer === true ||
@@ -7226,7 +7285,8 @@ document.addEventListener("sld-user-logged-in", updateBackupButtonVisibility);
 
 /** فتح نافذة النسخ الاحتياطي */
 function openBackupModal() {
-  const _cu = window.currentUser || currentUser; const isAdmin = _cu && (_cu.role === "admin" || _cu.is_developer === true || (_cu.permissions && (_cu.permissions.includes("all") || _cu.permissions.includes("developer"))));
+  const _cu = (typeof window !== 'undefined' && window.currentUser) ? window.currentUser : (typeof currentUser !== 'undefined' ? currentUser : null);
+  const isAdmin = _cu && (_cu.role === "admin" || _cu.is_developer === true || (_cu.permissions && (_cu.permissions.includes("all") || _cu.permissions.includes("developer"))));
   if (!isAdmin) {
     showToast("⛔ هذه الميزة مخصصة للمدير فقط", "error");
     return;
@@ -7261,7 +7321,8 @@ window.closeBackupModal = closeBackupModal;
 
 /** تصدير نسخة احتياطية JSON */
 function exportBackup(mode) {
-  const _cu = window.currentUser || currentUser; const isAdmin = _cu && (_cu.role === "admin" || _cu.is_developer === true || (_cu.permissions && (_cu.permissions.includes("all") || _cu.permissions.includes("developer"))));
+  const _cu = (typeof window !== 'undefined' && window.currentUser) ? window.currentUser : (typeof currentUser !== 'undefined' ? currentUser : null);
+  const isAdmin = _cu && (_cu.role === "admin" || _cu.is_developer === true || (_cu.permissions && (_cu.permissions.includes("all") || _cu.permissions.includes("developer"))));
   if (!isAdmin) { showToast("⛔ غير مصرح", "error"); return; }
 
   let backupData;
@@ -7291,7 +7352,7 @@ function exportBackup(mode) {
       _backup_type:    "all_projects",
       _backup_version: "2.0",
       _backup_date:    new Date().toISOString(),
-      _backup_by:      currentUser?.name || "المدير",
+      _backup_by:      ((typeof window !== 'undefined' && window.currentUser?.name) || (typeof currentUser !== 'undefined' ? currentUser?.name : null) || "المدير"),
       projects:        allProjects,
       current_project: currentProject || null,
     };
@@ -7304,7 +7365,7 @@ function exportBackup(mode) {
       _backup_type:    "single_project",
       _backup_version: "2.0",
       _backup_date:    new Date().toISOString(),
-      _backup_by:      currentUser?.name || "المدير",
+      _backup_by:      ((typeof window !== 'undefined' && window.currentUser?.name) || (typeof currentUser !== 'undefined' ? currentUser?.name : null) || "المدير"),
       project:         currentProject,
     };
     const safeName = (currentProject.name || currentProject.id || "Project").replace(/[\\/:*?"<>|]/g, "_");
@@ -7411,7 +7472,8 @@ function _processBackupFile(file) {
 
 /** استيراد النسخة الاحتياطية */
 function importBackup(mode) {
-  const _cu = window.currentUser || currentUser; const isAdmin = _cu && (_cu.role === "admin" || _cu.is_developer === true || (_cu.permissions && (_cu.permissions.includes("all") || _cu.permissions.includes("developer"))));
+  const _cu = (typeof window !== 'undefined' && window.currentUser) ? window.currentUser : (typeof currentUser !== 'undefined' ? currentUser : null);
+  const isAdmin = _cu && (_cu.role === "admin" || _cu.is_developer === true || (_cu.permissions && (_cu.permissions.includes("all") || _cu.permissions.includes("developer"))));
   if (!isAdmin) { showToast("⛔ غير مصرح", "error"); return; }
   if (!_backupPendingData) { showToast("⚠️ لم يتم اختيار ملف بعد", "warning"); return; }
 
