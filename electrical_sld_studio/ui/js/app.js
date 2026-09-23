@@ -5676,8 +5676,32 @@ function loadAdminWorkspace(adminName) {
   const validProjects = (Array.isArray(catalog) ? catalog : []).filter(p => p && !isProjectDeleted(p.id, p.name));
 
   let proj = null;
-  if (validProjects.length === 0) {
-    // 🔒 لا توجد أي مشاريع محفوظة لهذه الإدارة: تفريغ لوحة الرسم تماماً
+  // 1. أولاً: فحص المخطط الجاري العمل عليه حالياً في هذه الإدارة
+  let saved = getSavedFeederForAdmin(adminName);
+  if (saved && saved.nodes && saved.nodes.length > 0 && !isProjectDeleted(saved.id, saved.name)) {
+    // المخطط الحالي المحفوظ للإدارة موجود ولم يُحذف -> استرجاعه فوراً وحمايته من أي مسح عند التحديث
+    proj = saved;
+  } else if (validProjects.length > 0) {
+    // 2. إذا لم يكن هناك رسم حالي ولكن توجد مشاريع مسجلة بالكتالوج: فتح أحدث مشروع معتمد
+    const firstMeta = validProjects[0];
+    try {
+      const raw = localStorage.getItem("sld_proj_" + firstMeta.id);
+      if (raw) proj = JSON.parse(raw);
+    } catch (_) {}
+    if (!proj || !proj.nodes || proj.nodes.length === 0) {
+      proj = {
+        id: firstMeta.id,
+        name: firstMeta.name || "مخطط شبكة",
+        substation: firstMeta.substation || "",
+        feeder_max_load_kva: firstMeta.feeder_max_load_kva || 5000,
+        voltage_kv: firstMeta.voltage_kv || 11,
+        nodes: [],
+        sections: []
+      };
+    }
+    saveFeederForAdmin(proj, adminName);
+  } else {
+    // 3. الإدارة جديدة أو مفرغة ولا تملك أي رسم سابق: مساحة عمل بيضاء فارغة تماماً
     proj = {
       id: "feeder_" + Date.now(),
       name: "مخطط جديد",
@@ -5687,37 +5711,6 @@ function loadAdminWorkspace(adminName) {
       nodes: [],
       sections: []
     };
-    try {
-      localStorage.removeItem("sld_feeder_" + aKey);
-      if (aKey === "بني_مزار_شرق") {
-        localStorage.removeItem("sld_saved_feeder");
-      }
-    } catch (_) {}
-  } else {
-    // توجد مشاريع مسجلة: فحص المخطط المحفوظ الحالي
-    let saved = getSavedFeederForAdmin(adminName);
-    if (saved && saved.nodes && saved.nodes.length > 0 && !isProjectDeleted(saved.id, saved.name) && validProjects.some(vp => vp.id === saved.id || vp.name === saved.name)) {
-      proj = saved;
-    } else {
-      // فتح أول مشروع معتمد من كتالوج الإدارة
-      const firstMeta = validProjects[0];
-      try {
-        const raw = localStorage.getItem("sld_proj_" + firstMeta.id);
-        if (raw) proj = JSON.parse(raw);
-      } catch (_) {}
-      if (!proj || !proj.nodes || proj.nodes.length === 0) {
-        proj = {
-          id: firstMeta.id,
-          name: firstMeta.name || "مخطط شبكة",
-          substation: firstMeta.substation || "",
-          feeder_max_load_kva: firstMeta.feeder_max_load_kva || 5000,
-          voltage_kv: firstMeta.voltage_kv || 11,
-          nodes: [],
-          sections: []
-        };
-      }
-      saveFeederForAdmin(proj, adminName);
-    }
   }
 
   currentProject = proj;

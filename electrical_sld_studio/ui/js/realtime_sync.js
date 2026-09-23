@@ -1159,31 +1159,18 @@
         });
       }
 
-      // إذا كانت الإدارة لا تملك أي مشاريع معتمدة على الإطلاق: تبقى اللوحة بيضاء فارغة تماماً
-      if (effectiveCatalog.length === 0) {
-        console.log('ℹ️ الإدارة [' + currentAdminKey + '] لا تملك أي مشاريع معتمدة، إبقاء اللوحة فارغة تماماً');
-        if (remoteMeta && remoteMeta.nodesCount > 0) {
-          try {
-            fetch(adminUrl + '/project.json', { method: 'DELETE' }).catch(function(){});
-            fetch(adminUrl + '/meta.json', { method: 'DELETE' }).catch(function(){});
-          } catch (_) {}
-        }
-        var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
-        if (curLocal && curLocal.nodes && curLocal.nodes.length > 0) {
-          if (typeof window.createNewProjectDirectly === 'function') {
-            window.createNewProjectDirectly();
-          }
-        }
-        updateBadgeUI('connected');
-        return;
-      }
-
       var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
       if (!curLocal || !curLocal.nodes || curLocal.nodes.length === 0) {
         if (typeof window.getSavedFeederForAdmin === 'function') {
           curLocal = window.getSavedFeederForAdmin();
         }
       }
+
+      // إذا كان المخطط المحلي مسجلاً في قائمة المحذوفات يتم تفريغه
+      if (curLocal && typeof window.isProjectDeleted === 'function' && window.isProjectDeleted(curLocal.id, curLocal.name)) {
+        curLocal = null;
+      }
+
       var localNodesCount = (curLocal && Array.isArray(curLocal.nodes)) ? curLocal.nodes.length : 0;
       var remoteNodesCount = (remoteMeta && remoteMeta.nodesCount) ? remoteMeta.nodesCount : 0;
 
@@ -1205,7 +1192,7 @@
         console.log('🔒 المخطط المحلي معتمد ومحفوظ حديثاً، رفع للسحابة لتحديثها دون لمس الرسم المحلي...');
         await syncProjectDirectToFirebase(curLocal, 'local_authoritative_sync');
       } 
-      // 2. إذا كان المخطط المحلي فارغاً ولكن السحابة تحتوي على رسم ينتمي لمشاريع الإدارة
+      // 2. إذا كان المخطط المحلي فارغاً ولكن السحابة تحتوي على رسم غير محذوف ينتمي للإدارة
       else if ((!curLocal || localNodesCount === 0) && remoteNodesCount > 0) {
         console.log('☁️ استلام المخطط السحابي للإدارة الفارغة محلياً (' + remoteNodesCount + ' عقدة)...');
         var projRes = await fetch(adminUrl + '/project.json');
@@ -1215,11 +1202,8 @@
           if (typeof window.isProjectDeleted === 'function' && remoteProj) {
             isDeleted = window.isProjectDeleted(remoteProj.id, remoteProj.name);
           }
-          var inCatalog = effectiveCatalog.some(function(p) {
-            return remoteProj && (p.id === remoteProj.id || p.name === remoteProj.name);
-          });
 
-          if (!isDeleted && inCatalog && remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
+          if (!isDeleted && remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
             isApplyingRemote = true;
             if (window.setCurrentProject) window.setCurrentProject(remoteProj);
             else window.currentProject = remoteProj;
@@ -1507,7 +1491,7 @@
       sseClient = null;
     }
 
-    var sseUrl = activeCloudHost + '/' + encodeURIComponent(currentRoom) + '/sse';
+    var sseUrl = activeCloudHost + '/' + encodeURIComponent(currentRoom) + ',sld_egypt_sld_system_control/sse';
     console.log('⚡ فتح قناة المزامنة اللحظية السحابية:', sseUrl);
 
     try {
@@ -1786,7 +1770,99 @@
   }
 
   function broadcastMaintenanceState(isActive) {
-    postCloudEvent('MAINTENANCE_UPDATE', { isActive: !!isActive }, 'maintenance_toggle');
+    var stateBool = !!isActive;
+    try {
+      localStorage.setItem('sld_maintenance_mode', stateBool ? 'true' : 'false');
+    } catch (_) {}
+    if (window.checkMaintenanceState) window.checkMaintenanceState();
+    if (window.updateMaintenanceBtnUI) window.updateMaintenanceBtnUI();
+
+    // 1. تحديث مباشر وفوري على سحابة Firebase المركزية
+    fetch(FIREBASE_BASE_URL + '/maintenance.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(stateBool)
+    }).catch(function () {});
+
+    // 2. بث محلي عبر BroadcastChannel (0ms لجميع التبويبات المفتوحة في المتصفح)
+    if (localBroadcastChannel) {
+      try {
+        localBroadcastChannel.postMessage({
+          type: 'MAINTENANCE_UPDATE',
+          senderId: deviceId,
+          timestamp: Date.now(),
+          data: { isActive: stateBool }
+        });
+      } catch (_) {}
+    }
+    try {
+      localStorage.setItem('sld_sync_bus', JSON.stringify({
+        payload: { type: 'MAINTENANCE_UPDATE', data: { isActive: stateBool } },
+        r: Math.random(),
+        t: Date.now()
+      }));
+    } catch (_) {}
+
+    // 3. بث سحابي عالي الأولوية لجميع غرف الإدارات والغرفة العامة عبر NTFY
+    var payload = {
+      type: 'MAINTENANCE_UPDATE',
+      senderId: deviceId,
+      author: (window.currentUser && window.currentUser.name) || 'المهندس مصطفى المغربي',
+      isAdmin: true,
+      priority: 'high',
+      timestamp: Date.now(),
+      data: { isActive: stateBool }
+    };
+
+    var allTargetRooms = [
+      'sld_egypt_sld_system_control',
+      'bni_mazar_east', 'bni_mazar_west', 'maghagha', 'edwa', 'matay',
+      'samalut_east', 'samalut_west', 'mallawi', 'deir_mowas', 'abu_qurqas'
+    ];
+    if (currentRoom && !allTargetRooms.includes(currentRoom)) {
+      allTargetRooms.push(currentRoom);
+    }
+
+    allTargetRooms.forEach(function (room) {
+      try {
+        fetch(activeCloudHost + '/' + encodeURIComponent(room), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Title': 'MAINTENANCE: ' + (stateBool ? 'ACTIVE' : 'INACTIVE')
+          },
+          body: JSON.stringify(payload)
+        }).catch(function () {});
+      } catch (_) {}
+    });
+
+    // 4. إرسال حدث مباشر لسحابة Firebase مسار الإدارة الحالية
+    try {
+      fetch(getAdminFirebaseUrl() + '/live_event.json', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch(function () {});
+    } catch (_) {}
+  }
+
+  // فحص حالة وضع الصيانة المركزية كل ثانية واحدة لضمان قفل/فتح المنظومة لحظياً على كافة الأجهزة
+  async function pollGlobalMaintenanceHeartbeat() {
+    try {
+      var res = await fetch(FIREBASE_BASE_URL + '/maintenance.json');
+      if (res.ok) {
+        var m = await res.json();
+        if (typeof m === 'boolean') {
+          var curM = (localStorage.getItem('sld_maintenance_mode') === 'true');
+          if (curM !== m) {
+            localStorage.setItem('sld_maintenance_mode', m ? 'true' : 'false');
+            if (window.checkMaintenanceState) window.checkMaintenanceState();
+            if (window.updateMaintenanceBtnUI) window.updateMaintenanceBtnUI();
+            console.log('🛠️ تحديث فوري لحالة وضع الصيانة من السحابة:', m ? 'مفعل' : 'معطل');
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   // ─── 9. واجهة الشارة والتنبيهات ───────────────────────────────────────────────
@@ -2305,6 +2381,8 @@
     fetchFirebaseStartup();
     connectFirebaseSSE();
     setInterval(pollFirebaseHeartbeat, 1000);
+    pollGlobalMaintenanceHeartbeat();
+    setInterval(pollGlobalMaintenanceHeartbeat, 1000);
 
     // 2. مزامنة فورية مع الخادم المحلي (إن وُجد) لجلب المخطط والمستخدمين
     fetchServerState();
@@ -2327,6 +2405,7 @@
       if (document.visibilityState === 'visible') {
         fetchFirebaseStartup();
         pollFirebaseHeartbeat();
+        pollGlobalMaintenanceHeartbeat();
         pollRecentCloudUpdates();
       }
     });
