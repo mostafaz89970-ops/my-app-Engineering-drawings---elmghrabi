@@ -306,7 +306,14 @@ const Components = {
     const x = node.x;
     const y = node.y;
     const dir = node.direction || "up";
-    const strokeColor = isEnergized ? "#48BB78" : "#718096";
+    const isPrivate = (node.ownership === "private" || node.ownership === "خاص");
+    // المحول العام: أخضر معتمد (#16A34A / #22C55E) | المحول الخاص: برتقالي مميز (#EA580C / #F97316)
+    const strokeColor = isEnergized ? (isPrivate ? "#EA580C" : "#16A34A") : "#718096";
+    const placardStroke = isPrivate ? "#EA580C" : "#16A34A";
+    const placardBar = isPrivate ? "#FB923C" : "#4ADE80";
+    const tagText = isPrivate ? "خاص" : "عام";
+    const tagColor = isPrivate ? "#FB923C" : "#86EFAC";
+
     const cap = node.capacity || 100;
     const loadPct = node.loading_pct || 75;
     const selClass = isSelected ? "sld-selected" : "";
@@ -354,10 +361,10 @@ const Components = {
     }
 
     // حساب موضع وأبعاد اليفطة الصغيرة الأنيقة للمحول (منع الطمس والتداخل نهائياً)
-    const name = node.name || "محول";
+    const name = node.name || (isPrivate ? "محول خاص" : "محول");
     const capText = loadPct ? `${cap} KVA (${loadPct}%)` : `${cap} KVA`;
-    const charCount = Math.max(name.length, (capText + " (" + node.id + ")").length);
-    const boxW = Math.max(72, Math.min(126, charCount * 6.8 + 16));
+    const charCount = Math.max((name + " (" + tagText + ")").length, (capText + " (" + node.id + ")").length);
+    const boxW = Math.max(82, Math.min(145, charCount * 7.0 + 16));
     const boxH = 30; // يفطة صغيرة وأنيقة جداً
 
     let placardX = 0, placardY = 0;
@@ -425,15 +432,15 @@ const Components = {
         <!-- نقطة التوصيل على الخط الرئيسي -->
         <circle cx="0" cy="0" r="3.5" fill="#FFFFFF" stroke="${strokeColor}" stroke-width="2" />
         ${connLine}
-        <!-- دائرتا المحول المتداخلتان المعتمدتان -->
-        <circle cx="${c1x}" cy="${c1y}" r="10" fill="url(#trans-grad)" stroke="${strokeColor}" stroke-width="2" />
-        <circle cx="${c2x}" cy="${c2y}" r="10" fill="url(#trans-grad)" stroke="${strokeColor}" stroke-width="2" />
+        <!-- دائرتا المحول المتداخلتان المعتمدتان (تلوين مميز للخاص والعام) -->
+        <circle cx="${c1x}" cy="${c1y}" r="10" fill="${isPrivate ? 'rgba(234, 88, 12, 0.18)' : 'url(#trans-grad)'}" stroke="${strokeColor}" stroke-width="2.2" />
+        <circle cx="${c2x}" cy="${c2y}" r="10" fill="${isPrivate ? 'rgba(234, 88, 12, 0.18)' : 'url(#trans-grad)'}" stroke="${strokeColor}" stroke-width="2.2" />
 
-        <!-- يفطة بيانات المحول: صغيرة وأنيقة ومنعزلة بمسافة أمان تامة عن الدوائر ومسارات الخطوط -->
+        <!-- يفطة بيانات المحول: مميزة بوضوح للمحول العام أو الخاص مع شارة الملكية -->
         <g class="sld-trans-placard sld-trans-label-group" transform="translate(${placardX}, ${placardY})">
-          <rect x="${-boxW / 2}" y="${-boxH / 2}" width="${boxW}" height="${boxH}" rx="4" class="sld-placard-bg" style="fill:rgba(15,23,42,0.92); stroke:#16A34A; stroke-width:1.2px; filter:drop-shadow(0 1.5px 3px rgba(0,0,0,0.45));" />
-          <line x1="${-boxW / 2 + 5}" y1="${-boxH / 2}" x2="${boxW / 2 - 5}" y2="${-boxH / 2}" stroke="#4ADE80" stroke-width="2.2" stroke-linecap="round" />
-          <text x="0" y="-3" text-anchor="middle" class="sld-placard-title sld-transformer-name" fill="#FFFFFF" font-size="10.5" font-weight="bold">${name}</text>
+          <rect x="${-boxW / 2}" y="${-boxH / 2}" width="${boxW}" height="${boxH}" rx="4" class="sld-placard-bg" style="fill:rgba(15,23,42,0.94); stroke:${placardStroke}; stroke-width:1.5px; filter:drop-shadow(0 1.5px 3px rgba(0,0,0,0.45));" />
+          <line x1="${-boxW / 2 + 5}" y1="${-boxH / 2}" x2="${boxW / 2 - 5}" y2="${-boxH / 2}" stroke="${placardBar}" stroke-width="2.2" stroke-linecap="round" />
+          <text x="0" y="-3" text-anchor="middle" class="sld-placard-title sld-transformer-name" fill="#FFFFFF" font-size="10.5" font-weight="bold">${name} <tspan fill="${tagColor}" font-size="8.5" font-weight="bold">(${tagText})</tspan></text>
           <text x="0" y="9" text-anchor="middle" class="sld-placard-sub sld-transformer-cap" fill="#ECC94B" font-size="9.5" font-weight="bold">
             ${capText} <tspan fill="#90CDF4" font-weight="bold" font-size="8.5">(${node.id})</tspan>
           </text>
@@ -446,8 +453,15 @@ const Components = {
   renderKiosk(node, isEnergized = true, isSelected = false) {
     const x = node.x;
     const y = node.y;
-    // لون الكشك الهندسي المعتمد في المخطط القياسي: أزرق كابلات الجهد المتوسط (#1E88E5) كما في صورة نظام وضع الاكشاك
-    const strokeColor = isEnergized ? "#1E88E5" : "#718096";
+    const isPrivate = (node.ownership === "private" || node.ownership === "خاص");
+    // الكشك العام: أزرق كابلات الجهد المتوسط المعتمد (#1E88E5) | الكشك الخاص: عنبري/برتقالي هندسي مميز (#D97706 / #F59E0B)
+    const strokeColor = isEnergized ? (isPrivate ? "#D97706" : "#1E88E5") : "#718096";
+    const placardStroke = isPrivate ? "#D97706" : "#1E88E5";
+    const placardBar = isPrivate ? "#FBBF24" : "#60A5FA";
+    const tagText = isPrivate ? "خاص" : "عام";
+    const tagColor = isPrivate ? "#FDE047" : "#93C5FD";
+    const triangleFill = isPrivate ? "#FFFBEB" : "#FFFFFF";
+
     const cap = node.capacity || 200;
     const dir = node.direction || "up";
     const selClass = isSelected ? "sld-selected" : "";
@@ -470,7 +484,7 @@ const Components = {
 
     if (dir === "right") {
       triangleMarkup = `
-        <polygon points="16,-14 44,0 16,14" fill="#FFFFFF" stroke="${strokeColor}" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round" />
+        <polygon points="16,-14 44,0 16,14" fill="${triangleFill}" stroke="${strokeColor}" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round" />
       `;
       if (hasTakeoff) {
         // عند الأخذ من الكشك: نقطتان (نقطة دخول من أعلى ونقطة خروج من أسفل)
@@ -494,7 +508,7 @@ const Components = {
       }
     } else if (dir === "up") {
       triangleMarkup = `
-        <polygon points="-14,-16 0,-44 14,-16" fill="#FFFFFF" stroke="${strokeColor}" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round" />
+        <polygon points="-14,-16 0,-44 14,-16" fill="${triangleFill}" stroke="${strokeColor}" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round" />
       `;
       if (hasTakeoff) {
         // عند الأخذ من الكشك: نقطتان من أسفل الكشك (نقطة دخول ونقطة خروج)
@@ -518,7 +532,7 @@ const Components = {
       }
     } else if (dir === "down") {
       triangleMarkup = `
-        <polygon points="-14,16 0,44 14,16" fill="#FFFFFF" stroke="${strokeColor}" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round" />
+        <polygon points="-14,16 0,44 14,16" fill="${triangleFill}" stroke="${strokeColor}" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round" />
       `;
       if (hasTakeoff) {
         // عند الأخذ من الكشك: نقطتان من أعلى الكشك (نقطة دخول ونقطة خروج)
@@ -540,7 +554,7 @@ const Components = {
       }
     } else { // left
       triangleMarkup = `
-        <polygon points="-16,-14 -44,0 -16,14" fill="#FFFFFF" stroke="${strokeColor}" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round" />
+        <polygon points="-16,-14 -44,0 -16,14" fill="${triangleFill}" stroke="${strokeColor}" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round" />
       `;
       if (hasTakeoff) {
         // عند الأخذ من الكشك: نقطتان (نقطة دخول ونقطة خروج)
@@ -563,10 +577,10 @@ const Components = {
     }
 
     // حساب موضع وأبعاد اليفطة الصغيرة الأنيقة للكشك (إظهار KVA ومنع طمس أو تداخل النصوص نهائياً)
-    const name = node.name || "كشك";
+    const name = node.name || (isPrivate ? "كشك خاص" : "كشك");
     const capText = `${cap} KVA`;
-    const charCount = Math.max(name.length, (capText + " (" + node.id + ")").length);
-    const boxW = Math.max(72, Math.min(124, charCount * 6.8 + 16));
+    const charCount = Math.max((name + " (" + tagText + ")").length, (capText + " (" + node.id + ")").length);
+    const boxW = Math.max(82, Math.min(145, charCount * 7.0 + 16));
     const boxH = 30; // ارتفاع اليفطة أنيق وصغير جداً
 
     // فحص اتجاهات الكابلات والخطوط المتصلة بالكشك لتفادي وضع اليفطة على مسار أي كابل متصل
@@ -666,11 +680,11 @@ const Components = {
         <!-- جسم الكشك المثلثي المعتمد في المخطط (نظام وضع الاكشاك) -->
         ${triangleMarkup}
 
-        <!-- يفطة بيانات الكشك: صغيرة وأنيقة وتظهر KVA صراحة ومنعزلة بمسافة أمان تامة عن جسم الكشك ومسارات الكابلات -->
+        <!-- يفطة بيانات الكشك: مميزة بوضوح للكشك العام أو الخاص مع شارة الملكية -->
         <g class="sld-kiosk-placard sld-kiosk-label-group" transform="translate(${placardX}, ${placardY})">
-          <rect x="${-boxW / 2}" y="${-boxH / 2}" width="${boxW}" height="${boxH}" rx="4" class="sld-placard-bg" style="fill:rgba(15,23,42,0.92); stroke:#1E88E5; stroke-width:1.2px; filter:drop-shadow(0 1.5px 3px rgba(0,0,0,0.45));" />
-          <line x1="${-boxW / 2 + 5}" y1="${-boxH / 2}" x2="${boxW / 2 - 5}" y2="${-boxH / 2}" stroke="#60A5FA" stroke-width="2.2" stroke-linecap="round" />
-          <text x="0" y="-3" text-anchor="middle" class="sld-placard-title sld-kiosk-name" fill="#FFFFFF" font-size="10.5" font-weight="bold">${name}</text>
+          <rect x="${-boxW / 2}" y="${-boxH / 2}" width="${boxW}" height="${boxH}" rx="4" class="sld-placard-bg" style="fill:rgba(15,23,42,0.94); stroke:${placardStroke}; stroke-width:1.5px; filter:drop-shadow(0 1.5px 3px rgba(0,0,0,0.45));" />
+          <line x1="${-boxW / 2 + 5}" y1="${-boxH / 2}" x2="${boxW / 2 - 5}" y2="${-boxH / 2}" stroke="${placardBar}" stroke-width="2.2" stroke-linecap="round" />
+          <text x="0" y="-3" text-anchor="middle" class="sld-placard-title sld-kiosk-name" fill="#FFFFFF" font-size="10.5" font-weight="bold">${name} <tspan fill="${tagColor}" font-size="8.5" font-weight="bold">(${tagText})</tspan></text>
           <text x="0" y="9" text-anchor="middle" class="sld-placard-sub sld-kiosk-cap" fill="#ECC94B" font-size="9.5" font-weight="bold">
             ${capText} <tspan fill="#90CDF4" font-weight="bold" font-size="8.5">(${node.id})</tspan>
           </text>

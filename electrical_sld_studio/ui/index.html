@@ -1205,9 +1205,19 @@
 
         <div class="form-grid-2">
           <div class="form-group">
-            <label>اسم المحول / المسمى:</label>
+            <label id="dlg-trans-name-label">اسم المحول / المسمى:</label>
             <input type="text" id="dlg-trans-name" class="form-control" value="محول اتصالات مصر">
           </div>
+          <div class="form-group">
+            <label style="color:#A78BFA; font-weight:bold;">🏛️ الملكية والتبعية:</label>
+            <select id="dlg-trans-ownership" class="form-control" style="font-weight:bold; border-color:#8B5CF6;">
+              <option value="public" selected>🟢 عام (حكومي / شركة توزيع)</option>
+              <option value="private">🟠 خاص (ملكية خاصة / مستثمر / أهالي)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-grid-2">
           <div class="form-group">
             <label>القدرة (KVA):</label>
             <select id="dlg-trans-cap" class="form-control">
@@ -1222,17 +1232,15 @@
               <option value="1000">1000 KVA</option>
             </select>
           </div>
-        </div>
-
-        <div class="form-grid-2">
           <div class="form-group">
             <label>نسبة التحميل (%):</label>
             <input type="number" id="dlg-trans-load" class="form-control" value="75" min="10" max="150">
           </div>
-          <div class="form-group" id="dlg-switches-group" style="display:none;">
-            <label>عدد السكاكين:</label>
-            <input type="number" id="dlg-trans-switches" class="form-control" value="2" min="1" max="4">
-          </div>
+        </div>
+
+        <div class="form-group" id="dlg-switches-group" style="display:none;">
+          <label>عدد السكاكين:</label>
+          <input type="number" id="dlg-trans-switches" class="form-control" value="2" min="1" max="4">
         </div>
 
         <!-- خيار الكشك الحلقي أو محول فقط -->
@@ -1727,6 +1735,16 @@
             <input type="text" id="kfk-name" class="form-control" value="كشك جديد">
           </div>
           <div class="form-group">
+            <label style="color:#A78BFA; font-weight:bold;">🏛️ الملكية والتبعية:</label>
+            <select id="kfk-ownership" class="form-control" style="font-weight:bold; border-color:#8B5CF6;">
+              <option value="public" selected>🟢 عام (حكومي / شركة توزيع)</option>
+              <option value="private">🟠 خاص (ملكية خاصة / مستثمر / أهالي)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
             <label>القدرة (KVA):</label>
             <select id="kfk-cap" class="form-control">
               <option value="100">100 KVA</option>
@@ -1737,17 +1755,15 @@
               <option value="1000">1000 KVA</option>
             </select>
           </div>
-        </div>
-
-        <div class="form-grid-2">
           <div class="form-group">
             <label>نسبة التحميل (%):</label>
             <input type="number" id="kfk-load" class="form-control" value="65" min="10" max="150">
           </div>
-          <div class="form-group">
-            <label>عدد السكاكين:</label>
-            <input type="number" id="kfk-switches" class="form-control" value="2" min="1" max="4">
-          </div>
+        </div>
+
+        <div class="form-group">
+          <label>عدد السكاكين:</label>
+          <input type="number" id="kfk-switches" class="form-control" value="2" min="1" max="4">
         </div>
 
         <!-- خيار الكشك الحلقي أو محول فقط للكشك الجديد -->
@@ -1839,7 +1855,14 @@
           </div>
         </div>
 
-        <div class="form-grid-2">
+        <div class="form-grid-3">
+          <div class="form-group">
+            <label style="color:#A78BFA; font-weight:bold;">🏛️ الملكية والتبعية:</label>
+            <select id="cas-ownership" class="form-control" style="font-weight:bold; border-color:#8B5CF6;">
+              <option value="public" selected>🟢 عام (حكومي)</option>
+              <option value="private">🟠 خاص (ملكية خاصة)</option>
+            </select>
+          </div>
           <div class="form-group">
             <label>القدرة (KVA):</label>
             <select id="cas-cap" class="form-control">
@@ -2616,14 +2639,14 @@
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <!-- PptxGenJS: تصدير PowerPoint مباشرة من المتصفح بدون خادم -->
   <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-  <script src="js/default_projects.js?v=25.0"></script>
-  <script src="js/auth.js?v=25.0"></script>
-  <script src="js/realtime_sync.js?v=25.0"></script>
-  <script src="js/components.js?v=25.0"></script>
-  <script src="js/simulation.js?v=25.0"></script>
-  <script src="js/canvas.js?v=25.0"></script>
-  <script src="js/app.js?v=25.0"></script>
-  <script src="js/settings.js?v=25.0"></script>
+  <script src="js/default_projects.js?v=26.0"></script>
+  <script src="js/auth.js?v=26.0"></script>
+  <script src="js/realtime_sync.js?v=26.0"></script>
+  <script src="js/components.js?v=26.0"></script>
+  <script src="js/simulation.js?v=26.0"></script>
+  <script src="js/canvas.js?v=26.0"></script>
+  <script src="js/app.js?v=26.0"></script>
+  <script src="js/settings.js?v=26.0"></script>
 </body>
 </html>
 

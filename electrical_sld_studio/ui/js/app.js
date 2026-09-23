@@ -572,14 +572,24 @@ function openEditElementModal(type, id) {
           </div>
         </div>
 
-        <div class="form-group" style="margin-top:6px;">
-          <label style="font-size:12px; font-weight:bold; color:#E2E8F0; margin-bottom:4px; display:block;">اتجاه تفريع ${node.type === 'kiosk' ? 'الكشك' : 'المحول'} بالنسبة لنقطة الأخذ:</label>
-          <select id="edit-node-direction" class="form-control" onchange="onEditNodeDirectionChange()" style="background:#1E293B; border:1px solid #475569; color:#F8FAFC; padding:8px 10px; border-radius:6px; width:100%; font-weight:bold;">
-            <option value="up" ${(node.direction === "up") ? 'selected' : ''}>⬆️ أعلى</option>
-            <option value="down" ${(node.direction === "down") ? 'selected' : ''}>⬇️ أسفل</option>
-            <option value="right" ${(node.direction === "right") ? 'selected' : ''}>➡️ يمين</option>
-            <option value="left" ${(node.direction === "left") ? 'selected' : ''}>⬅️ شمال / يسار</option>
-          </select>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:6px;">
+          <div class="form-group">
+            <label style="font-size:12px; font-weight:bold; color:#A78BFA; margin-bottom:4px; display:block;">🏛️ الملكية والتبعية:</label>
+            <select id="edit-node-ownership" class="form-control" style="background:#1E293B; border:1px solid #8B5CF6; color:#F8FAFC; padding:8px 10px; border-radius:6px; width:100%; font-weight:bold;">
+              <option value="public" ${node.ownership !== 'private' && node.ownership !== 'خاص' ? 'selected' : ''}>🟢 عام (حكومي / شركة توزيع)</option>
+              <option value="private" ${node.ownership === 'private' || node.ownership === 'خاص' ? 'selected' : ''}>🟠 خاص (ملكية خاصة / مستثمر / أهالي)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label style="font-size:12px; font-weight:bold; color:#E2E8F0; margin-bottom:4px; display:block;">اتجاه تفريع ${node.type === 'kiosk' ? 'الكشك' : 'المحول'}:</label>
+            <select id="edit-node-direction" class="form-control" onchange="onEditNodeDirectionChange()" style="background:#1E293B; border:1px solid #475569; color:#F8FAFC; padding:8px 10px; border-radius:6px; width:100%; font-weight:bold;">
+              <option value="up" ${(node.direction === "up") ? 'selected' : ''}>⬆️ أعلى</option>
+              <option value="down" ${(node.direction === "down") ? 'selected' : ''}>⬇️ أسفل</option>
+              <option value="right" ${(node.direction === "right") ? 'selected' : ''}>➡️ يمين</option>
+              <option value="left" ${(node.direction === "left") ? 'selected' : ''}>⬅️ شمال / يسار</option>
+            </select>
+          </div>
         </div>
 
         ${node.type === "kiosk" ? `
@@ -816,6 +826,8 @@ function saveElementEdits(event) {
     if (node.type === "transformer" || node.type === "kiosk") {
       const capInput = document.getElementById("edit-node-capacity");
       const loadInput = document.getElementById("edit-node-loading");
+      const ownInput = document.getElementById("edit-node-ownership");
+      if (ownInput) node.ownership = ownInput.value;
       if (capInput) {
         const cVal = parseInt(capInput.value, 10);
         if (!isNaN(cVal) && cVal > 0) node.capacity = cVal;
@@ -2230,6 +2242,7 @@ function submitCascadeTransformerDialog() {
     id: newNodeId,
     type: "transformer",
     name: name,
+    ownership: document.getElementById("cas-ownership")?.value || "public",
     capacity: cap,
     loading_pct: loadPct,
     direction: (dir === "down") ? "down" : "up",
@@ -2336,6 +2349,7 @@ function submitKioskFromKioskDialog() {
     id: nextNodeId,
     type: "kiosk",
     name: name,
+    ownership: document.getElementById("kfk-ownership")?.value || "public",
     capacity: cap,
     loading_pct: loadPct,
     switches_count: switches,
@@ -2587,6 +2601,11 @@ function openTransformerDialog(type) {
     document.getElementById("dlg-trans-load").value = "75";
   }
 
+  const nameLabel = document.getElementById("dlg-trans-name-label");
+  if (nameLabel) nameLabel.textContent = isKiosk ? "اسم كشك المحولات:" : "اسم المحول / المسمى:";
+  const ownSelect = document.getElementById("dlg-trans-ownership");
+  if (ownSelect) ownSelect.value = "public";
+
   // توليد رقم نود فريد غير مكرر
   let nextNum = currentProject.nodes.length + 1;
   while (currentProject.nodes.some(n => n.id === "N" + nextNum)) {
@@ -2709,6 +2728,7 @@ function submitTransDialog() {
   const isKiosk = (currentTransDialogType === "kiosk");
   const sourceId = document.getElementById("dlg-trans-source")?.value;
   const name = document.getElementById("dlg-trans-name").value.trim() || (isKiosk ? "كشك" : "محول");
+  const ownership = document.getElementById("dlg-trans-ownership")?.value || "public";
   const cap = parseFloat(document.getElementById("dlg-trans-cap").value) || 100;
   const loadPct = parseFloat(document.getElementById("dlg-trans-load").value) || 75;
   const switches = parseInt(document.getElementById("dlg-trans-switches")?.value) || 2;
@@ -2726,6 +2746,7 @@ function submitTransDialog() {
 
     targetNode.type = isKiosk ? "kiosk" : "transformer";
     targetNode.name = name;
+    targetNode.ownership = ownership;
     targetNode.capacity = cap;
     targetNode.loading_pct = loadPct;
     targetNode.direction = dir;
@@ -2738,7 +2759,7 @@ function submitTransDialog() {
 
     closeTransDialog();
     renderNetwork();
-    showToast(`📌 تم تثبيت ${isKiosk ? 'الكشك' : 'المحول'} [${name}] على نفس النود [${targetNode.id}] (${cap}KVA) بنجاح!`, "success");
+    showToast(`📌 تم تثبيت ${isKiosk ? 'الكشك' : 'المحول'} [${name}] (${ownership === 'private' ? 'خاص' : 'عام'}) على نفس النود [${targetNode.id}] بنجاح!`, "success");
     return;
   }
 
@@ -2782,6 +2803,7 @@ function submitTransDialog() {
     id: nodeId,
     type: isKiosk ? "kiosk" : "transformer",
     name: name,
+    ownership: ownership,
     capacity: cap,
     loading_pct: loadPct,
     switches_count: switches,
@@ -3117,6 +3139,10 @@ async function exportToExcel() {
     const proj     = currentProject;
 
     // ===== ورقة 1: معلومات المشروع =====
+    const transList = nodes.filter(n => n.type === "transformer" || n.type === "kiosk");
+    const transPublicCount = transList.filter(n => n.ownership !== "private" && n.ownership !== "خاص").length;
+    const transPrivateCount = transList.filter(n => n.ownership === "private" || n.ownership === "خاص").length;
+
     const projRows = [
       ["بيانات المشروع", ""],
       ["اسم المشروع",    proj.name || "—"],
@@ -3124,7 +3150,9 @@ async function exportToExcel() {
       ["تاريخ التصدير",  new Date().toLocaleString("ar-EG")],
       ["عدد النودات",    nodes.length],
       ["عدد المقاطع",    sections.length],
-      ["إجمالي المحولات", nodes.filter(n => n.type === "transformer" || n.type === "kiosk").length],
+      ["إجمالي المحولات والأكشاك", transList.length],
+      ["محولات وأكشاك (عام)", transPublicCount],
+      ["محولات وأكشاك (خاص)", transPrivateCount],
       ["إجمالي السكاكين", nodes.filter(n => n.type === "switch").length],
       ["إجمالي القدرة (kVA)",
         nodes.filter(n => n.capacity).reduce((s, n) => s + (parseFloat(n.capacity) || 0), 0) + " kVA"
@@ -3132,7 +3160,7 @@ async function exportToExcel() {
     ];
 
     // ===== ورقة 2: النودات =====
-    const nodeHeaders = ["م", "رقم النود", "النوع", "الاسم", "القدرة (kVA)", "الإحداثي X", "الإحداثي Y", "الحالة", "الاتجاه"];
+    const nodeHeaders = ["م", "رقم النود", "النوع", "الاسم", "الملكية", "القدرة (kVA)", "الإحداثي X", "الإحداثي Y", "الحالة", "الاتجاه"];
     const nodeRows = nodes.map((n, i) => [
       i + 1,
       n.id,
@@ -3144,6 +3172,7 @@ async function exportToExcel() {
       n.type === "rmu"         ? "وحدة RMU"    :
       n.type === "avr"         ? "منظم AVR"    : n.type || "—",
       n.name  || "—",
+      ["transformer", "kiosk"].includes(n.type) ? (n.ownership === "private" || n.ownership === "خاص" ? "خاص" : "عام") : (n.type === "substation" ? "عام" : "—"),
       n.capacity ? `${n.capacity} kVA` : "—",
       Math.round(n.x || 0),
       Math.round(n.y || 0),
@@ -3174,7 +3203,7 @@ async function exportToExcel() {
 
     // ===== ورقة 4: المحولات والأكشاك =====
     const transNodes = nodes.filter(n => ["transformer","kiosk","substation"].includes(n.type));
-    const transHeaders = ["م", "رقم النود", "النوع", "الاسم", "القدرة (kVA)", "التحميل (kW)", "الجهد", "ملاحظات"];
+    const transHeaders = ["م", "رقم النود", "النوع", "الاسم", "الملكية", "القدرة (kVA)", "التحميل (kW)", "الجهد", "ملاحظات"];
     const transRows = transNodes.map((n, i) => [
       i + 1,
       n.id,
@@ -3182,6 +3211,7 @@ async function exportToExcel() {
       n.type === "transformer" ? "محول معلق"   :
       n.type === "kiosk"       ? "كشك محولات"  : n.type,
       n.name       || "—",
+      n.type === "substation"  ? "عام" : (n.ownership === "private" || n.ownership === "خاص" ? "خاص" : "عام"),
       n.capacity   || "—",
       n.load       || "—",
       n.voltage    || "11/0.4 kV",
@@ -3380,12 +3410,18 @@ async function downloadProjectPPTX() {
       fontSize: 22, bold: true, color: "38BDF8", align: "center"
     });
 
+    const transCount = nodes.filter(n => ["transformer","kiosk"].includes(n.type)).length;
+    const transPub = nodes.filter(n => ["transformer","kiosk"].includes(n.type) && (n.ownership !== 'private' && n.ownership !== 'خاص')).length;
+    const transPriv = nodes.filter(n => ["transformer","kiosk"].includes(n.type) && (n.ownership === 'private' || n.ownership === 'خاص')).length;
+
     const summaryData = [
       ["البند", "القيمة"],
       ["اسم المشروع",        proj.name || "—"],
       ["عدد النودات الكلي",  nodes.length + " نود"],
       ["عدد الخطوط والكابلات", sections.length + " مقطع"],
-      ["محولات وأكشاك",     nodes.filter(n => ["transformer","kiosk"].includes(n.type)).length + " وحدة"],
+      ["محولات وأكشاك (إجمالي)", transCount + " وحدة"],
+      ["محولات وأكشاك (عامة)", transPub + " وحدة"],
+      ["محولات وأكشاك (خاصة)", transPriv + " وحدة"],
       ["سكاكين هوائية",     nodes.filter(n => n.type === "switch").length + " سكينة"],
       ["إجمالي القدرة",
         nodes.filter(n => n.capacity).reduce((s, n) => s + (parseFloat(n.capacity)||0), 0) + " kVA"
@@ -3410,7 +3446,7 @@ async function downloadProjectPPTX() {
 
     slideSummary.addTable(tableRows, {
       x: 1.0, y: 1.0, w: 11.5, h: 5.5,
-      rowH: 0.48,
+      rowH: 0.44,
       border: { pt: 1, color: "334155" },
     });
 
@@ -3422,7 +3458,7 @@ async function downloadProjectPPTX() {
         x: 0.5, y: 0.15, w: 12.5, h: 0.5,
         fontSize: 20, bold: true, color: "38BDF8", align: "center"
       });
-      const nodeHeader = ["م", "رقم النود", "النوع", "الاسم", "القدرة", "الحالة"];
+      const nodeHeader = ["م", "رقم النود", "النوع", "الاسم", "الملكية", "القدرة", "الحالة"];
       const nodeTableRows = [
         nodeHeader.map(h => ({ text: h, options: { bold: true, fontSize: 11, color: "FFFFFF", fill: { color: "1E40AF" }, align: "center" } })),
         ...nodes.slice(0, 22).map((n, i) => [
@@ -3430,6 +3466,7 @@ async function downloadProjectPPTX() {
           { text: n.id || "—" },
           { text: n.type === "substation" ? "محطة" : n.type === "transformer" ? "محول" : n.type === "kiosk" ? "كشك" : n.type === "switch" ? "سكينة" : n.type === "junction" ? "ربط" : n.type || "—" },
           { text: n.name || "—" },
+          { text: ["transformer", "kiosk"].includes(n.type) ? (n.ownership === "private" || n.ownership === "خاص" ? "خاص" : "عام") : (n.type === "substation" ? "عام" : "—") },
           { text: n.capacity ? n.capacity + " kVA" : "—" },
           { text: n.state === "open" ? "مفتوح" : n.state === "closed" ? "مغلق" : "—" },
         ].map((cell, ci) => ({ ...cell, options: { fontSize: 10, color: "E2E8F0", fill: { color: i%2===0?"1E293B":"0F172A" }, align: "center" } })))
