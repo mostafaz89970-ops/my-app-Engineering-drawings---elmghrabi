@@ -113,13 +113,16 @@ function flipDrawingVerticalLayout() {
 const historyStack = [];
 const MAX_HISTORY = 40;
 
-function saveHistoryState() {
+function saveHistoryState(reason = "تعديل محلي في المخطط") {
   window._lastLocalEditTime = Date.now();
   if (!currentProject) return;
   const snapshot = JSON.stringify(currentProject);
   historyStack.push(snapshot);
   if (historyStack.length > MAX_HISTORY) {
     historyStack.shift();
+  }
+  if (typeof captureTimelineSnapshot === "function") {
+    try { captureTimelineSnapshot(reason, currentProject); } catch(_) {}
   }
 }
 
@@ -169,6 +172,9 @@ async function saveCurrentProject() {
   } catch(e) {}
 
   const ok = await saveProjectToStorage(currentProject);
+  if (typeof captureTimelineSnapshot === "function") {
+    try { captureTimelineSnapshot("حفظ معتمد للمخطط", currentProject); } catch(_) {}
+  }
 
   // 2. رفع مباشر وفوري لسحابة Firebase واعتماده كسجل موثوق
   if (window.pushDrawingToFirebase) {
@@ -1278,10 +1284,12 @@ function updateFeederInputs() {
   const fNameInput = document.getElementById("feeder-name-input");
   const subInput = document.getElementById("substation-name-input");
   const voltSelect = document.getElementById("feeder-voltage-select");
+  const maxLoadInput = document.getElementById("feeder-max-load-input");
 
   if (fNameInput) fNameInput.value = currentProject.name || "مغذي رئيسي";
   if (subInput) subInput.value = currentProject.substation || "محطة محولات";
   if (voltSelect) voltSelect.value = currentProject.voltage_kv || 11;
+  if (maxLoadInput) maxLoadInput.value = currentProject.feeder_max_load_kva || 5000;
 
   const tbName = document.getElementById("tb-project-name");
   if (tbName) tbName.textContent = currentProject.name || "مخطط شبكة الجهد المتوسط (SLD)";
@@ -1303,14 +1311,17 @@ function updateFeederInfo(isLive = false) {
   const fNameInput = document.getElementById("feeder-name-input");
   const subInput = document.getElementById("substation-name-input");
   const voltSelect = document.getElementById("feeder-voltage-select");
+  const maxLoadInput = document.getElementById("feeder-max-load-input");
 
   const nameVal = fNameInput ? fNameInput.value.trim() : (currentProject.name || "");
   const subVal = subInput ? subInput.value.trim() : (currentProject.substation || "");
   const voltVal = voltSelect ? (parseFloat(voltSelect.value) || 11) : (currentProject.voltage_kv || 11);
+  const maxLoadVal = maxLoadInput ? (parseFloat(maxLoadInput.value) || 5000) : (currentProject.feeder_max_load_kva || 5000);
 
   currentProject.name = nameVal;
   currentProject.substation = subVal;
   currentProject.voltage_kv = voltVal;
+  currentProject.feeder_max_load_kva = maxLoadVal;
 
   // تحديث الخرطوشة الهندسية في الرسم فوراً
   const tbName = document.getElementById("tb-project-name");
@@ -1384,6 +1395,19 @@ function populateNodeDropdowns() {
   }
 }
 
+// دالة التأكد من وجود لوحة توزيع أو محطة محولات كبداية للتغذية قبل السماح بأي إضافات
+function requireSubstationFirst() {
+  if (!currentProject || !currentProject.nodes || currentProject.nodes.length === 0 || !currentProject.nodes.some(n => n.type === 'substation' || n.type === 'source')) {
+    showToast("⚠️ يجب إضافة لوحة توزيع أو محطة محولات أولاً لتكون نقطة بداية التغذية!", "warning");
+    if (typeof openSubstationModal === 'function') {
+      openSubstationModal();
+    }
+    return false;
+  }
+  return true;
+}
+window.requireSubstationFirst = requireSubstationFirst;
+
 // --- نافذة إضافة محطة محولات أو لوحة توزيع ---
 function openSubstationModal() {
   if (window.hasPermission && !window.hasPermission('btn_substation')) {
@@ -1395,15 +1419,23 @@ function openSubstationModal() {
   if (currentProject) {
     document.getElementById("sub-name").value = currentProject.substation || "محطة محولات غرب";
     document.getElementById("sub-voltage").value = currentProject.voltage_kv || 11;
+    const maxLoadEl = document.getElementById("sub-max-load");
+    if (maxLoadEl && currentProject.feeder_max_load_kva) {
+      maxLoadEl.value = currentProject.feeder_max_load_kva;
+    }
   }
   const nextId = (currentProject && currentProject.nodes.length > 0) ? "N" + (currentProject.nodes.length + 1) : "N1";
   document.getElementById("sub-node-id").value = nextId;
   modal.classList.remove("hidden");
+  modal.style.display = "flex";
 }
 
 function closeSubstationModal() {
   const modal = document.getElementById("substation-modal");
-  if (modal) modal.classList.add("hidden");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.style.display = "none";
+  }
 }
 
 function submitSubstationModal() {
@@ -1412,6 +1444,8 @@ function submitSubstationModal() {
   const subType = document.getElementById("sub-type").value;
   const voltage = parseFloat(document.getElementById("sub-voltage").value) || 11;
   const nodeId = document.getElementById("sub-node-id").value.trim().toUpperCase() || "N1";
+  const maxLoadEl = document.getElementById("sub-max-load");
+  const maxLoadVal = maxLoadEl ? (parseFloat(maxLoadEl.value) || 5000) : 5000;
 
   if (!currentProject) {
     currentProject = {
@@ -1419,6 +1453,7 @@ function submitSubstationModal() {
       name: "مغذي جديد",
       substation: name,
       voltage_kv: voltage,
+      feeder_max_load_kva: maxLoadVal,
       nodes: [],
       sections: []
     };
@@ -1426,6 +1461,7 @@ function submitSubstationModal() {
 
   currentProject.substation = name;
   currentProject.voltage_kv = voltage;
+  currentProject.feeder_max_load_kva = maxLoadVal;
 
   let node = currentProject.nodes.find(n => n.id === nodeId);
   if (node) {
@@ -1451,7 +1487,7 @@ function submitSubstationModal() {
   closeSubstationModal();
   updateFeederInputs();
   renderNetwork();
-  showToast(`🏭 تم ضبط وإضافة ${name} (${voltage} ك.ف)`, "success");
+  showToast(`🏭 تم ضبط وإضافة ${name} (${voltage} ك.ف) - أقصى سعة: ${maxLoadVal} kVA`, "success");
 }
 
 // --- نافذة أخذ خط / تفريعة من خط مارر بين نقطتين أو رسم خط مباشر ---
@@ -1460,10 +1496,7 @@ function openLineBetweenNodesModal() {
     showToast("⛔ ليس لديك صلاحية أخذ خط من بين نقطتين", "error");
     return;
   }
-  if (!currentProject || !currentProject.nodes || currentProject.nodes.length === 0) {
-    alert("الرجاء إضافة محطة محولات أو خط أولاً.");
-    return;
-  }
+  if (!requireSubstationFirst()) return;
   const modal = document.getElementById("line-between-nodes-modal");
   populateNodeDropdowns();
 
@@ -1951,10 +1984,7 @@ function openLineDialog(type) {
     showToast(`⛔ ليس لديك صلاحية رسم ${type === 'كابل' ? 'الكابل الأرضي' : 'الخط الهوائي'}`, "error");
     return;
   }
-  if (!currentProject || currentProject.nodes.length === 0) {
-    alert("الرجاء إضافة محطة محولات أولاً.");
-    return;
-  }
+  if (!requireSubstationFirst()) return;
   currentLineDialogType = type;
   const isCable = (type === "كابل");
 
@@ -1985,6 +2015,12 @@ function openLineDialog(type) {
 
   populateNodeDropdowns();
 
+  // ضبط أقصى سعة للمغذي في الحقل
+  const maxLoadEl = document.getElementById("dlg-feeder-max-load");
+  if (maxLoadEl && currentProject) {
+    maxLoadEl.value = currentProject.feeder_max_load_kva || 5000;
+  }
+
   // اقتراح آخر نود كافتراضي
   const lastNode = currentProject.nodes[currentProject.nodes.length - 1];
   const nextNum = currentProject.nodes.length + 1;
@@ -2011,6 +2047,7 @@ function openLineDialog(type) {
 
   onLineFromNodeChange();
   modal.classList.remove("hidden");
+  modal.style.display = "flex";
 }
 
 // تعبئة dropdown النودات القائمة لاختيار الوجهة
@@ -2066,7 +2103,11 @@ function onLineFromNodeChange() {
 }
 
 function closeLineDialog() {
-  document.getElementById("line-dialog-modal").classList.add("hidden");
+  const modal = document.getElementById("line-dialog-modal");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.style.display = "none";
+  }
 }
 
 // أخذ مناول من أي خط أو نود
@@ -2081,10 +2122,7 @@ function openCascadeTransformerDialog() {
     showToast("⛔ ليس لديك صلاحية تفريع محول من محول", "error");
     return;
   }
-  if (!currentProject || !currentProject.nodes || currentProject.nodes.length === 0) {
-    alert("الرجاء إضافة محطة محولات أو نود بالمخطط أولاً.");
-    return;
-  }
+  if (!requireSubstationFirst()) return;
 
   // فرز العقد المتاحة للأخذ: المحولات، الأكشاك، المحطات، ونقاط الربط
   const allSources = currentProject.nodes.filter(n => n.type === 'transformer' || n.type === 'kiosk' || n.type === 'substation' || n.type === 'junction');
@@ -2274,7 +2312,7 @@ function openKioskFromKioskDialog() {
     showToast("⛔ ليس لديك صلاحية إضافة كشك من كشك آخر", "error");
     return;
   }
-  if (!currentProject || !currentProject.nodes) return;
+  if (!requireSubstationFirst()) return;
   const kiosksAndSubs = currentProject.nodes.filter(n => n.type === 'kiosk' || n.type === 'substation' || n.type === 'rmu');
 
   if (kiosksAndSubs.length === 0) {
@@ -2385,6 +2423,14 @@ function submitLineDialog() {
   const size = document.getElementById("dlg-size").value;
   const dirEl = document.querySelector('input[name="dlg-dir"]:checked');
   const dir = dirEl ? dirEl.value : "down";
+
+  // حفظ سعة المغذي إن وُجدت
+  const maxLoadEl = document.getElementById("dlg-feeder-max-load");
+  if (maxLoadEl && parseFloat(maxLoadEl.value) > 0) {
+    currentProject.feeder_max_load_kva = parseFloat(maxLoadEl.value);
+    const topMax = document.getElementById("feeder-max-load-input");
+    if (topMax) topMax.value = currentProject.feeder_max_load_kva;
+  }
 
   // --- تحديد وضع الوجهة: نود قائم أو جديد ---
   const toMode = document.querySelector('input[name="dlg-to-mode"]:checked')?.value || "new";
@@ -2570,10 +2616,7 @@ function openTransformerDialog(type) {
     showToast(`⛔ ليس لديك صلاحية إضافة ${type === 'kiosk' ? 'كشك محولات' : 'محول معلق'}`, "error");
     return;
   }
-  if (!currentProject || currentProject.nodes.length === 0) {
-    alert("الرجاء إضافة محطة محولات أو لوحة توزيع أولاً.");
-    return;
-  }
+  if (!requireSubstationFirst()) return;
   currentTransDialogType = type;
   const isKiosk = (type === "kiosk");
   const modal = document.getElementById("trans-dialog-modal");
@@ -2863,7 +2906,7 @@ function addQuickSection() {
     showToast("⛔ ليس لديك صلاحية رسم خط من الشريط الجانبي", "error");
     return;
   }
-  if (!currentProject || currentProject.nodes.length === 0) return;
+  if (!requireSubstationFirst()) return;
   saveHistoryState();
   const nodes = currentProject.nodes;
   
@@ -3059,6 +3102,11 @@ function calculateFeederEngineering(project) {
     ? Math.round((totalActualLoadKva / totalCapKva) * 1000) / 10
     : 0;
 
+  const maxFeederCap = parseFloat(project.feeder_max_load_kva) || (project.feeder_max_capacity_kva ? parseFloat(project.feeder_max_capacity_kva) : 5000.0);
+  const feederCapacityLoadingPct = maxFeederCap > 0
+    ? Math.round((totalActualLoadKva / maxFeederCap) * 1000) / 10
+    : 0;
+
   const sinPhi = Math.sqrt(Math.max(0, 1 - powerFactor * powerFactor));
   const cosPhi = powerFactor;
 
@@ -3088,8 +3136,10 @@ function calculateFeederEngineering(project) {
       total_ohl_length_m: Math.round(totalOhlLen * 10) / 10,
       total_ugc_length_m: Math.round(totalUgcLen * 10) / 10,
       total_capacity_kva: Math.round(totalCapKva),
+      feeder_max_load_kva: Math.round(maxFeederCap),
       total_actual_load_kva: Math.round(totalActualLoadKva * 10) / 10,
       overall_loading_pct: overallLoadingPct,
+      feeder_capacity_loading_pct: feederCapacityLoadingPct,
       total_feeder_current_a: Math.round(totalFeederAmp * 10) / 10,
       max_voltage_drop_pct: Math.round(maxDropPct * 100) / 100,
       overloaded_count: overloadedTransformers.length,
@@ -3108,6 +3158,8 @@ function updateLiveMetrics() {
   if (!currentProject) return;
   const data = calculateFeederEngineering(currentProject);
   const sum = data.summary;
+  const maxFeederCap = parseFloat(currentProject.feeder_max_load_kva) || sum.feeder_max_load_kva || 5000;
+  const feederCapPct = sum.feeder_capacity_loading_pct || (maxFeederCap > 0 ? Math.round((sum.total_actual_load_kva / maxFeederCap) * 1000) / 10 : 0);
 
   const capEl = document.getElementById("st-total-cap");
   if (capEl) capEl.textContent = `${sum.total_capacity_kva} kVA`;
@@ -3118,18 +3170,18 @@ function updateLiveMetrics() {
   const loadEl = document.getElementById("st-feeder-loading");
   if (loadEl) {
     loadEl.textContent = `${sum.overall_loading_pct}%`;
-    if (sum.overall_loading_pct > 100) {
+    if (sum.overall_loading_pct > 100 || feederCapPct > 100) {
       loadEl.style.color = "#EF4444";
       loadEl.style.backgroundColor = "rgba(239, 68, 68, 0.25)";
-      loadEl.title = `⚠️ تحذير: نسبة تحميل الخط مفرطة وتتجاوز 100% (${sum.overall_loading_pct}%)!`;
-    } else if (sum.overall_loading_pct > 80) {
+      loadEl.title = `⚠️ تحذير: نسبة تحميل الخط مفرطة وتتجاوز 100% (${sum.overall_loading_pct}%) | سعة المغذي: ${feederCapPct}%`;
+    } else if (sum.overall_loading_pct > 80 || feederCapPct > 80) {
       loadEl.style.color = "#F59E0B";
       loadEl.style.backgroundColor = "rgba(245, 158, 11, 0.22)";
-      loadEl.title = `⚡ تنبيه: نسبة تحميل الخط مرتفعة (${sum.overall_loading_pct}%)`;
+      loadEl.title = `⚡ تنبيه: نسبة تحميل الخط مرتفعة (${sum.overall_loading_pct}%) | سعة المغذي: ${feederCapPct}%`;
     } else {
       loadEl.style.color = "#38BDF8";
       loadEl.style.backgroundColor = "rgba(56, 189, 248, 0.15)";
-      loadEl.title = `✅ نسبة تحميل الخط في النطاق الآمن (${sum.overall_loading_pct}%)`;
+      loadEl.title = `✅ نسبة تحميل الخط: ${sum.overall_loading_pct}% (من قدرات المحولات ${sum.total_capacity_kva} kVA)\n🚨 نسبة استهلاك سعة المغذي: ${feederCapPct}% (من أقصى سعة ${maxFeederCap} kVA)`;
     }
   }
 
@@ -3160,39 +3212,69 @@ async function openCalculationsModal() {
     showToast("⛔ ليس لديك صلاحية فتح جدول الحسابات الهندسية", "error");
     return;
   }
-  if (!currentProject) return;
+  if (!currentProject) {
+    showToast("⚠️ لا يوجد مشروع مفتوح حالياً", "warning");
+    return;
+  }
   const modal = document.getElementById("calc-modal");
   const content = document.getElementById("calc-content");
+  if (!modal || !content) return;
   modal.classList.remove("hidden");
+  modal.style.display = "flex";
 
   // الحساب الفوري بدون أي انتظار
   const data = calculateFeederEngineering(currentProject);
   const sum = data.summary;
+  const maxFeederCap = sum.feeder_max_load_kva || 5000;
+  const feederCapPct = sum.feeder_capacity_loading_pct || 0;
 
   let loadingBadgeColor = "#38bdf8";
   let loadingBadgeBg = "rgba(56,189,248,0.15)";
-  if (sum.overall_loading_pct > 100) {
+  if (sum.overall_loading_pct > 100 || feederCapPct > 100) {
     loadingBadgeColor = "#fc8181";
     loadingBadgeBg = "rgba(239,68,68,0.25)";
-  } else if (sum.overall_loading_pct > 80) {
+  } else if (sum.overall_loading_pct > 80 || feederCapPct > 80) {
     loadingBadgeColor = "#fbbf24";
     loadingBadgeBg = "rgba(245,158,11,0.22)";
   }
 
-  let html = `
+  let html = "";
+
+  if (data.loads.length === 0 && data.sections.length === 0) {
+    html += `
+      <div style="background:rgba(59,130,246,0.12); border:1px solid #3b82f6; border-radius:8px; padding:16px 20px; margin-bottom:20px; text-align:center; color:#93c5fd;">
+        <span style="font-size:24px; display:block; margin-bottom:6px;">⚡</span>
+        <b style="font-size:15px;">لا توجد محولات أو مقاطع خطوط مضافة بعد في المخطط.</b>
+        <p style="margin:6px 0 0; font-size:12.5px; color:#cbd5e1; line-height:1.6;">
+          لبدء الحسابات: تأكد من إضافة <b>لوحة توزيع / محطة محولات</b> أولاً، ثم ارسم خطوط التغذية وأضف الأكشاك أو المحولات.<br>
+          ستظهر جميع مؤشرات الحمل، وتيار الخط، وهبوط الجهد التراكمي تلقائياً هنا وبدقة هندسية كاملة.
+        </p>
+      </div>
+    `;
+  }
+
+  html += `
     <!-- كروت ملخص مؤشرات الخط الهندسية -->
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:20px;">
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; margin-bottom:20px;">
       <div style="background:#1a202c; padding:12px; border-radius:8px; border:1px solid #2d3748; text-align:center;">
         <div style="font-size:11px; color:#a0aec0;">⚡ سعة المحولات الكلية (القدرة)</div>
         <div style="font-size:19px; font-weight:bold; color:#48bb78; margin-top:4px;">${sum.total_capacity_kva} KVA</div>
       </div>
+      <div style="background:#1a202c; padding:12px; border-radius:8px; border:1px solid #ecc94b; text-align:center; box-shadow:0 0 8px rgba(236,201,75,0.15);">
+        <div style="font-size:11px; color:#ecc94b;">🚨 أقصى سعة مصرح بها للمغذي</div>
+        <div style="font-size:19px; font-weight:bold; color:#ecc94b; margin-top:4px;">${maxFeederCap} KVA</div>
+      </div>
       <div style="background:#1a202c; padding:12px; border-radius:8px; border:1px solid #2d3748; text-align:center;">
         <div style="font-size:11px; color:#a0aec0;">📊 الحمل الفعلي المتوقع للخط</div>
-        <div style="font-size:19px; font-weight:bold; color:#ecc94b; margin-top:4px;">${sum.total_actual_load_kva} KVA</div>
+        <div style="font-size:19px; font-weight:bold; color:#38bdf8; margin-top:4px;">${sum.total_actual_load_kva} KVA</div>
       </div>
       <div style="background:#1a202c; padding:12px; border-radius:8px; border:1px solid ${loadingBadgeColor}; text-align:center; box-shadow:0 0 10px ${loadingBadgeBg};">
-        <div style="font-size:11px; color:#cbd5e1;">📈 نسبة تحميل الخط بالكامل</div>
-        <div style="font-size:22px; font-weight:bold; color:${loadingBadgeColor}; margin-top:3px; background:${loadingBadgeBg}; padding:2px 8px; border-radius:6px; display:inline-block;">${sum.overall_loading_pct}%</div>
+        <div style="font-size:11px; color:#cbd5e1;">📈 استهلاك سعة المغذي القصوى</div>
+        <div style="font-size:22px; font-weight:bold; color:${loadingBadgeColor}; margin-top:3px; background:${loadingBadgeBg}; padding:2px 8px; border-radius:6px; display:inline-block;">${feederCapPct}%</div>
+      </div>
+      <div style="background:#1a202c; padding:12px; border-radius:8px; border:1px solid #2d3748; text-align:center;">
+        <div style="font-size:11px; color:#a0aec0;">📈 نسبة تحميل المحولات</div>
+        <div style="font-size:19px; font-weight:bold; color:#a78bfa; margin-top:4px;">${sum.overall_loading_pct}%</div>
       </div>
       <div style="background:#1a202c; padding:12px; border-radius:8px; border:1px solid #2d3748; text-align:center;">
         <div style="font-size:11px; color:#a0aec0;">🔌 تيار المغذي الكلي المتوقع</div>
@@ -3230,21 +3312,29 @@ async function openCalculationsModal() {
         <tbody>
   `;
 
-  data.loads.forEach(ld => {
-    const isPriv = (ld.ownership === 'private' || ld.ownership === 'خاص');
+  if (data.loads.length === 0) {
     html += `
-      <tr style="border-bottom:1px solid #2d3748;">
-        <td style="padding:6px; border:1px solid #2d3748; font-weight:bold; color:#90cdf4;">${ld.node_id}</td>
-        <td style="padding:6px; border:1px solid #2d3748; text-align:right;">${ld.name}</td>
-        <td style="padding:6px; border:1px solid #2d3748;">${ld.type}</td>
-        <td style="padding:6px; border:1px solid #2d3748; color:${isPriv ? '#fb923c' : '#86efac'}; font-weight:bold;">${isPriv ? 'خاص' : 'عام'}</td>
-        <td style="padding:6px; border:1px solid #2d3748; color:#48bb78; font-weight:bold;">${ld.capacity_kva}</td>
-        <td style="padding:6px; border:1px solid #2d3748; color:${ld.loading_pct > 100 ? '#fc8181' : (ld.loading_pct > 80 ? '#fbbf24' : '#a0aec0')}; font-weight:bold;">${ld.loading_pct}%</td>
-        <td style="padding:6px; border:1px solid #2d3748; color:#ecc94b; font-weight:bold;">${ld.actual_load_kva}</td>
-        <td style="padding:6px; border:1px solid #2d3748;">${ld.actual_amp_mv}</td>
+      <tr>
+        <td colspan="8" style="padding:16px; color:#a0aec0; font-style:italic;">لا توجد محولات أو أكشاك مسجلة على هذا المغذي حتى الآن</td>
       </tr>
     `;
-  });
+  } else {
+    data.loads.forEach(ld => {
+      const isPriv = (ld.ownership === 'private' || ld.ownership === 'خاص');
+      html += `
+        <tr style="border-bottom:1px solid #2d3748;">
+          <td style="padding:6px; border:1px solid #2d3748; font-weight:bold; color:#90cdf4;">${ld.node_id}</td>
+          <td style="padding:6px; border:1px solid #2d3748; text-align:right;">${ld.name}</td>
+          <td style="padding:6px; border:1px solid #2d3748;">${ld.type}</td>
+          <td style="padding:6px; border:1px solid #2d3748; color:${isPriv ? '#fb923c' : '#86efac'}; font-weight:bold;">${isPriv ? 'خاص' : 'عام'}</td>
+          <td style="padding:6px; border:1px solid #2d3748; color:#48bb78; font-weight:bold;">${ld.capacity_kva}</td>
+          <td style="padding:6px; border:1px solid #2d3748; color:${ld.loading_pct > 100 ? '#fc8181' : (ld.loading_pct > 80 ? '#fbbf24' : '#a0aec0')}; font-weight:bold;">${ld.loading_pct}%</td>
+          <td style="padding:6px; border:1px solid #2d3748; color:#ecc94b; font-weight:bold;">${ld.actual_load_kva}</td>
+          <td style="padding:6px; border:1px solid #2d3748;">${ld.actual_amp_mv}</td>
+        </tr>
+      `;
+    });
+  }
 
   // سطر الإجمالي الكلي للخط
   html += `
@@ -3279,20 +3369,28 @@ async function openCalculationsModal() {
       <tbody>
   `;
 
-  data.sections.forEach((sc, idx) => {
-    const vProf = data.voltage_profile[idx] || {};
+  if (data.sections.length === 0) {
     html += `
-      <tr style="border-bottom:1px solid #2d3748;">
-        <td style="padding:6px; border:1px solid #2d3748;">${sc.from_node}</td>
-        <td style="padding:6px; border:1px solid #2d3748;">${sc.to_node}</td>
-        <td style="padding:6px; border:1px solid #2d3748;">${sc.type === 'كابل' ? 'كابل (متقطع)' : 'هوائي (سليم)'}</td>
-        <td style="padding:6px; border:1px solid #2d3748;">${sc.size}</td>
-        <td style="padding:6px; border:1px solid #2d3748; font-weight:bold; color:#ecc94b;">${sc.length}</td>
-        <td style="padding:6px; border:1px solid #2d3748;">${vProf.section_drop_v || 0}</td>
-        <td style="padding:6px; border:1px solid #2d3748; font-weight:bold; color:${(vProf.drop_percentage || 0) > 5 ? '#fc8181' : '#63b3ed'};">${vProf.drop_percentage || 0}%</td>
+      <tr>
+        <td colspan="7" style="padding:16px; color:#a0aec0; font-style:italic;">لا توجد مقاطع خطوط مسجلة حتى الآن</td>
       </tr>
     `;
-  });
+  } else {
+    data.sections.forEach((sc, idx) => {
+      const vProf = data.voltage_profile[idx] || {};
+      html += `
+        <tr style="border-bottom:1px solid #2d3748;">
+          <td style="padding:6px; border:1px solid #2d3748;">${sc.from_node}</td>
+          <td style="padding:6px; border:1px solid #2d3748;">${sc.to_node}</td>
+          <td style="padding:6px; border:1px solid #2d3748;">${sc.type === 'كابل' ? 'كابل (متقطع)' : 'هوائي (سليم)'}</td>
+          <td style="padding:6px; border:1px solid #2d3748;">${sc.size}</td>
+          <td style="padding:6px; border:1px solid #2d3748; font-weight:bold; color:#ecc94b;">${sc.length}</td>
+          <td style="padding:6px; border:1px solid #2d3748;">${vProf.section_drop_v || 0}</td>
+          <td style="padding:6px; border:1px solid #2d3748; font-weight:bold; color:${(vProf.drop_percentage || 0) > 5 ? '#fc8181' : '#63b3ed'};">${vProf.drop_percentage || 0}%</td>
+        </tr>
+      `;
+    });
+  }
 
   html += `
         </tbody>
@@ -3307,8 +3405,14 @@ async function openCalculationsModal() {
 }
 
 function closeCalculationsModal() {
-  document.getElementById("calc-modal").classList.add("hidden");
+  const modal = document.getElementById("calc-modal");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.style.display = "none";
+  }
 }
+window.openCalculationsModal = openCalculationsModal;
+window.closeCalculationsModal = closeCalculationsModal;
 
 async function exportToExcel() {
   if (window.hasPermission && !window.hasPermission('btn_excel')) {
@@ -3354,8 +3458,10 @@ async function exportToExcel() {
       ["محولات وأكشاك (خاص)",   transPrivateCount],
       ["إجمالي السكاكين",       nodes.filter(n => n.type === "switch").length],
       ["⚡ إجمالي القدرات المركبة للخط", `${sum.total_capacity_kva} kVA`],
+      ["🚨 أقصى سعة مصرح بها للمغذي", `${sum.feeder_max_load_kva || 5000} kVA`],
       ["📊 إجمالي الحمل الفعلي المتوقع للخط", `${sum.total_actual_load_kva} kVA`],
-      ["📈 نسبة تحميل الخط بالكامل",     `${sum.overall_loading_pct}%`],
+      ["📈 استهلاك سعة المغذي القصوى",   `${sum.feeder_capacity_loading_pct || 0}%`],
+      ["📈 نسبة تحميل المحولات الكلية",  `${sum.overall_loading_pct}%`],
       ["🔌 تيار المغذي الكلي المتوقع",    `${sum.total_feeder_current_a} A`],
       ["⚠️ أقصى هبوط جهد تراكمي",         `${sum.max_voltage_drop_pct}%`],
     ];
@@ -4399,6 +4505,12 @@ window.onSwitchBetweenNodeAChange = onSwitchBetweenNodeAChange;
 
 // --- السكاكين الهوائية المفصلية المعتمدة - واجهة ديناميكية ذكية وسلسة ---
 function openSwitchModal(suggestedDir = 'down') {
+  if (window.hasPermission && !window.hasPermission('btn_switch')) {
+    showToast("⛔ ليس لديك صلاحية إضافة سكينة هوائية", "error");
+    return;
+  }
+  if (!requireSubstationFirst()) return;
+
   window._lastSuggestedSwitchDir = suggestedDir;
   const modal = document.getElementById("switch-modal");
   if (!modal) {
@@ -4414,29 +4526,8 @@ function openSwitchModal(suggestedDir = 'down') {
   modal.style.setProperty("z-index", "99999", "important");
 
   try {
-    // إذا لم يكن هناك مشروع، ننشئ مشروعاً جديداً تلقائياً
-    if (!currentProject) {
-      if (typeof createNewProjectDirectly === 'function') {
-        createNewProjectDirectly();
-      } else {
-        currentProject = { id: "feeder_" + Date.now(), name: "مخطط جديد", nodes: [], sections: [] };
-        window.currentProject = currentProject;
-      }
-    }
     if (!currentProject.nodes) currentProject.nodes = [];
     if (!currentProject.sections) currentProject.sections = [];
-
-    // إذا لم تكن هناك أي نقطة بالرسم، ننشئ محطة/نقطة بداية افتراضية حتى تتوفر نقطة ربط
-    if (currentProject.nodes.length === 0) {
-      currentProject.nodes.push({
-        id: "N1",
-        type: "substation",
-        name: "محطة محولات",
-        x: 400,
-        y: (window.drawingFlowDirection === 'up') ? 800 : 100
-      });
-      if (typeof renderNetwork === 'function') renderNetwork();
-    }
 
     try { populateNodeDropdowns(); } catch (e) { console.warn("populateNodeDropdowns:", e); }
 
@@ -5103,28 +5194,9 @@ window.quickAddSwitchPrompt = quickAddSwitchPrompt;
 
 // --- نافذة ودوال رسم كوع (مسار منكسر 90°) بجميع الاتجاهات ---
 function openElbowModal() {
-  if (!currentProject || !currentProject.nodes || currentProject.nodes.length === 0) {
-    if (typeof createNewProjectDirectly === 'function') {
-      createNewProjectDirectly();
-    } else {
-      currentProject = { id: "feeder_" + Date.now(), name: "مخطط جديد", nodes: [], sections: [] };
-      window.currentProject = currentProject;
-    }
-  }
+  if (!requireSubstationFirst()) return;
   if (!currentProject.nodes) currentProject.nodes = [];
   if (!currentProject.sections) currentProject.sections = [];
-
-  // إذا كان المشروع فارغاً ننشئ محطة كبداية
-  if (currentProject.nodes.length === 0) {
-    currentProject.nodes.push({
-      id: "N1",
-      type: "substation",
-      name: "محطة محولات",
-      x: 400,
-      y: (window.drawingFlowDirection === 'up') ? 800 : 100
-    });
-    if (typeof renderNetwork === 'function') renderNetwork();
-  }
 
   const modal = document.getElementById("elbow-modal");
   if (!modal) return;
@@ -5340,10 +5412,7 @@ function openRMUModal() {
     showToast("⛔ ليس لديك صلاحية إضافة وحدة RMU", "error");
     return;
   }
-  if (!currentProject || currentProject.nodes.length === 0) {
-    alert("الرجاء إضافة محطة محولات أولاً.");
-    return;
-  }
+  if (!requireSubstationFirst()) return;
   const modal = document.getElementById("rmu-modal");
   populateNodeDropdowns();
   document.getElementById("rmu-name").value = "لوحة RMU " + (currentProject.nodes.filter(n => n.type === 'rmu').length + 1);
@@ -5423,10 +5492,7 @@ function openAVRModal() {
     showToast("⛔ ليس لديك صلاحية إضافة منظم AVR", "error");
     return;
   }
-  if (!currentProject || currentProject.nodes.length === 0) {
-    alert("الرجاء إضافة محطة محولات أولاً.");
-    return;
-  }
+  if (!requireSubstationFirst()) return;
   const modal = document.getElementById("avr-modal");
   populateNodeDropdowns();
   document.getElementById("avr-name").value = "منظم جهد AVR " + (currentProject.nodes.filter(n => n.type === 'avr').length + 1);
@@ -5871,7 +5937,7 @@ async function openProjectsManager() {
   renderProjectsTable(projects, isServerOnline);
 }
 
-// رسم جدول المشاريع
+// رسم جدول المشاريع مع العزل التام بين الإدارات وإتاحة الصلاحيات الكاملة للمدير
 function renderProjectsTable(projects, isServerOnline) {
   const container = document.getElementById("projects-list-container");
   if (!container) return;
@@ -5879,14 +5945,18 @@ function renderProjectsTable(projects, isServerOnline) {
   const statusBadge = isServerOnline
     ? `<span style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#48bb78; background:rgba(72,187,120,0.15); padding:4px 12px; border-radius:20px; border:1px solid rgba(72,187,120,0.35);">
         <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#48bb78;"></span>
-        <span>⚡ متصل بالخادم المحلي والمزامنة السحابية</span>
+        <span>⚡ متصل بالخادم والمزامنة</span>
        </span>`
     : `<span style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#63b3ed; background:rgba(99,179,237,0.15); padding:4px 12px; border-radius:20px; border:1px solid rgba(99,179,237,0.35);">
         <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#63b3ed;"></span>
-        <span>🟢 التخزين المحلي والسحابي نشط (جاهز للعمل والمزامنة)</span>
+        <span>🟢 التخزين المحلي والسحابي نشط</span>
        </span>`;
 
   const curAdmin = getCurrentAdminName();
+  const isAdmin = (typeof isCurrentUserAdmin === "function") ? isCurrentUserAdmin() : false;
+  const loggedUser = (typeof _getLoggedInUser === "function") ? _getLoggedInUser() : null;
+  const userAdmin = (loggedUser && loggedUser.administration) ? loggedUser.administration : curAdmin;
+
   const adminList = [
     "بني مزار شرق",
     "بني مزار غرب",
@@ -5896,32 +5966,74 @@ function renderProjectsTable(projects, isServerOnline) {
     "سمالوط شرق",
     "سمالوط غرب"
   ];
-  const adminOptions = adminList.map(adm => `<option value="${adm}" ${adm === curAdmin ? "selected" : ""}>هندسة كهرباء ${adm}</option>`).join("");
+
+  let adminSwitcherHtml = "";
+  if (isAdmin) {
+    const adminOptions = adminList.map(adm => `<option value="${adm}" ${adm === curAdmin ? "selected" : ""}>هندسة كهرباء ${adm}</option>`).join("");
+    adminSwitcherHtml = `
+      <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(45, 55, 72, 0.7); padding:4px 10px; border-radius:8px; border:1px solid var(--border-color);">
+        <span style="font-size:12px; color:#ecc94b; font-weight:bold;">🏛️ الإدارة:</span>
+        <select id="projects-admin-switcher" style="background:#1a202c; color:#fff; border:1px solid #4a5568; border-radius:6px; padding:3px 8px; font-size:12px; font-weight:600; cursor:pointer;" onchange="switchAdminWorkspace(this.value)">
+          <option value="__all__" ${curAdmin === "__all__" ? "selected" : ""}>🌍 كل الإدارات (عرض شامل للمدير العام)</option>
+          ${adminOptions}
+        </select>
+      </div>
+    `;
+  } else {
+    // 🔒 عزل الإدارات للمستخدم العادي: لا يرى سوى إدارته فقط ولا يستطيع التبديل
+    adminSwitcherHtml = `
+      <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(45, 55, 72, 0.85); padding:4px 12px; border-radius:8px; border:1px solid #3b82f6;">
+        <span style="font-size:12px; color:#93c5fd; font-weight:bold;">🏛️ إدارتك:</span>
+        <span style="font-size:12px; color:#68d391; font-weight:bold;">هندسة كهرباء ${userAdmin} 🔒</span>
+      </div>
+    `;
+  }
 
   let html = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
         ${statusBadge}
-        <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(45, 55, 72, 0.7); padding:4px 10px; border-radius:8px; border:1px solid var(--border-color);">
-          <span style="font-size:12px; color:#ecc94b; font-weight:bold;">🏛️ الإدارة:</span>
-          <select id="projects-admin-switcher" style="background:#1a202c; color:#fff; border:1px solid #4a5568; border-radius:6px; padding:3px 8px; font-size:12px; font-weight:600; cursor:pointer;" onchange="switchAdminWorkspace(this.value)">
-            ${adminOptions}
-          </select>
-        </div>
+        ${adminSwitcherHtml}
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        ${isAdmin ? `
+          <button class="btn btn-outline btn-sm" onclick="openTransferProjectModal()" style="border-color:#3b82f6; color:#60a5fa; font-size:11.5px; padding:5px 10px;" title="تحويل المشروع النشط لإدارة أو قطاع آخر">
+            <span>🔄 تحويل مشروع</span>
+          </button>
+        ` : ''}
         <button class="btn btn-outline btn-sm" onclick="triggerSLDFileImport()" style="border-color:#38b2ac; color:#4fd1c5; font-size:11.5px; padding:5px 10px;">
-          <span>📥 استيراد ملف مشروع .sld</span>
+          <span>📥 استيراد ملف .sld</span>
         </button>
         <button class="btn btn-outline btn-sm" onclick="exportCurrentProjectAsSLD()" style="border-color:#ecc94b; color:#ecc94b; font-size:11.5px; padding:5px 10px;" title="تنزيل المشروع المفتوح كملف .sld">
-          <span>💾 تصدير المشروع الحالي .sld</span>
+          <span>💾 تصدير الحالي .sld</span>
         </button>
       </div>
     </div>
   `;
 
+  // تصفية المشاريع: إذا لم يكن مديراً عاماً، يُمنع تماماً من رؤية مشاريع الإدارات الأخرى
+  if (!isAdmin) {
+    projects = projects.filter(p => !p.administration || p.administration === userAdmin);
+  } else if (curAdmin === "__all__") {
+    // جمع كافة المشاريع من كافة الفهارس
+    const allProjectsMap = new Map();
+    adminList.forEach(adm => {
+      const cat = getCatalogForAdmin(adm);
+      if (Array.isArray(cat)) {
+        cat.forEach(item => {
+          if (!item.administration) item.administration = adm;
+          allProjectsMap.set(item.id || item.name, item);
+        });
+      }
+    });
+    projects.forEach(p => {
+      allProjectsMap.set(p.id || p.name, p);
+    });
+    projects = Array.from(allProjectsMap.values());
+  }
+
   if (!projects || projects.length === 0) {
-    html += "<p style='text-align:center; padding:30px; color:#a0aec0;'>لا توجد مشاريع محفوظة حالياً.</p>";
+    html += "<p style='text-align:center; padding:30px; color:#a0aec0;'>لا توجد مشاريع محفوظة لهذه الإدارة حالياً.</p>";
     container.innerHTML = html;
     return;
   }
@@ -5932,12 +6044,13 @@ function renderProjectsTable(projects, isServerOnline) {
         <thead>
           <tr style="background:var(--bg-tertiary); position:sticky; top:0; z-index:2; border-bottom:1px solid var(--border-color);">
             <th style="text-align:right; padding:10px 12px;">اسم المخطط / الخط</th>
+            ${(isAdmin && curAdmin === "__all__") ? "<th>الإدارة التابع لها</th>" : ""}
             <th>المحطة الرئيسية</th>
             <th>الجهد</th>
             <th>العقد</th>
             <th>المقاطع</th>
             <th>تاريخ التعديل</th>
-            <th style="min-width:210px; text-align:center;">الإجراءات</th>
+            <th style="min-width:250px; text-align:center;">الإجراءات</th>
           </tr>
         </thead>
         <tbody>
@@ -5946,6 +6059,7 @@ function renderProjectsTable(projects, isServerOnline) {
   projects.forEach(p => {
     const displayName = (p.name || p.id).replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const displaySub = (p.substation || '-').replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const displayAdmin = (p.administration || curAdmin || '-').replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const encId = encodeURIComponent(p.id);
     const encName = encodeURIComponent(p.name || p.id);
     const isCurrent = currentProject && (currentProject.id === p.id || currentProject.name === p.name);
@@ -5957,16 +6071,22 @@ function renderProjectsTable(projects, isServerOnline) {
           ${displayName}
           ${isCurrent ? '<span style="margin-right:6px; font-size:10px; background:#3182ce; color:#fff; padding:2px 7px; border-radius:10px;">نشط حالياً</span>' : ''}
         </td>
+        ${(isAdmin && curAdmin === "__all__") ? `<td style="color:#60a5fa; font-weight:600; font-size:11.5px;">${displayAdmin}</td>` : ""}
         <td>${displaySub}</td>
         <td style="color:#ecc94b; font-weight:bold;">${p.voltage_kv || 11} ك.ف</td>
         <td>${p.nodes_count !== undefined ? p.nodes_count : '-'}</td>
         <td>${p.sections_count !== undefined ? p.sections_count : '-'}</td>
         <td style="font-size:11px; color:#a0aec0;">${p.updated_at || '-'}</td>
         <td style="text-align:center;">
-          <div style="display:inline-flex; gap:5px; justify-content:center;">
+          <div style="display:inline-flex; gap:5px; justify-content:center; flex-wrap:wrap;">
             <button class="btn btn-primary btn-sm" style="padding:3px 8px; font-size:11px;" onclick="loadProjectFromManager(decodeURIComponent('${encId}'))" title="فتح وعرض المخطط">
               <span>👁️ فتح</span>
             </button>
+            ${isAdmin ? `
+              <button class="btn btn-outline btn-sm" style="padding:3px 8px; font-size:11px; border-color:#3b82f6; color:#60a5fa;" onclick="openTransferProjectModal(decodeURIComponent('${encId}'))" title="تحويل المشروع إلى إدارة أو قطاع آخر">
+                <span>🔄 تحويل</span>
+              </button>
+            ` : ''}
             <button class="btn btn-outline btn-sm" style="padding:3px 8px; font-size:11px; border-color:#ecc94b; color:#ecc94b;" onclick="exportProjectAsSLD(decodeURIComponent('${encId}'))" title="تنزيل كملف .sld">
               <span>💾 .sld</span>
             </button>
@@ -6135,11 +6255,10 @@ function createNewProjectDirectly() {
   currentProject = {
     id: "feeder_" + Date.now(),
     name: "مخطط جديد",
-    substation: "محطة محولات غرب",
+    substation: "",
     voltage_kv: 11,
-    nodes: [
-      { id: "N1", type: "substation", name: "محطة محولات غرب", x: 400, y: (window.drawingFlowDirection === 'up') ? 1000 : 80 }
-    ],
+    feeder_max_load_kva: 5000,
+    nodes: [],
     sections: []
   };
   window.currentProject = currentProject;
@@ -6148,7 +6267,7 @@ function createNewProjectDirectly() {
   renderNetwork();
   resetZoom();
   closeProjectsManager();
-  showToast("✨ تم فتح مشروع جديد مباشر - جاهز للرسم والعمل فوراً", "success");
+  showToast("✨ تم إنشاء مشروع جديد فارغ — ابدأ بإضافة لوحة توزيع أو محطة محولات", "success");
 }
 
 function createNewProjectFromManager() {
@@ -7198,8 +7317,8 @@ let _backupPendingData = null; // بيانات الملف المحدد للاس�
 function updateBackupButtonVisibility() {
   const group = document.getElementById("backup-group");
   if (!group) return;
-  // استخدم window.currentUser (المحدَّث من auth.js) أو currentUser المحلي
-  const user = window.currentUser || currentUser;
+  // استخدم window.currentUser أو currentUser بشكل آمن
+  const user = (typeof window !== 'undefined' && window.currentUser) ? window.currentUser : (typeof currentUser !== 'undefined' ? currentUser : null);
   const isAdmin = user && (
     user.role === "admin" ||
     user.is_developer === true ||
@@ -7226,7 +7345,8 @@ document.addEventListener("sld-user-logged-in", updateBackupButtonVisibility);
 
 /** فتح نافذة النسخ الاحتياطي */
 function openBackupModal() {
-  const _cu = window.currentUser || currentUser; const isAdmin = _cu && (_cu.role === "admin" || _cu.is_developer === true || (_cu.permissions && (_cu.permissions.includes("all") || _cu.permissions.includes("developer"))));
+  const _cu = (typeof window !== 'undefined' && window.currentUser) ? window.currentUser : (typeof currentUser !== 'undefined' ? currentUser : null);
+  const isAdmin = _cu && (_cu.role === "admin" || _cu.is_developer === true || (_cu.permissions && (_cu.permissions.includes("all") || _cu.permissions.includes("developer"))));
   if (!isAdmin) {
     showToast("⛔ هذه الميزة مخصصة للمدير فقط", "error");
     return;
@@ -7261,7 +7381,8 @@ window.closeBackupModal = closeBackupModal;
 
 /** تصدير نسخة احتياطية JSON */
 function exportBackup(mode) {
-  const _cu = window.currentUser || currentUser; const isAdmin = _cu && (_cu.role === "admin" || _cu.is_developer === true || (_cu.permissions && (_cu.permissions.includes("all") || _cu.permissions.includes("developer"))));
+  const _cu = (typeof window !== 'undefined' && window.currentUser) ? window.currentUser : (typeof currentUser !== 'undefined' ? currentUser : null);
+  const isAdmin = _cu && (_cu.role === "admin" || _cu.is_developer === true || (_cu.permissions && (_cu.permissions.includes("all") || _cu.permissions.includes("developer"))));
   if (!isAdmin) { showToast("⛔ غير مصرح", "error"); return; }
 
   let backupData;
@@ -7291,7 +7412,7 @@ function exportBackup(mode) {
       _backup_type:    "all_projects",
       _backup_version: "2.0",
       _backup_date:    new Date().toISOString(),
-      _backup_by:      currentUser?.name || "المدير",
+      _backup_by:      ((typeof window !== 'undefined' && window.currentUser?.name) || (typeof currentUser !== 'undefined' ? currentUser?.name : null) || "المدير"),
       projects:        allProjects,
       current_project: currentProject || null,
     };
@@ -7304,7 +7425,7 @@ function exportBackup(mode) {
       _backup_type:    "single_project",
       _backup_version: "2.0",
       _backup_date:    new Date().toISOString(),
-      _backup_by:      currentUser?.name || "المدير",
+      _backup_by:      ((typeof window !== 'undefined' && window.currentUser?.name) || (typeof currentUser !== 'undefined' ? currentUser?.name : null) || "المدير"),
       project:         currentProject,
     };
     const safeName = (currentProject.name || currentProject.id || "Project").replace(/[\\/:*?"<>|]/g, "_");
@@ -7411,7 +7532,8 @@ function _processBackupFile(file) {
 
 /** استيراد النسخة الاحتياطية */
 function importBackup(mode) {
-  const _cu = window.currentUser || currentUser; const isAdmin = _cu && (_cu.role === "admin" || _cu.is_developer === true || (_cu.permissions && (_cu.permissions.includes("all") || _cu.permissions.includes("developer"))));
+  const _cu = (typeof window !== 'undefined' && window.currentUser) ? window.currentUser : (typeof currentUser !== 'undefined' ? currentUser : null);
+  const isAdmin = _cu && (_cu.role === "admin" || _cu.is_developer === true || (_cu.permissions && (_cu.permissions.includes("all") || _cu.permissions.includes("developer"))));
   if (!isAdmin) { showToast("⛔ غير مصرح", "error"); return; }
   if (!_backupPendingData) { showToast("⚠️ لم يتم اختيار ملف بعد", "warning"); return; }
 
@@ -7471,5 +7593,659 @@ function importBackup(mode) {
   }
 }
 window.importBackup = importBackup;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ⏱️ نظام التراجع والاسترجاع الزمني للمدير العام (Admin Time-Machine Timeline)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const TIMELINE_STORAGE_KEY = "sld_timeline_snapshots";
+let _lastCapturedHash = "";
+let _lastCapturedTime = 0;
+
+function getStoredTimelineSnapshots() {
+  try {
+    const raw = localStorage.getItem(TIMELINE_STORAGE_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return arr;
+    }
+  } catch(e) {}
+  return [];
+}
+
+function saveTimelineSnapshots(snapshots) {
+  try {
+    // الاحتفاظ بأحدث 80 لقطة زمنية كحد أقصى لمنع امتلاء التخزين
+    const trimmed = (snapshots || []).slice(0, 80);
+    localStorage.setItem(TIMELINE_STORAGE_KEY, JSON.stringify(trimmed));
+  } catch(e) {
+    console.warn("Could not save timeline snapshots:", e);
+  }
+}
+
+// التقاط لقطة زمنية للمخطط وحفظها في سجل التاريخ الزمني
+function captureTimelineSnapshot(reason = "حفظ تلقائي", explicitProj = null) {
+  const proj = explicitProj || currentProject;
+  if (!proj || !Array.isArray(proj.nodes) || proj.nodes.length === 0) return null;
+
+  const now = Date.now();
+  const firstId = proj.nodes[0] ? proj.nodes[0].id : '';
+  const lastId = proj.nodes[proj.nodes.length - 1] ? proj.nodes[proj.nodes.length - 1].id : '';
+  const hash = `${proj.id || ''}_${proj.name || ''}_${proj.nodes.length}_${(proj.sections || []).length}_${firstId}_${lastId}`;
+
+  // تخفيف التكرار إذا كان نفس المحتوى خلال 8 ثوانٍ
+  if (hash === _lastCapturedHash && (now - _lastCapturedTime) < 8000 && !reason.includes("يدوي") && !reason.includes("قبل") && !reason.includes("أمان")) {
+    return null;
+  }
+  _lastCapturedHash = hash;
+  _lastCapturedTime = now;
+
+  let transCount = 0;
+  let totalCap = 0;
+  (proj.nodes || []).forEach(n => {
+    if (n.type === "transformer" || n.type === "kiosk" || n.subType === "kiosk" || n.subType === "transformer") {
+      transCount++;
+      if (typeof n.capacity === "number") totalCap += n.capacity;
+      else if (typeof n.power === "number") totalCap += n.power;
+    }
+  });
+
+  const curAdmin = (typeof getCurrentAdminName === "function") ? getCurrentAdminName() : "بني مزار شرق";
+  const snapshotObj = {
+    id: "snap_" + now + "_" + Math.floor(Math.random() * 1000),
+    timestamp: now,
+    date_str: new Date(now).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'medium' }),
+    reason: reason,
+    source: "لقطة زمنية موثقة",
+    project_id: proj.id || ("proj_" + now),
+    project_name: proj.name || "مخطط شبكة",
+    substation: proj.substation || "محطة محولات",
+    administration: proj.administration || curAdmin,
+    sector: proj.sector || "المنيا شمال",
+    nodes_count: proj.nodes.length,
+    sections_count: (proj.sections || []).length,
+    transformers_count: transCount,
+    total_capacity_kva: totalCap,
+    data: JSON.parse(JSON.stringify(proj))
+  };
+
+  const list = getStoredTimelineSnapshots();
+  list.unshift(snapshotObj);
+  saveTimelineSnapshots(list);
+  return snapshotObj;
+}
+window.captureTimelineSnapshot = captureTimelineSnapshot;
+
+// مسح واستخراج كافة الحالات التاريخية من المتصفح والذاكرة (Deep History Harvester)
+function harvestAllHistoricalSnapshots() {
+  const existing = getStoredTimelineSnapshots();
+  const seenSignatures = new Set();
+
+  existing.forEach(s => {
+    if (s && s.data) {
+      const sig = `${s.project_name || ''}_${s.nodes_count}_${s.sections_count}_${s.total_capacity_kva}`;
+      seenSignatures.add(sig);
+    }
+  });
+
+  const newlyDiscovered = [];
+  const now = Date.now();
+
+  // 1. فحص سجل التراجع الفوري بالذاكرة (historyStack)
+  if (Array.isArray(historyStack) && historyStack.length > 0) {
+    historyStack.forEach((rawStr, idx) => {
+      try {
+        const p = JSON.parse(rawStr);
+        if (p && Array.isArray(p.nodes) && p.nodes.length > 0) {
+          let transCount = 0;
+          let totalCap = 0;
+          p.nodes.forEach(n => {
+            if (n.type === "transformer" || n.type === "kiosk" || n.subType === "kiosk" || n.subType === "transformer") {
+              transCount++;
+              if (typeof n.capacity === "number") totalCap += n.capacity;
+              else if (typeof n.power === "number") totalCap += n.power;
+            }
+          });
+          const sig = `${p.name || ''}_${p.nodes.length}_${(p.sections || []).length}_${totalCap}`;
+          if (!seenSignatures.has(sig)) {
+            seenSignatures.add(sig);
+            const estTime = now - ((historyStack.length - idx) * 45000);
+            newlyDiscovered.push({
+              id: "snap_hist_" + estTime + "_" + idx,
+              timestamp: estTime,
+              date_str: new Date(estTime).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'medium' }),
+              reason: `ذاكرة التراجع الفورية (خطوة ${idx + 1} قبل التداخل)`,
+              source: "ذاكرة التراجع المؤقتة",
+              project_id: p.id || ("proj_hist_" + idx),
+              project_name: p.name || "مخطط سابق",
+              substation: p.substation || "محطة محولات",
+              administration: p.administration || getCurrentAdminName(),
+              sector: p.sector || "المنيا شمال",
+              nodes_count: p.nodes.length,
+              sections_count: (p.sections || []).length,
+              transformers_count: transCount,
+              total_capacity_kva: totalCap,
+              data: p
+            });
+          }
+        }
+      } catch(_) {}
+    });
+  }
+
+  // 2. فحص كافة مفاتيح التخزين المحلي LocalStorage
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (key === "sld_saved_feeder" || key.startsWith("sld_feeder_") || key.startsWith("sld_proj_") || key.startsWith("sld_project_") || key.includes("backup")) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw || raw.length < 50) continue;
+          const p = JSON.parse(raw);
+          if (p && Array.isArray(p.nodes) && p.nodes.length > 0) {
+            let transCount = 0;
+            let totalCap = 0;
+            p.nodes.forEach(n => {
+              if (n.type === "transformer" || n.type === "kiosk" || n.subType === "kiosk" || n.subType === "transformer") {
+                transCount++;
+                if (typeof n.capacity === "number") totalCap += n.capacity;
+                else if (typeof n.power === "number") totalCap += n.power;
+              }
+            });
+            const sig = `${p.name || ''}_${p.nodes.length}_${(p.sections || []).length}_${totalCap}`;
+            if (!seenSignatures.has(sig)) {
+              seenSignatures.add(sig);
+              const pTime = p.saved_at || p.user_saved_at || p.timestamp || (now - 3600000);
+              newlyDiscovered.push({
+                id: "snap_ls_" + pTime + "_" + Math.floor(Math.random() * 1000),
+                timestamp: pTime,
+                date_str: new Date(pTime).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'medium' }),
+                reason: `نسخة محفوظة محلياً [${key}]`,
+                source: "التخزين المحلي الدائم",
+                project_id: p.id || key,
+                project_name: p.name || key,
+                substation: p.substation || "محطة محولات",
+                administration: p.administration || (key.startsWith("sld_feeder_") ? key.replace("sld_feeder_", "").replace(/_/g, " ") : getCurrentAdminName()),
+                sector: p.sector || "المنيا شمال",
+                nodes_count: p.nodes.length,
+                sections_count: (p.sections || []).length,
+                transformers_count: transCount,
+                total_capacity_kva: totalCap,
+                data: p
+              });
+            }
+          }
+        } catch(_) {}
+      }
+    }
+  } catch(_) {}
+
+  // دمج وترتيب الكل تنازلياً حسب الوقت
+  const combined = [...existing, ...newlyDiscovered];
+  combined.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  saveTimelineSnapshots(combined);
+  return combined;
+}
+
+// فتح نافذة الاسترجاع الزمني للمدير
+function openTimelineRollbackModal() {
+  if (typeof isCurrentUserAdmin === "function" && !isCurrentUserAdmin()) {
+    showToast("⛔ سجل التراجع الزمني متاح للمدير العام فقط", "error");
+    return;
+  }
+  const modal = document.getElementById("timeline-rollback-modal");
+  if (!modal) return;
+
+  modal.classList.remove("hidden");
+
+  // التقاط لقطة حالية لحفظ الوضع الراهن أولاً
+  captureTimelineSnapshot("فتح سجل التراجع الزمني", currentProject);
+
+  const snapshots = harvestAllHistoricalSnapshots();
+
+  // تحديث قائمة تصفية الإدارات
+  const filterAdminSelect = document.getElementById("timeline-filter-admin");
+  if (filterAdminSelect) {
+    const adminSet = new Set();
+    snapshots.forEach(s => {
+      if (s.administration) adminSet.add(s.administration);
+    });
+    let optHtml = `<option value="all">كل الإدارات (${snapshots.length} لقطة)</option>`;
+    adminSet.forEach(adm => {
+      optHtml += `<option value="${adm}">هندسة ${adm}</option>`;
+    });
+    filterAdminSelect.innerHTML = optHtml;
+  }
+
+  renderTimelineList();
+}
+window.openTimelineRollbackModal = openTimelineRollbackModal;
+
+function closeTimelineRollbackModal() {
+  const modal = document.getElementById("timeline-rollback-modal");
+  if (modal) modal.classList.add("hidden");
+}
+window.closeTimelineRollbackModal = closeTimelineRollbackModal;
+
+// رسم قائمة بطاقات التراجع الزمني
+function renderTimelineList() {
+  const container = document.getElementById("timeline-snapshots-container");
+  if (!container) return;
+
+  const filterAdminSelect = document.getElementById("timeline-filter-admin");
+  const selectedAdmin = filterAdminSelect ? filterAdminSelect.value : "all";
+
+  let snapshots = getStoredTimelineSnapshots();
+  if (selectedAdmin !== "all") {
+    snapshots = snapshots.filter(s => s.administration === selectedAdmin);
+  }
+
+  if (!snapshots || snapshots.length === 0) {
+    container.innerHTML = `
+      <div style="text-align:center; padding:40px 20px; color:#94a3b8;">
+        <span style="font-size:36px; display:block; margin-bottom:10px;">⏱️</span>
+        <p style="margin:0; font-size:14px; font-weight:bold; color:#f8fafc;">لا توجد لقطات تاريخية مسجلة لهذه الإدارة حتى الآن.</p>
+        <p style="margin-top:6px; font-size:12px; color:#64748b;">يمكنك النقر على زر "📸 أخذ لقطة حفظ الآن" لتسجيل نسخة فورية من المخطط الحالي.</p>
+      </div>
+    `;
+    return;
+  }
+
+  let html = `
+    <div style="display:flex; flex-direction:column; gap:8px; padding:6px;">
+  `;
+
+  snapshots.forEach((snap, idx) => {
+    const encId = encodeURIComponent(snap.id);
+    const dateFormatted = snap.date_str || new Date(snap.timestamp).toLocaleString('ar-EG');
+    const isNewest = (idx === 0);
+
+    html += `
+      <div class="timeline-snapshot-card" style="background:#1e293b; border:1px solid ${isNewest ? '#38bdf8' : '#334155'}; border-radius:8px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; transition:border-color 0.2s ease;">
+        <div style="display:flex; flex-direction:column; gap:4px; max-width:65%;">
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span style="color:#fbbf24; font-weight:bold; font-size:13px; display:inline-flex; align-items:center; gap:4px;">
+              <span>⏱️</span> <span>${dateFormatted}</span>
+            </span>
+            ${isNewest ? '<span style="background:rgba(56,189,248,0.2); color:#38bdf8; border:1px solid rgba(56,189,248,0.4); padding:1px 6px; border-radius:4px; font-size:10.5px; font-weight:bold;">الأحدث حالياً</span>' : ''}
+            <span style="background:#0f172a; color:#a5b4fc; padding:2px 8px; border-radius:5px; font-size:11px; border:1px solid #312e81; font-weight:600;">
+              🏛️ ${snap.administration || 'بني مزار'}
+            </span>
+          </div>
+
+          <div style="font-size:13px; font-weight:bold; color:#f8fafc; margin-top:2px;">
+            <span>⚡ ${snap.project_name || 'مخطط بدون اسم'}</span>
+            <span style="color:#94a3b8; font-weight:normal; font-size:12px; margin-right:6px;">(${snap.substation || 'محطة محولات'})</span>
+          </div>
+
+          <div style="display:flex; gap:12px; font-size:11.5px; color:#cbd5e1; flex-wrap:wrap; margin-top:3px;">
+            <span style="color:#60a5fa;">🔵 العقد: <b>${snap.nodes_count}</b></span>
+            <span style="color:#4ade80;">🟢 المقاطع: <b>${snap.sections_count}</b></span>
+            <span style="color:#f472b6;">⚡ المحولات: <b>${snap.transformers_count}</b></span>
+            <span style="color:#fbbf24;">💡 القدرة: <b>${snap.total_capacity_kva} ك.ف.أ</b></span>
+          </div>
+
+          <div style="font-size:11px; color:#64748b; margin-top:2px;">
+            <span>🏷️ السبب: <b>${snap.reason || 'حفظ تلقائي'}</b></span>
+            <span style="margin-right:8px;">[المصدر: ${snap.source || 'النظام'}]</span>
+          </div>
+        </div>
+
+        <div style="display:inline-flex; gap:6px; align-items:center; flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" onclick="previewTimelineSnapshot(decodeURIComponent('${encId}'))" style="border-color:#38bdf8; color:#38bdf8; padding:5px 9px; font-size:11.5px;" title="معاينة تفاصيل وبيانات هذا المخطط">
+            <span>👁️ معاينة</span>
+          </button>
+          <button class="btn btn-outline btn-sm" onclick="downloadTimelineSnapshotSLD(decodeURIComponent('${encId}'))" style="border-color:#eab308; color:#fde047; padding:5px 9px; font-size:11.5px;" title="تنزيل هذه النسخة التاريخية كملف .sld إلى جهازك">
+            <span>💾 تنزيل .sld</span>
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="restoreTimelineSnapshot(decodeURIComponent('${encId}'))" style="background:#059669; border-color:#10b981; padding:5px 12px; font-size:11.5px; font-weight:bold;" title="استرجاع هذا المخطط واعتماده 100% فوراً">
+            <span>⏪ استرجاع 100%</span>
+          </button>
+        </div>
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+  container.innerHTML = html;
+}
+window.renderTimelineList = renderTimelineList;
+
+// استرجاع لقطة زمنية محددة بنسبة 100%
+function restoreTimelineSnapshot(snapshotId) {
+  if (typeof isCurrentUserAdmin === "function" && !isCurrentUserAdmin()) {
+    showToast("⛔ صلاحية استرجاع المخططات مقتصرة على المدير العام فقط", "error");
+    return;
+  }
+  const snapshots = getStoredTimelineSnapshots();
+  const snap = snapshots.find(s => s.id === snapshotId);
+  if (!snap || !snap.data) {
+    showToast("⚠️ تعذر العثور على بيانات اللقطة الزمنية المحددة", "error");
+    return;
+  }
+
+  const confirmMsg = `هل أنت متأكد من استرجاع هذا المخطط المؤرخ في [${snap.date_str}]؟\n\n` +
+    `• اسم المخطط: ${snap.project_name}\n` +
+    `• الإدارة: ${snap.administration}\n` +
+    `• عدد العقد: ${snap.nodes_count} | المقاطع: ${snap.sections_count}\n` +
+    `• إجمالي المحولات: ${snap.transformers_count} (${snap.total_capacity_kva} ك.ف.أ)\n\n` +
+    `💡 سيتم تلقائياً حفظ لقطة أمان احتياطية من حالتك الحالية قبل الاسترجاع.`;
+
+  if (!confirm(confirmMsg)) return;
+
+  // 1. أخذ نسخة أمان فورية من المخطط الحالي قبل تطبيق الاسترجاع
+  if (currentProject && currentProject.nodes && currentProject.nodes.length > 0) {
+    captureTimelineSnapshot("نسخة احتياطية تلقائية قبل استرجاع لقطة زمنية", currentProject);
+  }
+
+  // 2. تطبيق بيانات اللقطة المسترجعة
+  const restored = JSON.parse(JSON.stringify(snap.data));
+  const now = Date.now();
+  restored.updated_at = new Date(now).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' });
+  restored.restored_from_snapshot_at = now;
+
+  currentProject = restored;
+  window.currentProject = restored;
+
+  // 3. الحفظ الدائم محلياً وسحابياً للمخطط المسترجع
+  const adminName = restored.administration || getCurrentAdminName();
+  if (typeof saveFeederForAdmin === "function") {
+    saveFeederForAdmin(currentProject, adminName);
+  }
+  try {
+    localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
+    if (currentProject.id) {
+      localStorage.setItem("sld_proj_" + currentProject.id, JSON.stringify(currentProject));
+    }
+  } catch(e) {}
+
+  if (typeof saveProjectToStorage === "function") {
+    saveProjectToStorage(currentProject);
+  }
+
+  // 4. بث المخطط المسترجع لسحابة Firebase لضمان تحديث كافة الشاشات
+  if (window.pushDrawingToFirebase) {
+    try { window.pushDrawingToFirebase(currentProject, 'timeline_rollback_restore'); } catch(_) {}
+  }
+
+  // 5. تحديث واجهة الـ CAD وإعادة الرسم فوراً
+  if (window.clearSelection) clearSelection();
+  if (typeof updateFeederInputs === "function") updateFeederInputs();
+  if (typeof renderNetwork === "function") renderNetwork();
+  if (typeof resetZoom === "function") resetZoom();
+  if (typeof fitToScreen === "function") fitToScreen();
+
+  closeTimelineRollbackModal();
+  showToast(`🎉 تم بنجاح استرجاع المخطط [${currentProject.name || 'المعتمد'}] بنسبة 100% كما كان في تاريخ (${snap.date_str})!`, "success");
+}
+window.restoreTimelineSnapshot = restoreTimelineSnapshot;
+
+// معاينة تفصيلية لبيانات اللقطة التاريخية دون المساس بالمخطط المفتوح
+function previewTimelineSnapshot(snapshotId) {
+  const snapshots = getStoredTimelineSnapshots();
+  const snap = snapshots.find(s => s.id === snapshotId);
+  if (!snap || !snap.data) {
+    showToast("⚠️ تعذر جلب تفاصيل اللقطة", "warning");
+    return;
+  }
+  const p = snap.data;
+  let transListStr = "";
+  let transCount = 0;
+  (p.nodes || []).forEach((n, i) => {
+    if (n.type === "transformer" || n.type === "kiosk" || n.subType === "kiosk" || n.subType === "transformer") {
+      transCount++;
+      const cap = n.capacity || n.power || 0;
+      const ownership = n.ownership === 'private' ? 'خاص' : 'عام';
+      transListStr += `  ${transCount}. ${n.name || ('نود ' + n.id)} [${cap} ك.ف.أ - ${ownership}]\n`;
+    }
+  });
+
+  const previewInfo = `📋 تفاصيل النسخة التاريخية [${snap.date_str}]:\n\n` +
+    `• اسم الخط/المشروع: ${p.name || '-'}\n` +
+    `• المحطة الرئيسية: ${p.substation || '-'}\n` +
+    `• الجهد: ${p.voltage_kv || 11} ك.ف\n` +
+    `• أقصى حمل للمغذي: ${p.feeder_max_load_kva || 'غير محدد'} ك.ف.أ\n` +
+    `• الإدارة والقطاع: ${snap.administration} (${snap.sector || '-'})\n` +
+    `• عدد العقد والنود: ${snap.nodes_count}\n` +
+    `• عدد المقاطع والخطوط: ${snap.sections_count}\n` +
+    `• إجمالي قدرات المحولات: ${snap.total_capacity_kva} ك.ف.أ\n\n` +
+    (transListStr ? `⚡ بيان المحولات والأكشاك:\n${transListStr}\n` : '') +
+    `هل ترغب في استرجاع هذه النسخة الآن؟`;
+
+  if (confirm(previewInfo)) {
+    restoreTimelineSnapshot(snapshotId);
+  }
+}
+window.previewTimelineSnapshot = previewTimelineSnapshot;
+
+// تنزيل اللقطة التاريخية مباشرة كملف .sld
+function downloadTimelineSnapshotSLD(snapshotId) {
+  const snapshots = getStoredTimelineSnapshots();
+  const snap = snapshots.find(s => s.id === snapshotId);
+  if (!snap || !snap.data) {
+    showToast("⚠️ تعذر جلب ملف اللقطة", "error");
+    return;
+  }
+  const str = JSON.stringify(snap.data, null, 2);
+  const blob = new Blob([str], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const fileName = `${(snap.project_name || 'feeder').replace(/[\\/*?:"<>|]/g, "_")}_snapshot_${snap.timestamp}.sld`;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(`💾 تم تنزيل اللقطة التاريخية كملف [${fileName}] بنجاح!`, "success");
+}
+window.downloadTimelineSnapshotSLD = downloadTimelineSnapshotSLD;
+
+// أخذ لقطة حفظ يدوية في السجل الزمني
+function captureManualTimelineSnapshot() {
+  if (!currentProject || !currentProject.nodes || currentProject.nodes.length === 0) {
+    showToast("⚠️ لا يوجد مخطط نشط لحفظ لقطة منه", "warning");
+    return;
+  }
+  const snap = captureTimelineSnapshot("لقطة حفظ يدوية موثقة للمدير", currentProject);
+  renderTimelineList();
+  showToast("📸 تم أخذ لقطة حفظ يدوية بنجاح وتسجيلها في الخط الزمني!", "success");
+}
+window.captureManualTimelineSnapshot = captureManualTimelineSnapshot;
+
+// تحديث بيانات السجل الزمني
+function refreshTimelineData() {
+  harvestAllHistoricalSnapshots();
+  renderTimelineList();
+  showToast("🔄 تم إعادة فحص وتحديث السجل الزمني بنجاح!", "info");
+}
+window.refreshTimelineData = refreshTimelineData;
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🔄 نظام تحويل ونقل المشاريع بين الإدارات والقطاعات
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const DEFAULT_SYSTEM_SECTORS = {
+  "المنيا شمال": ["بني مزار شرق", "بني مزار غرب", "مغاغة", "العدوة", "مطاي", "سمالوط شرق", "سمالوط غرب"],
+  "المنيا جنوب": ["المنيا شرق", "المنيا غرب", "أبو قرقاص", "ملوي", "ديرمواس"],
+  "بني سويف": ["مدينة بني سويف", "مركز بني سويف", "ناصر", "ببا", "الفشن", "إهناسيا", "الواسطى", "سمسطا"],
+  "الفيوم": ["شرق الفيوم", "غرب الفيوم", "مركز الفيوم", "إطسا", "طامية", "سنورس", "يوسف الصديق", "إبشواي"],
+  "أسيوط": ["شرق أسيوط", "غرب أسيوط", "مركز أسيوط", "ديروط", "القوصية", "منفلوط", "أبنوب", "الفتح", "صدفا", "الغنايم", "البداري", "ساحل سليم"],
+  "الوادي الجديد": ["الخارجة", "الداخلة", "الفرافرة", "باريس", "بلاط"]
+};
+
+function getSystemSectorsMap() {
+  if (window.SECTORS_MAP && Object.keys(window.SECTORS_MAP).length > 0) return window.SECTORS_MAP;
+  if (typeof appSettings !== "undefined" && appSettings && appSettings.sectors) return appSettings.sectors;
+  return DEFAULT_SYSTEM_SECTORS;
+}
+
+// فتح نافذة تحويل المشروع
+async function openTransferProjectModal(projectId = null) {
+  if (typeof isCurrentUserAdmin === "function" && !isCurrentUserAdmin()) {
+    showToast("⛔ صلاحية نقل وتحويل المشاريع بين الإدارات والقطاعات مقتصرة على المدير العام فقط", "error");
+    return;
+  }
+
+  const modal = document.getElementById("transfer-project-modal");
+  if (!modal) return;
+
+  let targetProj = null;
+  if (projectId) {
+    targetProj = await loadProjectDataById(projectId);
+  } else {
+    targetProj = currentProject;
+  }
+
+  if (!targetProj) {
+    showToast("⚠️ تعذر تحديد المشروع المراد تحويله", "warning");
+    return;
+  }
+
+  const curSector = targetProj.sector || "المنيا شمال";
+  const curAdmin = targetProj.administration || getCurrentAdminName();
+
+  document.getElementById("transfer-project-id").value = targetProj.id || ("proj_" + Date.now());
+  document.getElementById("transfer-project-name").value = targetProj.name || "مخطط شبكة توزيع";
+  document.getElementById("transfer-current-sector").value = curSector;
+  document.getElementById("transfer-current-admin").value = curAdmin;
+
+  // ملء قائمة القطاعات المستهدفة
+  const sectorSelect = document.getElementById("transfer-new-sector");
+  const sectorsMap = getSystemSectorsMap();
+  const sectorKeys = Object.keys(sectorsMap);
+
+  sectorSelect.innerHTML = sectorKeys.map(s => 
+    `<option value="${s}" ${s === curSector ? "selected" : ""}>قطاع ${s}</option>`
+  ).join('');
+
+  onTransferSectorChange();
+  modal.classList.remove("hidden");
+}
+window.openTransferProjectModal = openTransferProjectModal;
+
+function closeTransferProjectModal() {
+  const modal = document.getElementById("transfer-project-modal");
+  if (modal) modal.classList.add("hidden");
+}
+window.closeTransferProjectModal = closeTransferProjectModal;
+
+// عند تغيير القطاع في نافذة التحويل، يتم تحديث قائمة الإدارات التابعة له تلقائياً
+function onTransferSectorChange() {
+  const sectorSelect = document.getElementById("transfer-new-sector");
+  const adminSelect = document.getElementById("transfer-new-admin");
+  if (!sectorSelect || !adminSelect) return;
+
+  const selectedSector = sectorSelect.value;
+  const sectorsMap = getSystemSectorsMap();
+  const admins = sectorsMap[selectedSector] || [];
+
+  adminSelect.innerHTML = admins.map(adm => 
+    `<option value="${adm}">هندسة كهرباء ${adm}</option>`
+  ).join('');
+}
+window.onTransferSectorChange = onTransferSectorChange;
+
+// تأكيد وتنفيذ تحويل المشروع
+async function submitTransferProject() {
+  if (typeof isCurrentUserAdmin === "function" && !isCurrentUserAdmin()) {
+    showToast("⛔ صلاحية تحويل المشاريع للمدير العام فقط", "error");
+    return;
+  }
+
+  const pId = document.getElementById("transfer-project-id").value;
+  const newSector = document.getElementById("transfer-new-sector").value;
+  const newAdmin = document.getElementById("transfer-new-admin").value;
+  const keepCopy = document.getElementById("transfer-keep-copy") ? document.getElementById("transfer-keep-copy").checked : false;
+
+  if (!newSector || !newAdmin) {
+    showToast("⚠️ يرجى اختيار القطاع والإدارة المستهدفة", "warning");
+    return;
+  }
+
+  let proj = (currentProject && currentProject.id === pId) ? currentProject : await loadProjectDataById(pId);
+  if (!proj) {
+    showToast("❌ تعذر العثور على بيانات المشروع", "error");
+    return;
+  }
+
+  const oldAdmin = proj.administration || getCurrentAdminName();
+  if (oldAdmin === newAdmin && proj.sector === newSector) {
+    showToast("⚠️ المشروع ينتمي بالفعل لنفس الإدارة والقطاع المحددين!", "info");
+    return;
+  }
+
+  // أخذ لقطة أمان احتياطية قبل التحويل
+  captureTimelineSnapshot(`لقطة أمان قبل تحويل المخطط إلى هندسة ${newAdmin}`, proj);
+
+  // تحديث بيانات المخطط
+  const updatedProj = JSON.parse(JSON.stringify(proj));
+  updatedProj.sector = newSector;
+  updatedProj.administration = newAdmin;
+  const nowTs = Date.now();
+  const nowStr = new Date(nowTs).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' });
+  updatedProj.updated_at = nowStr;
+  updatedProj.transferred_at = nowTs;
+
+  // 1. إضافة المشروع إلى فهرس الإدارة الجديدة
+  const newKey = newAdmin.trim().replace(/\s+/g, '_');
+  const targetCatalog = getCatalogForAdmin(newAdmin);
+  const meta = {
+    id: updatedProj.id,
+    name: updatedProj.name || "مخطط شبكة",
+    substation: updatedProj.substation || "محطة محولات",
+    voltage_kv: updatedProj.voltage_kv || 11,
+    nodes_count: (updatedProj.nodes || []).length,
+    sections_count: (updatedProj.sections || []).length,
+    updated_at: nowStr,
+    saved_at: nowTs,
+    administration: newAdmin,
+    sector: newSector
+  };
+
+  const existingIdx = targetCatalog.findIndex(c => c.id === updatedProj.id || (updatedProj.name && c.name === updatedProj.name));
+  if (existingIdx >= 0) {
+    targetCatalog[existingIdx] = meta;
+  } else {
+    targetCatalog.unshift(meta);
+  }
+  saveCatalogForAdmin(targetCatalog, newAdmin);
+  saveFeederForAdmin(updatedProj, newAdmin);
+  try {
+    localStorage.setItem("sld_proj_" + updatedProj.id, JSON.stringify(updatedProj));
+  } catch(_) {}
+
+  // 2. إذا لم يتم تحديد الاحتفاظ بنسخة، نحذف من فهرس الإدارة القديمة
+  if (!keepCopy && oldAdmin && oldAdmin !== newAdmin) {
+    let oldCatalog = getCatalogForAdmin(oldAdmin);
+    oldCatalog = oldCatalog.filter(c => c.id !== updatedProj.id && c.name !== updatedProj.name);
+    saveCatalogForAdmin(oldCatalog, oldAdmin);
+  }
+
+  // 3. إذا كان المشروع هو المشروع المفتوح حالياً، نحدث مساحة العمل
+  if (currentProject && currentProject.id === pId) {
+    currentProject = updatedProj;
+    window.currentProject = updatedProj;
+    if (typeof updateFeederInputs === "function") updateFeederInputs();
+  }
+
+  // 4. البث عبر المزامنة
+  if (typeof window.broadcastProjectUpdate === "function") {
+    try { window.broadcastProjectUpdate("transfer"); } catch(_) {}
+  }
+
+  closeTransferProjectModal();
+
+  // تحديث جدول المشاريع إذا كانت نافذة المشاريع مفتوحة
+  const projectsModal = document.getElementById("projects-manager-modal");
+  if (projectsModal && !projectsModal.classList.contains("hidden")) {
+    openProjectsManager();
+  }
+
+  showToast(`✅ تم تحويل المخطط [${updatedProj.name || updatedProj.id}] بنجاح إلى قطاع [${newSector}] - هندسة كهرباء [${newAdmin}]!`, "success");
+}
+window.submitTransferProject = submitTransferProject;
 
 

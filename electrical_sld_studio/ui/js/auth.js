@@ -557,7 +557,7 @@ function hasPermission(permKey) {
     if (editPerms.includes(permKey)) return true;
   }
   if (perms.includes("export") && (permKey === "btn_excel" || permKey === "btn_print")) return true;
-  if (perms.includes("calculations") && permKey === "btn_calculations") return true;
+  if ((perms.includes("calculations") || perms.includes("view") || perms.includes("all")) && permKey === "btn_calculations") return true;
   if (perms.includes("simulate_switching") && permKey === "btn_simulation") return true;
   if (perms.includes("settings") && (permKey === "btn_settings" || permKey === "settings")) return true;
   if (perms.includes("manage_users") && permKey === "manage_users") return true;
@@ -584,6 +584,17 @@ function applyUserPermissions() {
     btnSettings.style.display = (hasPermission("btn_settings") || hasPermission("settings")) ? "" : "none";
   }
 
+  // زر تحويل المشروع وزر التراجع الزمني للمدير العام فقط
+  const isAdmin = (currentUser && (currentUser.role === 'admin' || currentUser.id === 'admin' || currentUser.role === 'manager' || currentUser.is_developer || (typeof currentUser.name === 'string' && currentUser.name.includes('المدير'))));
+  const btnTransfer = document.getElementById("btn-transfer-project");
+  if (btnTransfer) {
+    btnTransfer.style.display = isAdmin ? "inline-flex" : "none";
+  }
+  const btnTimeline = document.getElementById("btn-admin-timeline");
+  if (btnTimeline) {
+    btnTimeline.style.display = isAdmin ? "inline-flex" : "none";
+  }
+
   // زر وضع الصيانة (يظهر للمطور فقط حصراً — مخفي تماماً عن باقي المستخدمين)
   const btnMaint = document.getElementById("btn-maintenance-mode");
   if (btnMaint) {
@@ -597,6 +608,22 @@ function applyUserPermissions() {
 
   checkMaintenanceState();
 }
+
+function isCurrentUserAdmin() {
+  if (typeof isDeveloperUser === "function" && isDeveloperUser()) return true;
+  if (!currentUser) {
+    try {
+      const s = sessionStorage.getItem("sld_user");
+      if (s) {
+        const u = JSON.parse(s);
+        return (u && (u.role === 'admin' || u.id === 'admin' || u.role === 'manager' || u.is_developer || (typeof u.name === 'string' && u.name.includes('المدير'))));
+      }
+    } catch(_) {}
+    return true; // إذا لم يُسجل الدخول بعد، يُسمح بالوصول الافتراضي
+  }
+  return (currentUser.role === 'admin' || currentUser.id === 'admin' || currentUser.role === 'manager' || currentUser.is_developer === true || (typeof currentUser.name === 'string' && currentUser.name.includes('المدير')));
+}
+window.isCurrentUserAdmin = isCurrentUserAdmin;
 
 function updateDesignerName(name) {
   const tb = document.getElementById("tb-designer-name");

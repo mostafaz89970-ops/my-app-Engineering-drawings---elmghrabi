@@ -12,17 +12,6 @@
   var urlParams = new URLSearchParams(window.location.search);
   var urlRoom = urlParams.get('room') || urlParams.get('live') || urlParams.get('channel');
   var DEFAULT_ROOM = 'mepco_elmghrabi_sync_v6';
-  var currentRoom = urlRoom || localStorage.getItem('sld_sync_room') || DEFAULT_ROOM;
-  if (urlRoom) {
-    try { localStorage.setItem('sld_sync_room', currentRoom); } catch (_) {}
-  }
-
-  // قاعدة بيانات وسحابة Firebase Realtime Database المعتمدة لحفظ ومزامنة المخططات لحظياً
-  var FIREBASE_BASE_URL = 'https://elmghrabyelectric-default-rtdb.firebaseio.com/sld_studio';
-  var FIREBASE_RTDB_URL = FIREBASE_BASE_URL; // توافق خلفي
-  var lastFirebaseTimestamp = 0;
-  var firebaseEventSource = null;
-  var isFirebaseConnected = false;
 
   function getAdminKey() {
     if (typeof window.getCurrentAdminKey === 'function') {
@@ -39,6 +28,27 @@
     } catch (_) {}
     return String(adminName).trim().replace(/\s+/g, '_');
   }
+
+  function getSyncRoom() {
+    if (urlRoom) return urlRoom;
+    var customRoom = localStorage.getItem('sld_sync_room');
+    if (customRoom && customRoom !== DEFAULT_ROOM && !customRoom.startsWith('mepco_elmghrabi_sync_')) {
+      return customRoom;
+    }
+    return DEFAULT_ROOM + '_' + getAdminKey();
+  }
+
+  var currentRoom = getSyncRoom();
+  if (urlRoom) {
+    try { localStorage.setItem('sld_sync_room', currentRoom); } catch (_) {}
+  }
+
+  // قاعدة بيانات وسحابة Firebase Realtime Database المعتمدة لحفظ ومزامنة المخططات لحظياً
+  var FIREBASE_BASE_URL = 'https://elmghrabyelectric-default-rtdb.firebaseio.com/sld_studio';
+  var FIREBASE_RTDB_URL = FIREBASE_BASE_URL; // توافق خلفي
+  var lastFirebaseTimestamp = 0;
+  var firebaseEventSource = null;
+  var isFirebaseConnected = false;
 
   function getAdminFirebaseUrl() {
     return FIREBASE_BASE_URL + '/admins/' + encodeURIComponent(getAdminKey());
@@ -253,6 +263,30 @@
     }
     if (!localProj || !localProj.nodes || !Array.isArray(localProj.nodes) || localProj.nodes.length === 0) {
       return { merged: remoteProj, addedNodes: remoteProj.nodes.length, addedSecs: (remoteProj.sections || []).length, localHadExtra: false };
+    }
+
+    // 🔒 التحقق الصارم من هوية المخطط: منع دمج مشروعين مختلفين أو مغذيين مختلفين أو إدارتين مختلفتين منعاً باتاً
+    var localId = String(localProj.id || '').trim();
+    var remoteId = String(remoteProj.id || '').trim();
+    var localAdmin = String(localProj.administration || '').trim();
+    var remoteAdmin = String(remoteProj.administration || '').trim();
+    var localName = String(localProj.name || '').trim();
+    var remoteName = String(remoteProj.name || '').trim();
+
+    // 1. إذا كانت المعرفات مختلفة، فهما مشروعان منفصلان تماماً -> لا تدمج أبداً!
+    if (localId && remoteId && localId !== remoteId) {
+      console.warn('⛔ [عزل المشاريع] تم منع دمج مشروعين مختلفين المعرف:', localId, 'مع', remoteId);
+      return { merged: localProj, addedNodes: 0, addedSecs: 0, localHadExtra: false };
+    }
+    // 2. إذا كانت الإدارات مختلفة -> لا تدمج أبداً!
+    if (localAdmin && remoteAdmin && localAdmin !== remoteAdmin) {
+      console.warn('⛔ [عزل الإدارات] تم منع دمج رسم بين إدارتين مختلفتين:', localAdmin, 'مع', remoteAdmin);
+      return { merged: localProj, addedNodes: 0, addedSecs: 0, localHadExtra: false };
+    }
+    // 3. إذا كانت أسماء الخطوط والمغذيات مختلفة -> لا تدمج أبداً!
+    if (localName && remoteName && localName !== remoteName && localName !== 'مخطط جديد' && remoteName !== 'مخطط جديد') {
+      console.warn('⛔ [عزل الخطوط] تم منع دمج مغذيين مختلفين:', localName, 'مع', remoteName);
+      return { merged: localProj, addedNodes: 0, addedSecs: 0, localHadExtra: false };
     }
 
     var merged = Object.assign({}, localProj);
@@ -1099,6 +1133,7 @@
   // إعادة ضبط وتوصيل Firebase عند تبديل الإدارة الهندسية
   function reconnectFirebaseForAdmin(adminName) {
     console.log('🔄 Reconnecting Firebase for admin workspace:', adminName);
+    currentRoom = getSyncRoom();
     lastFirebaseTimestamp = 0;
     lastDrawingUpdateTimestamp = 0;
     if (firebaseEventSource) {
