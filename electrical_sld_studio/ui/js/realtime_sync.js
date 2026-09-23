@@ -898,6 +898,65 @@
         showSyncToast(isActive ? '🚨 دخلت المنظومة في وضع الصيانة والتحديث الآن' : '✅ تم إنهاء وضع الصيانة وفتح المنظومة للجميع', isActive ? 'warning' : 'info');
       }
 
+    } else if (type === 'PROJECT_LOCK_TOGGLED' || type === 'lock_toggle') {
+      var lockProjId = data.id || data.projectId;
+      var isLocked = !!(data.is_locked !== undefined ? data.is_locked : data.isLocked);
+
+      // 1. تحديث المشروع المفتوح حالياً إذا كان هو المستهدف
+      var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+      if (curLocal && (curLocal.id === lockProjId || curLocal.name === lockProjId)) {
+        curLocal.is_locked = isLocked;
+        if (typeof window.updateProjectLockUI === 'function') {
+          window.updateProjectLockUI();
+        }
+        if (typeof window.saveFeederForAdmin === 'function') {
+          window.saveFeederForAdmin(curLocal);
+        }
+      }
+
+      // 2. تحديث التخزين المحلي للمشروع
+      try {
+        var rawLocal = localStorage.getItem('sld_proj_' + lockProjId);
+        if (rawLocal) {
+          var parsedLocal = JSON.parse(rawLocal);
+          parsedLocal.is_locked = isLocked;
+          localStorage.setItem('sld_proj_' + lockProjId, JSON.stringify(parsedLocal));
+        }
+      } catch (_) {}
+
+      // 3. تحديث الكتالوج للإدارة
+      if (typeof window.getCatalogForAdmin === 'function' && typeof window.saveCatalogForAdmin === 'function') {
+        try {
+          var curCat = window.getCatalogForAdmin();
+          var pIdx = curCat.findIndex(function(p) { return p.id === lockProjId || p.name === lockProjId; });
+          if (pIdx >= 0) {
+            curCat[pIdx].is_locked = isLocked;
+            window.saveCatalogForAdmin(curCat);
+          }
+        } catch (_) {}
+      }
+
+      // 4. تحديث جدول المشاريع إذا كانت نافذة المشاريع مفتوحة
+      var prModal = document.getElementById('projects-manager-modal');
+      if (prModal && !prModal.classList.contains('hidden') && typeof window.openProjectsManager === 'function') {
+        window.openProjectsManager();
+      }
+
+      if (isLocked) {
+        showSyncToast('🔒 قامت الإدارة بإيقاف وتجميد المشروع لمنع التعديل والعبث به', 'warning', true);
+      } else {
+        showSyncToast('🔓 قامت الإدارة بإلغاء إيقاف المشروع وتفعيله للعمل والتعديل بنجاح', 'success', true);
+      }
+      updateBadgeUI('connected');
+
+    } else if (type === 'PROJECT_SHARING_UPDATED' || type === 'sharing_update') {
+      var prModal2 = document.getElementById('projects-manager-modal');
+      if (prModal2 && !prModal2.classList.contains('hidden') && typeof window.openProjectsManager === 'function') {
+        window.openProjectsManager();
+      }
+      showSyncToast('👥 تم تحديث إدارات وصلاحيات عرض المخطط من قبل الإدارة', 'info');
+      updateBadgeUI('connected');
+
     } else if (type === 'REQUEST_FULL_SYNC') {
       respondToFullSyncRequest(payload.senderId);
 
@@ -1846,6 +1905,23 @@
     } catch (_) {}
   }
 
+  function broadcastProjectLockToggled(projectId, projectName, isLocked, adminName) {
+    var stateBool = !!isLocked;
+    postCloudEvent('PROJECT_LOCK_TOGGLED', {
+      id: projectId,
+      name: projectName,
+      is_locked: stateBool,
+      admin: adminName
+    }, 'project_lock_toggle');
+  }
+
+  function broadcastProjectSharingUpdated(projectId, visibleAdmins) {
+    postCloudEvent('PROJECT_SHARING_UPDATED', {
+      id: projectId,
+      visible_admins: visibleAdmins
+    }, 'sharing_update');
+  }
+
   // فحص حالة وضع الصيانة المركزية كل ثانية واحدة لضمان قفل/فتح المنظومة لحظياً على كافة الأجهزة
   async function pollGlobalMaintenanceHeartbeat() {
     try {
@@ -2358,6 +2434,8 @@
   window.broadcastProjectTransferred = broadcastProjectTransferred;
   window.broadcastUsersUpdate = broadcastUsersUpdate;
   window.broadcastMaintenanceState = broadcastMaintenanceState;
+  window.broadcastProjectLockToggled = broadcastProjectLockToggled;
+  window.broadcastProjectSharingUpdated = broadcastProjectSharingUpdated;
   window.openSyncModal = openSyncModal;
   window.closeSyncModal = closeSyncModal;
   window.changeSyncRoom = changeSyncRoom;

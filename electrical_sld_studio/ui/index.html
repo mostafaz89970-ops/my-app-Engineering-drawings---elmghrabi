@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>شركة مصر الوسطى لتوزيع الكهرباء | ENG-MOSTAFAELMGHRABY</title>
-  <link rel="stylesheet" href="css/style.css?v=28.4">
-  <link rel="stylesheet" href="css/canvas.css?v=28.4">
-  <link rel="stylesheet" href="css/settings.css?v=28.4">
+  <link rel="stylesheet" href="css/style.css?v=28.5">
+  <link rel="stylesheet" href="css/canvas.css?v=28.5">
+  <link rel="stylesheet" href="css/settings.css?v=28.5">
 </head>
 <body>
 
@@ -126,16 +126,16 @@
 
           <!-- مجموعة المزامنة والمشاركة اللحظية -->
           <div class="sys-btn-group" id="grp-sync" title="المزامنة والنقل اللحظي بين المتصفحات">
-            <button id="btn-reconcile-sync" class="btn-sys" onclick="reconcileAndSyncAllDevices()" title="فحص ومطابقة الرسم واستكمال أي عناصر ناقصة بين كافة الأجهزة فوراً" style="background: linear-gradient(135deg, #059669, #047857); border: 1px solid #34d399; font-weight: bold; color: #ffffff;">
+            <button id="btn-reconcile-sync" class="btn-sys" data-perm="btn_reconcile_sync" onclick="reconcileAndSyncAllDevices()" title="فحص ومطابقة الرسم واستكمال أي عناصر ناقصة بين كافة الأجهزة فوراً" style="background: linear-gradient(135deg, #059669, #047857); border: 1px solid #34d399; font-weight: bold; color: #ffffff;">
               <span>🔄 مطابقة الرسم</span>
             </button>
-            <button id="btn-share-live" class="btn-sys" onclick="copyLiveStreamLink()" title="نسخ رابط البث المباشر لإرساله لأي مهندس ليفتح المخطط ويتابع معك الرسم لحظياً" style="background: linear-gradient(135deg, #1d4ed8, #2563eb); border: 1px solid #60a5fa; color: #ffffff; font-weight: bold;">
+            <button id="btn-share-live" class="btn-sys" data-perm="btn_share_live" onclick="copyLiveStreamLink()" title="نسخ رابط البث المباشر لإرساله لأي مهندس ليفتح المخطط ويتابع معك الرسم لحظياً" style="background: linear-gradient(135deg, #1d4ed8, #2563eb); border: 1px solid #60a5fa; color: #ffffff; font-weight: bold;">
               <span>📡 بث مباشر</span>
             </button>
-            <button id="btn-copy-drawing-code" class="btn-sys" onclick="copyDrawingCodeToClipboard()" title="نسخ كود الرسم الحالي بالكامل لنقله لمتصفح فايرفوكس أو أي جهاز آخر فوراً" style="background: rgba(14, 165, 233, 0.2); border: 1px solid #0284c7; color: #38bdf8;">
+            <button id="btn-copy-drawing-code" class="btn-sys" data-perm="btn_copy_drawing_code" onclick="copyDrawingCodeToClipboard()" title="نسخ كود الرسم الحالي بالكامل لنقله لمتصفح فايرفوكس أو أي جهاز آخر فوراً" style="background: rgba(14, 165, 233, 0.2); border: 1px solid #0284c7; color: #38bdf8;">
               <span>📋 نسخ</span>
             </button>
-            <button id="btn-paste-drawing-code" class="btn-sys" onclick="pasteDrawingCodeFromClipboard()" title="لصق واستيراد كود الرسم المنقول فوراً وظهوره على الشاشة" style="background: rgba(168, 85, 247, 0.2); border: 1px solid #9333ea; color: #c084fc;">
+            <button id="btn-paste-drawing-code" class="btn-sys" data-perm="btn_paste_drawing_code" onclick="pasteDrawingCodeFromClipboard()" title="لصق واستيراد كود الرسم المنقول فوراً وظهوره على الشاشة" style="background: rgba(168, 85, 247, 0.2); border: 1px solid #9333ea; color: #c084fc;">
               <span>📥 لصق</span>
             </button>
           </div>
@@ -148,10 +148,10 @@
             <button class="btn-sys" data-perm="btn_excel" onclick="exportToExcel()" title="تصدير تقرير إكسيل هندسي مباشر">
               <span>📊 Excel</span>
             </button>
-            <button class="btn-sys btn-sys-primary" id="btn-download-project" data-perm="btn_excel" onclick="downloadProjectPPTX()" title="تحميل المشروع بالكامل كملف باور بوينت (.pptx) بنفس التنسيق والاحتواء التلقائي لفتحه في PowerPoint" style="background: linear-gradient(135deg, #1e3a8a, #2563eb); border-color: #3b82f6; font-weight: bold;">
+            <button class="btn-sys btn-sys-primary" id="btn-download-project" data-perm="btn_pptx_export" onclick="downloadProjectPPTX()" title="تحميل المشروع بالكامل كملف باور بوينت (.pptx) بنفس التنسيق والاحتواء التلقائي لفتحه في PowerPoint" style="background: linear-gradient(135deg, #1e3a8a, #2563eb); border-color: #3b82f6; font-weight: bold;">
               <span>📥 PowerPoint</span>
             </button>
-            <button class="btn-sys" id="btn-import-pptx" data-perm="btn_excel" onclick="openImportPowerPointDialog()" title="استيراد شبكة ومخطط من عرض باور بوينت (.pptx) وترتيب كل شيء تلقائياً بنظام هندسي">
+            <button class="btn-sys" id="btn-import-pptx" data-perm="btn_pptx_import" onclick="openImportPowerPointDialog()" title="استيراد شبكة ومخطط من عرض باور بوينت (.pptx) وترتيب كل شيء تلقائياً بنظام هندسي">
               <span>📥 استيراد PPT</span>
             </button>
           </div>
@@ -175,10 +175,10 @@
 
         <!-- قسم المستخدم والإعدادات واتجاه الرسم (ثابت ومحمي دائماً لمنع أي اختفاء عند تكبير الشاشة) -->
         <div class="header-user-section">
-          <!-- زر التبديل الفوري بين نمط الباور بوينت والنمط الكلاسيكي -->
-          <button id="btn-toggle-ribbon-layout" class="btn-ribbon-mode-toggle" onclick="toggleHeaderLayoutMode()" title="التبديل بين شريط الباور بوينت المبوب (Ribbon) والنمط الكلاسيكي الأصلي">
-            <span id="ribbon-mode-icon">📐</span>
-            <span id="ribbon-mode-label">نمط الباور بوينت</span>
+          <!-- زر التبديل الفوري بين النمط الخاص والنمط الكلاسيكي -->
+          <button id="btn-toggle-ribbon-layout" class="btn-ribbon-mode-toggle" onclick="toggleHeaderLayoutMode()" title="التبديل بين النمط الخاص المبوب والنمط الكلاسيكي الأصلي">
+            <span id="ribbon-mode-icon">✨</span>
+            <span id="ribbon-mode-label">نمط خاص</span>
           </button>
 
           <!-- زري اتجاه مسار الرسم لتوفير المساحة في شريط الأدوات السفلي -->
@@ -458,6 +458,17 @@
         <span><strong>تنبيه للمطور:</strong> وضع الصيانة مفعّل حالياً — المنظومة مقفلة تماماً ومحجوبة عن كافة المستخدمين ومتاحة لك فقط للتطوير والتعديل.</span>
       </div>
       <button type="button" class="btn-maint-disable" onclick="toggleMaintenanceMode()">إلغاء وضع الصيانة وفتح المنظومة للجميع ✕</button>
+    </div>
+
+    <!-- بانر المشروع الموقوف والمجمد (يظهر عند إيقاف المشروع لمنع العبث به) -->
+    <div id="project-locked-banner" class="project-locked-banner" style="display:none; background:linear-gradient(135deg, rgba(185,28,28,0.95), rgba(153,27,27,0.95)); border-bottom:1px solid #ef4444; color:#fff; padding:6px 14px; font-size:12.5px; font-weight:bold; align-items:center; justify-content:space-between; box-shadow:0 2px 8px rgba(0,0,0,0.3); z-index:90;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:16px;">🔒</span>
+        <span><strong>تنبيه إداري:</strong> هذا المخطط موقوف ومجمد حالياً من قبل الإدارة لمنع التعديل أو العبث به (وضع القراءة والاستعراض فقط).</span>
+      </div>
+      <button type="button" id="btn-unlock-banner-action" class="btn btn-xs" style="background:#15803d; border:1px solid #22c55e; color:#fff; font-size:11px; padding:3px 10px; border-radius:4px; font-weight:bold; display:none; cursor:pointer;" onclick="toggleCurrentProjectLock(false)">
+        🔓 إعادة تفعيل وتشغيل المخطط الآن
+      </button>
     </div>
 
     <!-- حاوية التنبيهات العائمة (Toast Container) -->
@@ -2435,6 +2446,31 @@
           </div>
         </div>
 
+        <!-- بطاقة توضيح المستخدم المسجل حالياً والفرع النشط (من يعمل الآن) -->
+        <div class="dev-card-section" style="background:linear-gradient(135deg, rgba(30, 58, 138, 0.25), rgba(15, 23, 42, 0.8)); border:1px solid #3b82f6; border-radius:8px; padding:12px 16px; margin-bottom:14px;">
+          <div style="font-weight:700; color:#60a5fa; font-size:13.5px; display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+            <span>👤</span> المهندس / المستخدم النشط حالياً على هذا الجهاز:
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; font-size:12px;">
+            <div>
+              <span style="color:#94a3b8;">اسم المستخدم:</span>
+              <strong id="dev-active-user-name" style="display:block; color:#f8fafc; font-size:13px; margin-top:2px;">المدير العام</strong>
+            </div>
+            <div>
+              <span style="color:#94a3b8;">الدور / الصلاحية:</span>
+              <strong id="dev-active-user-role" style="display:block; color:#38bdf8; font-size:12.5px; margin-top:2px;">المدير العام (صلاحيات كاملة)</strong>
+            </div>
+            <div>
+              <span style="color:#94a3b8;">الفرع / الإدارة:</span>
+              <strong id="dev-active-user-admin" style="display:block; color:#4ade80; font-size:12.5px; margin-top:2px;">هندسة كهرباء بني مزار شرق</strong>
+            </div>
+            <div>
+              <span style="color:#94a3b8;">القطاع:</span>
+              <strong id="dev-active-user-sector" style="display:block; color:#fcd34d; font-size:12.5px; margin-top:2px;">قطاع المنيا شمال</strong>
+            </div>
+          </div>
+        </div>
+
         <!-- بطاقة تحكم المطور: وضع الصيانة وقفل المنظومة -->
         <div class="dev-card-section" style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.35);border-radius:8px;padding:12px 14px;margin-bottom:14px;">
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
@@ -2827,19 +2863,58 @@
     </div>
   </div>
 
+  <!-- ==================== نافذة مشاركة وتحديد إدارات عرض المشروع ==================== -->
+  <div id="project-sharing-modal" class="modal hidden" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.82);z-index:3500;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(5px);">
+    <div class="modal-dialog" style="background:#1e293b; border:1px solid #475569; border-radius:12px; width:95%; max-width:560px; box-shadow:0 12px 35px rgba(0,0,0,0.75); overflow:hidden;">
+      <div class="modal-header" style="background:#0f172a; border-bottom:1px solid #334155; padding:12px 18px; display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="margin:0; font-size:15px; color:#f8fafc; display:flex; align-items:center; gap:8px;">
+          <span>👥</span> مشاركة وتحديد إدارات عرض المشروع
+        </h3>
+        <button type="button" class="modal-close-btn" onclick="closeProjectSharingModal()" style="background:transparent; border:none; color:#94a3b8; font-size:18px; cursor:pointer;" title="إغلاق">✕</button>
+      </div>
+      <div class="modal-body" style="padding:16px 20px;">
+        <input type="hidden" id="sharing-project-id">
+        <div style="margin-bottom:12px;">
+          <span style="font-size:12px; color:#94a3b8;">المخطط المحدد:</span>
+          <strong id="sharing-project-name" style="color:#38bdf8; font-size:13.5px; display:block; margin-top:2px;"></strong>
+        </div>
+        <div style="background:rgba(59,130,246,0.12); border:1px solid rgba(59,130,246,0.35); border-radius:6px; padding:9px 13px; font-size:11.5px; color:#bfdbfe; margin-bottom:14px; line-height:1.6;">
+          💡 <strong>تحكم مرن في الإدارات:</strong> حدد الفروع التي ترغب في ظهور هذا المشروع في قائمة مشاريعها، وألغِ تحديد الفروع التي ترغب في إخفائه منها. يمكنك إظهار المخطط في فرع واحد، أو عدة فروع، أو كافة الفروع معاً.
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center;">
+          <button type="button" class="btn btn-outline btn-xs" onclick="selectAllSharingAdmins(true)" style="font-size:11px; padding:3px 10px; border-color:#38bdf8; color:#38bdf8; cursor:pointer;">
+            <span>✅ تحديد الكل (إظهار للجميع)</span>
+          </button>
+          <button type="button" class="btn btn-outline btn-xs" onclick="selectAllSharingAdmins(false)" style="font-size:11px; padding:3px 10px; border-color:#f87171; color:#f87171; cursor:pointer;">
+            <span>✕ إلغاء الكل</span>
+          </button>
+        </div>
+        <div id="sharing-admins-checkboxes-container" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; max-height:240px; overflow-y:auto; padding:6px; background:#0f172a; border:1px solid #334155; border-radius:8px;">
+          <!-- يتم ملؤها ديناميكياً بقائمة الإدارات -->
+        </div>
+      </div>
+      <div class="modal-footer" style="background:#0f172a; border-top:1px solid #334155; padding:12px 18px; display:flex; justify-content:flex-end; gap:8px;">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeProjectSharingModal()">إلغاء</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="saveProjectSharingSettings()" style="background:#2563eb; border-color:#3b82f6; font-weight:bold; cursor:pointer;">
+          <span>💾 حفظ إدارات العرض والمشاركة</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script src="js/jszip.min.js"></script>
   <!-- SheetJS: تصدير Excel مباشرة من المتصفح بدون خادم -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <!-- PptxGenJS: تصدير PowerPoint مباشرة من المتصفح بدون خادم -->
   <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-  <script src="js/default_projects.js?v=28.4"></script>
-  <script src="js/auth.js?v=28.4"></script>
-  <script src="js/realtime_sync.js?v=28.4"></script>
-  <script src="js/components.js?v=28.4"></script>
-  <script src="js/simulation.js?v=28.4"></script>
-  <script src="js/canvas.js?v=28.4"></script>
-  <script src="js/app.js?v=28.4"></script>
-  <script src="js/settings.js?v=28.4"></script>
+  <script src="js/default_projects.js?v=28.5"></script>
+  <script src="js/auth.js?v=28.5"></script>
+  <script src="js/realtime_sync.js?v=28.5"></script>
+  <script src="js/components.js?v=28.5"></script>
+  <script src="js/simulation.js?v=28.5"></script>
+  <script src="js/canvas.js?v=28.5"></script>
+  <script src="js/app.js?v=28.5"></script>
+  <script src="js/settings.js?v=28.5"></script>
 </body>
 </html>
 

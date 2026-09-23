@@ -71,6 +71,7 @@ const DEFAULT_APP_SETTINGS = {
   },
   categories: [
     { id: "system",    label: "📁 أدوات النظام وإدارة المشاريع" },
+    { id: "sync",      label: "📡 أدوات المزامنة والبث والربط المباشر" },
     { id: "lines",     label: "🔌 أزرار رسم الخطوط والكابلات" },
     { id: "equipment", label: "🏭 أزرار المحطات والمعدات والمحولات" },
     { id: "control",   label: "⚡ أزرار التحكم والتحليل والمحاكاة" },
@@ -80,10 +81,19 @@ const DEFAULT_APP_SETTINGS = {
     { key: "all",                 label: "⭐ كامل الصلاحيات لجميع الأزرار والوظائف", category: "general" },
     { key: "manage_users",        label: "👥 إدارة المستخدمين وصلاحياتهم", category: "general" },
     { key: "btn_projects",        label: "📁 زر فتح واستعراض وإدارة المشاريع", category: "system" },
+    { key: "delete_project",      label: "🗑️ صلاحية حذف المشاريع نهائياً من قائمة المشاريع", category: "system" },
+    { key: "lock_project",        label: "🔒 صلاحية إيقاف وتجميد المشاريع لمنع العبث", category: "system" },
+    { key: "share_project",       label: "👥 صلاحية تحديد ومشاركة إدارات عرض المشاريع", category: "system" },
     { key: "btn_save",            label: "💾 زر حفظ المخطط الحالي", category: "system" },
     { key: "btn_print",           label: "🖨️ زر طباعة المخطط والخرطوشة", category: "system" },
-    { key: "btn_excel",           label: "📥 زر تصدير تقرير إكسيل هندسي", category: "system" },
+    { key: "btn_excel",           label: "📊 زر تصدير تقرير إكسيل هندسي", category: "system" },
+    { key: "btn_pptx_export",     label: "📥 زر تحميل وتصدير ملف باور بوينت (.pptx)", category: "system" },
+    { key: "btn_pptx_import",     label: "📥 زر استيراد شبكة من باور بوينت (.pptx)", category: "system" },
     { key: "btn_settings",        label: "⚙️ زر فتح لوحة الإعدادات الشاملة", category: "system" },
+    { key: "btn_share_live",      label: "📡 زر البث المباشر ومشاركة الشاشة لحظياً", category: "sync" },
+    { key: "btn_reconcile_sync",  label: "🔄 زر فحص ومطابقة الرسم واستكماله سحابياً", category: "sync" },
+    { key: "btn_copy_drawing_code",label: "📋 زر نسخ كود الرسم لنقله لجهاز آخر", category: "sync" },
+    { key: "btn_paste_drawing_code",label: "📥 زر لصق واستيراد كود الرسم المنقول", category: "sync" },
     { key: "btn_cable",           label: "╍ زر رسم كابل أرضي (- - -)", category: "lines" },
     { key: "btn_overhead",        label: "➖ زر رسم خط هوائي (───)", category: "lines" },
     { key: "btn_line_between",    label: "⚡ زر أخذ خط / تفريعة من بين نقطتين", category: "lines" },
@@ -111,7 +121,7 @@ const DEFAULT_APP_SETTINGS = {
       is_active: true,
       password: "123450",
       password_plain: "123450",
-      permissions: ["all", "developer", "edit_network", "export", "settings", "manage_users", "btn_projects", "btn_save", "btn_print", "btn_excel", "btn_cable", "btn_overhead", "btn_line_between", "btn_quick_line", "btn_substation", "btn_switch", "btn_trans", "btn_cascade_trans", "btn_kiosk", "btn_kiosk_from_kiosk", "btn_rmu", "btn_avr", "btn_simulation", "btn_calculations", "btn_undo", "btn_delete", "btn_settings"]
+      permissions: ["all", "developer", "edit_network", "export", "sync", "settings", "manage_users", "btn_projects", "delete_project", "lock_project", "share_project", "btn_save", "btn_print", "btn_excel", "btn_pptx_export", "btn_pptx_import", "btn_share_live", "btn_reconcile_sync", "btn_copy_drawing_code", "btn_paste_drawing_code", "btn_cable", "btn_overhead", "btn_line_between", "btn_quick_line", "btn_substation", "btn_switch", "btn_trans", "btn_cascade_trans", "btn_kiosk", "btn_kiosk_from_kiosk", "btn_rmu", "btn_avr", "btn_simulation", "btn_calculations", "btn_undo", "btn_delete", "btn_settings"]
     },
     {
       id: "planning_eng",

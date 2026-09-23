@@ -554,7 +554,9 @@ function handleLogout() {
 }
 
 function hasPermission(permKey) {
-  if (!currentUser || !currentUser.permissions) return false;
+  if (!currentUser) return false;
+  if (isCurrentUserAdmin()) return true;
+  if (!currentUser.permissions) return false;
   const perms = currentUser.permissions;
   if (perms.includes("all")) return true;
   if (perms.includes(permKey)) return true;
@@ -569,7 +571,8 @@ function hasPermission(permKey) {
     ];
     if (editPerms.includes(permKey)) return true;
   }
-  if (perms.includes("export") && (permKey === "btn_excel" || permKey === "btn_print")) return true;
+  if (perms.includes("export") && (permKey === "btn_excel" || permKey === "btn_print" || permKey === "btn_pptx_export" || permKey === "btn_pptx_import")) return true;
+  if (perms.includes("sync") && (permKey === "btn_share_live" || permKey === "btn_reconcile_sync" || permKey === "btn_copy_drawing_code" || permKey === "btn_paste_drawing_code")) return true;
   if ((perms.includes("calculations") || perms.includes("view") || perms.includes("all")) && permKey === "btn_calculations") return true;
   if (perms.includes("simulate_switching") && permKey === "btn_simulation") return true;
   if (perms.includes("settings") && (permKey === "btn_settings" || permKey === "settings")) return true;
