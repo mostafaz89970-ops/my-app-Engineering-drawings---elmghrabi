@@ -5595,16 +5595,6 @@ function getSavedFeederForAdmin(adminName = null) {
   const aKey = aName.trim().replace(/\s+/g, '_');
   const key = "sld_feeder_" + aKey;
   let data = localStorage.getItem(key);
-  if (!data) {
-    // ترحيل المخطط الأصلي لـ بني مزار شرق
-    const legacy = localStorage.getItem("sld_saved_feeder");
-    if (legacy && (aKey === "بني_مزار_شرق" || !localStorage.getItem("sld_feeder_بني_مزار_شرق"))) {
-      localStorage.setItem("sld_feeder_بني_مزار_شرق", legacy);
-      if (aKey === "بني_مزار_شرق") {
-        data = legacy;
-      }
-    }
-  }
   try {
     return data ? JSON.parse(data) : null;
   } catch(e) {
@@ -5633,13 +5623,6 @@ function getCatalogForAdmin(adminName = null) {
   const aKey = aName.trim().replace(/\s+/g, '_');
   const key = "sld_catalog_" + aKey;
   let raw = localStorage.getItem(key);
-  if (!raw) {
-    const legacy = localStorage.getItem("sld_projects_catalog");
-    if (legacy && (aKey === "بني_مزار_شرق" || !localStorage.getItem("sld_catalog_بني_مزار_شرق"))) {
-      localStorage.setItem("sld_catalog_بني_مزار_شرق", legacy);
-      if (aKey === "بني_مزار_شرق") raw = legacy;
-    }
-  }
   try {
     return raw ? JSON.parse(raw) : [];
   } catch(e) {
@@ -5663,19 +5646,11 @@ function initAdminDefaultProject(adminName) {
   const pId = "feeder_" + Date.now();
   return {
     id: pId,
-    name: "مغذي " + adminName + " 1",
-    substation: "محطة محولات " + adminName,
+    name: "مخطط جديد",
+    substation: "",
+    feeder_max_load_kva: 5000,
     voltage_kv: 11,
-    nodes: [
-      {
-        id: "N1",
-        type: "substation",
-        name: "محطة محولات " + adminName,
-        x: 400,
-        y: 80,
-        subType: "substation"
-      }
-    ],
+    nodes: [],
     sections: []
   };
 }
@@ -5696,14 +5671,53 @@ function loadAdminWorkspace(adminName) {
   const mainTitle = document.getElementById("main-system-title");
   if (mainTitle) mainTitle.textContent = "هندسة كهرباء " + adminName;
 
-  let proj = getSavedFeederForAdmin(adminName);
-  if (!proj || !proj.nodes || proj.nodes.length === 0) {
-    if (adminName === "بني مزار شرق" && window.DEFAULT_BUNDLED_PROJECTS && window.DEFAULT_BUNDLED_PROJECTS.length > 0 && !isProjectDeleted(window.DEFAULT_BUNDLED_PROJECTS[0].id, window.DEFAULT_BUNDLED_PROJECTS[0].name)) {
-      proj = JSON.parse(JSON.stringify(window.DEFAULT_BUNDLED_PROJECTS[0]));
+  const aKey = adminName.trim().replace(/\s+/g, '_');
+  const catalog = getCatalogForAdmin(adminName);
+  const validProjects = (Array.isArray(catalog) ? catalog : []).filter(p => p && !isProjectDeleted(p.id, p.name));
+
+  let proj = null;
+  if (validProjects.length === 0) {
+    // 🔒 لا توجد أي مشاريع محفوظة لهذه الإدارة: تفريغ لوحة الرسم تماماً
+    proj = {
+      id: "feeder_" + Date.now(),
+      name: "مخطط جديد",
+      substation: "",
+      feeder_max_load_kva: 5000,
+      voltage_kv: 11,
+      nodes: [],
+      sections: []
+    };
+    try {
+      localStorage.removeItem("sld_feeder_" + aKey);
+      if (aKey === "بني_مزار_شرق") {
+        localStorage.removeItem("sld_saved_feeder");
+      }
+    } catch (_) {}
+  } else {
+    // توجد مشاريع مسجلة: فحص المخطط المحفوظ الحالي
+    let saved = getSavedFeederForAdmin(adminName);
+    if (saved && saved.nodes && saved.nodes.length > 0 && !isProjectDeleted(saved.id, saved.name) && validProjects.some(vp => vp.id === saved.id || vp.name === saved.name)) {
+      proj = saved;
     } else {
-      proj = initAdminDefaultProject(adminName);
+      // فتح أول مشروع معتمد من كتالوج الإدارة
+      const firstMeta = validProjects[0];
+      try {
+        const raw = localStorage.getItem("sld_proj_" + firstMeta.id);
+        if (raw) proj = JSON.parse(raw);
+      } catch (_) {}
+      if (!proj || !proj.nodes || proj.nodes.length === 0) {
+        proj = {
+          id: firstMeta.id,
+          name: firstMeta.name || "مخطط شبكة",
+          substation: firstMeta.substation || "",
+          feeder_max_load_kva: firstMeta.feeder_max_load_kva || 5000,
+          voltage_kv: firstMeta.voltage_kv || 11,
+          nodes: [],
+          sections: []
+        };
+      }
+      saveFeederForAdmin(proj, adminName);
     }
-    saveFeederForAdmin(proj, adminName);
   }
 
   currentProject = proj;
@@ -5766,39 +5780,7 @@ function getLocalProjectsCatalog() {
   if (!Array.isArray(catalog)) catalog = [];
 
   // تصفية أي مشروع تم حذفه مسبقاً
-  catalog = catalog.filter(p => !isProjectDeleted(p.id, p.name));
-
-  // دمج المشاريع المدمجة الافتراضية إذا كانت الإدارة بني مزار شرق بشرط ألا تكون قد حُذفت عمداً
-  if (getCurrentAdminKey() === "بني_مزار_شرق" && window.DEFAULT_BUNDLED_PROJECTS && Array.isArray(window.DEFAULT_BUNDLED_PROJECTS)) {
-    let changed = false;
-    window.DEFAULT_BUNDLED_PROJECTS.forEach(bp => {
-      // إذا كان المشروع التجريبي قد حذفه المستخدم عمداً، لا يُعاد أبداً!
-      if (isProjectDeleted(bp.id, bp.name)) return;
-
-      const exists = catalog.some(p => p.id === bp.id || p.name === bp.name);
-      if (!exists) {
-        catalog.push({
-          id: bp.id,
-          name: bp.name || bp.id,
-          substation: bp.substation || "لوحة المركز",
-          voltage_kv: bp.voltage_kv || 11,
-          nodes_count: (bp.nodes || []).length,
-          sections_count: (bp.sections || []).length,
-          updated_at: bp.updated_at || "مخطط معتمد",
-          administration: "بني مزار شرق"
-        });
-        changed = true;
-        try {
-          if (!localStorage.getItem("sld_proj_" + bp.id)) {
-            localStorage.setItem("sld_proj_" + bp.id, JSON.stringify(bp));
-          }
-        } catch(e) {}
-      }
-    });
-    if (changed) {
-      saveCatalogForAdmin(catalog);
-    }
-  }
+  catalog = catalog.filter(p => p && !isProjectDeleted(p.id, p.name));
   return catalog;
 }
 
@@ -5965,23 +5947,7 @@ async function openProjectsManager() {
   }
 
   // تصفية المشاريع المحذوفة نهائياً ومنع عودتها
-  projects = projects.filter(p => !isProjectDeleted(p.id, p.name));
-
-  // ضمان عدم فراغ القائمة عبر المشاريع المدمجة غير المحذوفة فقط
-  if (projects.length === 0 && window.DEFAULT_BUNDLED_PROJECTS) {
-    projects = window.DEFAULT_BUNDLED_PROJECTS
-      .filter(bp => !isProjectDeleted(bp.id, bp.name))
-      .map(bp => ({
-        id: bp.id,
-        name: bp.name || bp.id,
-        substation: bp.substation || "محطة محولات",
-        voltage_kv: bp.voltage_kv || 11,
-        nodes_count: (bp.nodes || []).length,
-        sections_count: (bp.sections || []).length,
-        updated_at: bp.updated_at || "مخطط معتمد",
-        administration: "بني مزار شرق"
-      }));
-  }
+  projects = projects.filter(p => p && !isProjectDeleted(p.id, p.name));
 
   renderProjectsTable(projects, isServerOnline);
 }

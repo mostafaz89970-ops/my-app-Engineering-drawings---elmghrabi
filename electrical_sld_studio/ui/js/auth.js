@@ -457,7 +457,7 @@ async function handleLogin(e) {
     window.loadAdminWorkspace(adminName);
   } else {
     const key = "sld_feeder_" + adminName.trim().replace(/\s+/g, '_');
-    const savedLocal = localStorage.getItem(key) || localStorage.getItem("sld_saved_feeder");
+    const savedLocal = localStorage.getItem(key);
     if (savedLocal) {
       try {
         const parsed = JSON.parse(savedLocal);
@@ -469,8 +469,20 @@ async function handleLogin(e) {
           if (window.fitToScreen) window.fitToScreen();
         }
       } catch(e) {}
-    } else if (window.loadDemoVideoProject) {
-      window.loadDemoVideoProject();
+    } else {
+      const emptyProj = {
+        id: "feeder_" + Date.now(),
+        name: "مخطط جديد",
+        substation: "",
+        voltage_kv: 11,
+        feeder_max_load_kva: 5000,
+        nodes: [],
+        sections: []
+      };
+      if (typeof currentProject !== "undefined") currentProject = emptyProj;
+      window.currentProject = emptyProj;
+      if (window.updateFeederInputs) window.updateFeederInputs();
+      if (window.renderNetwork) window.renderNetwork();
     }
   }
 
@@ -715,7 +727,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       window.loadAdminWorkspace(adminName);
     } else {
       const key = "sld_feeder_" + adminName.trim().replace(/\s+/g, '_');
-      const savedLocal = localStorage.getItem(key) || localStorage.getItem("sld_saved_feeder");
+      const savedLocal = localStorage.getItem(key);
       if (savedLocal) {
         try {
           const parsed = JSON.parse(savedLocal);
