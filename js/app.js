@@ -8422,4 +8422,217 @@ async function submitTransferProject() {
 }
 window.submitTransferProject = submitTransferProject;
 
+/* ==========================================================================
+   PowerPoint Ribbon Layout Controller (التحكم في شريط الباور بوينت والتبديل)
+   ========================================================================== */
+
+window.getHeaderLayoutMode = function() {
+  return localStorage.getItem("sld_header_layout_mode") || "ribbon";
+};
+
+window.setHeaderLayoutMode = function(mode) {
+  localStorage.setItem("sld_header_layout_mode", mode);
+};
+
+window.switchRibbonTab = function(tabId) {
+  const tabs = document.querySelectorAll(".ribbon-tab-btn");
+  const panes = document.querySelectorAll(".ribbon-tab-pane");
+
+  tabs.forEach(btn => {
+    if (btn.getAttribute("data-tab") === tabId) {
+      btn.classList.add("active");
+    } else {
+      btn.classList.remove("active");
+    }
+  });
+
+  panes.forEach(pane => {
+    if (pane.id === tabId) {
+      pane.classList.add("active");
+    } else {
+      pane.classList.remove("active");
+    }
+  });
+
+  localStorage.setItem("sld_ribbon_active_tab", tabId);
+};
+
+window.applyHeaderLayout = function(mode) {
+  const isRibbon = (mode === "ribbon");
+  document.body.setAttribute("data-header-mode", isRibbon ? "ribbon" : "classic");
+
+  const toggleIcon = document.getElementById("ribbon-mode-icon");
+  const toggleLabel = document.getElementById("ribbon-mode-label");
+  const toggleBtn = document.getElementById("btn-toggle-ribbon-layout");
+
+  if (toggleIcon) toggleIcon.textContent = isRibbon ? "📋" : "📐";
+  if (toggleLabel) toggleLabel.textContent = isRibbon ? "النمط الكلاسيكي" : "نمط الباور بوينت";
+  if (toggleBtn) {
+    toggleBtn.title = isRibbon 
+      ? "الرجوع فوراً للنمط الكلاسيكي الأصلي ذو الثلاثة صفوف" 
+      : "التبديل إلى نمط شريط الباور بوينت المبوب (PowerPoint Ribbon)";
+  }
+
+  // مراجع الحاويات
+  const paneHome = document.getElementById("pane-home");
+  const paneElements = document.getElementById("pane-elements");
+  const paneFeeder = document.getElementById("pane-feeder");
+  const paneSimulation = document.getElementById("pane-simulation");
+  const paneExport = document.getElementById("pane-export");
+  const paneSystem = document.getElementById("pane-system");
+
+  const classicSysActions = document.getElementById("classic-system-actions");
+  const classicRow2 = document.getElementById("classic-row2");
+  const classicRow3 = document.getElementById("classic-row3");
+  const headerTopRow = document.querySelector(".header-top-row");
+  const headerUserSec = document.querySelector(".header-user-section");
+  const userSep = headerUserSec ? headerUserSec.querySelector(".header-user-sep") : null;
+
+  // المجموعات والعناصر
+  const grpProjects = document.getElementById("grp-projects");
+  const grpSync = document.getElementById("grp-sync");
+  const grpExport = document.getElementById("grp-export");
+  const grpView = document.getElementById("grp-view");
+  const cloudBadge = document.getElementById("cloud-sync-badge");
+
+  const grpFeederCapsule = document.getElementById("grp-feeder-capsule");
+  const feederMetricsCapsule = document.getElementById("feeder-metrics-capsule");
+  const nodeSearchCapsule = document.getElementById("node-search-capsule");
+  const grpLines = document.getElementById("grp-lines");
+  const grpSubstationsSwitches = document.getElementById("grp-substations-switches");
+  const grpKiosks = document.getElementById("grp-kiosks");
+  const grpAnnotations = document.getElementById("grp-annotations");
+
+  const grpTransformers = document.getElementById("grp-transformers");
+  const grpRmu = document.getElementById("grp-rmu");
+  const backupGroup = document.getElementById("backup-group");
+  const grpSimulation = document.getElementById("grp-simulation");
+  const grpEditControl = document.getElementById("grp-edit-control");
+
+  const dirGroup = document.getElementById("cad-group-drawing-dir");
+  const btnMaint = document.getElementById("btn-maintenance-mode");
+  const btnSettings = document.getElementById("btn-settings");
+
+  if (isRibbon) {
+    // 1. تبويب الرئيسية (Home)
+    if (paneHome) {
+      if (grpProjects) paneHome.appendChild(grpProjects);
+      if (grpEditControl) paneHome.appendChild(grpEditControl);
+      if (grpView) paneHome.appendChild(grpView);
+    }
+
+    // 2. تبويب عناصر الشبكة (Grid Elements)
+    if (paneElements) {
+      if (grpLines) paneElements.appendChild(grpLines);
+      if (grpSubstationsSwitches) paneElements.appendChild(grpSubstationsSwitches);
+      if (grpKiosks) paneElements.appendChild(grpKiosks);
+      if (grpTransformers) paneElements.appendChild(grpTransformers);
+      if (grpRmu) paneElements.appendChild(grpRmu);
+      if (grpAnnotations) paneElements.appendChild(grpAnnotations);
+    }
+
+    // 3. تبويب بيانات المغذي (Feeder Info)
+    if (paneFeeder) {
+      if (grpFeederCapsule) paneFeeder.appendChild(grpFeederCapsule);
+      if (feederMetricsCapsule) paneFeeder.appendChild(feederMetricsCapsule);
+      if (dirGroup) paneFeeder.appendChild(dirGroup);
+    }
+
+    // 4. تبويب المحاكاة والتشغيل (Simulation & Operations)
+    if (paneSimulation) {
+      if (grpSimulation) paneSimulation.appendChild(grpSimulation);
+    }
+
+    // 5. تبويب التصدير والطباعة والمشاركة (Export & Share)
+    if (paneExport) {
+      if (grpExport) paneExport.appendChild(grpExport);
+      if (grpSync) paneExport.appendChild(grpSync);
+    }
+
+    // 6. تبويب النظام والإدارة (System & Tools)
+    if (paneSystem) {
+      if (backupGroup) paneSystem.appendChild(backupGroup);
+      if (btnSettings) paneSystem.appendChild(btnSettings);
+      if (btnMaint) paneSystem.appendChild(btnMaint);
+      if (cloudBadge) paneSystem.appendChild(cloudBadge);
+    }
+
+    // كبسولة البحث الفوري تكون متاحة في الصف العلوي بجوار بيانات المستخدم
+    if (headerTopRow && nodeSearchCapsule && headerUserSec) {
+      headerTopRow.insertBefore(nodeSearchCapsule, headerUserSec);
+    }
+
+    // تفعيل التبويب النشط المحفوظ
+    const savedTab = localStorage.getItem("sld_ribbon_active_tab") || "pane-home";
+    window.switchRibbonTab(savedTab);
+
+  } else {
+    // إعادة جميع العناصر إلى الصفوف الكلاسيكية الأصلية
+    if (classicSysActions) {
+      if (grpProjects) classicSysActions.appendChild(grpProjects);
+      if (grpSync) classicSysActions.appendChild(grpSync);
+      if (grpExport) classicSysActions.appendChild(grpExport);
+      if (grpView) classicSysActions.appendChild(grpView);
+      if (cloudBadge) classicSysActions.appendChild(cloudBadge);
+    }
+
+    if (classicRow2) {
+      if (grpFeederCapsule) classicRow2.appendChild(grpFeederCapsule);
+      if (feederMetricsCapsule) classicRow2.appendChild(feederMetricsCapsule);
+      if (nodeSearchCapsule) classicRow2.appendChild(nodeSearchCapsule);
+      if (grpLines) classicRow2.appendChild(grpLines);
+      if (grpSubstationsSwitches) classicRow2.appendChild(grpSubstationsSwitches);
+      if (grpKiosks) classicRow2.appendChild(grpKiosks);
+      if (grpAnnotations) classicRow2.appendChild(grpAnnotations);
+    }
+
+    if (classicRow3) {
+      if (grpTransformers) classicRow3.appendChild(grpTransformers);
+      if (grpRmu) classicRow3.appendChild(grpRmu);
+      if (backupGroup) classicRow3.appendChild(backupGroup);
+      if (grpSimulation) classicRow3.appendChild(grpSimulation);
+      if (grpEditControl) classicRow3.appendChild(grpEditControl);
+    }
+
+    if (headerUserSec && userSep) {
+      if (dirGroup) headerUserSec.insertBefore(dirGroup, userSep);
+      if (btnMaint) headerUserSec.insertBefore(btnMaint, userSep);
+      if (btnSettings) headerUserSec.insertBefore(btnSettings, userSep.nextSibling);
+    }
+  }
+
+  // إعادة فحص الصلاحيات لتحديث ظهور الأزرار المقيدة
+  if (typeof applyUserPermissions === "function") {
+    try { applyUserPermissions(); } catch (_) {}
+  }
+};
+
+window.toggleHeaderLayoutMode = function() {
+  const currentMode = window.getHeaderLayoutMode();
+  const nextMode = (currentMode === "ribbon") ? "classic" : "ribbon";
+  window.setHeaderLayoutMode(nextMode);
+  window.applyHeaderLayout(nextMode);
+
+  if (typeof showToast === "function") {
+    if (nextMode === "ribbon") {
+      showToast("📐 تم التبديل إلى نمط الباور بوينت المبوب (PowerPoint Ribbon)", "info");
+    } else {
+      showToast("📋 تم الرجوع إلى النمط الكلاسيكي الأصلي بنجاح", "info");
+    }
+  }
+};
+
+window.initHeaderLayout = function() {
+  const mode = window.getHeaderLayoutMode();
+  window.applyHeaderLayout(mode);
+};
+
+// تشغيل التهيئة التلقائية للواجهة
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", window.initHeaderLayout);
+} else {
+  window.initHeaderLayout();
+}
+
+
 
