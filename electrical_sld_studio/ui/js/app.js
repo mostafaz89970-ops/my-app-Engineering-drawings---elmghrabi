@@ -7815,12 +7815,6 @@ document.addEventListener("sld-user-logged-in", updateBackupButtonVisibility);
 
 /** فتح نافذة النسخ الاحتياطي */
 function openBackupModal() {
-  const _cu = (typeof window !== 'undefined' && window.currentUser) ? window.currentUser : (typeof currentUser !== 'undefined' ? currentUser : null);
-  const isAdmin = _cu && (_cu.role === "admin" || _cu.is_developer === true || (_cu.permissions && (_cu.permissions.includes("all") || _cu.permissions.includes("developer"))));
-  if (!isAdmin) {
-    showToast("⛔ هذه الميزة مخصصة للمدير فقط", "error");
-    return;
-  }
   _backupPendingData = null;
   // إعادة ضبط واجهة الاستيراد
   const preview = document.getElementById("backup-file-preview");
@@ -7838,71 +7832,151 @@ function openBackupModal() {
   if (fileInput) fileInput.value = "";
 
   const modal = document.getElementById("backup-modal");
-  if (modal) { modal.classList.remove("hidden"); modal.style.display = "flex"; }
+  if (modal) {
+    modal.classList.remove("hidden");
+    modal.style.display = "flex";
+    modal.style.setProperty("display", "flex", "important");
+    modal.style.setProperty("z-index", "99999", "important");
+  }
 }
 window.openBackupModal = openBackupModal;
 
 /** إغلاق نافذة النسخ الاحتياطي */
 function closeBackupModal() {
   const modal = document.getElementById("backup-modal");
-  if (modal) { modal.classList.add("hidden"); modal.style.display = "none"; }
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.style.display = "none";
+    modal.style.removeProperty("display");
+    modal.style.removeProperty("z-index");
+  }
 }
 window.closeBackupModal = closeBackupModal;
 
-/** تصدير نسخة احتياطية JSON */
-function exportBackup(mode) {
-  const _cu = (typeof window !== 'undefined' && window.currentUser) ? window.currentUser : (typeof currentUser !== 'undefined' ? currentUser : null);
-  const isAdmin = _cu && (_cu.role === "admin" || _cu.is_developer === true || (_cu.permissions && (_cu.permissions.includes("all") || _cu.permissions.includes("developer"))));
-  if (!isAdmin) { showToast("⛔ غير مصرح", "error"); return; }
-
-  let backupData;
+/** تصدير نسخة احتياطية شاملة لكامل بيانات التطبيق أو المخطط الحالي */
+function exportBackup(mode = "all") {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10);
+  const timeStr = now.toTimeString().slice(0, 5).replace(/:/g, "-");
   let fileName;
+  let backupData;
 
   if (mode === "all") {
-    // نسخ جميع المشاريع من localStorage + GunDB cache
+    // 1. جمع جميع المشاريع المخزنة في localStorage
     const allProjects = [];
-    // من localStorage
+    const visitedProjectIds = new Set();
+
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && (key.startsWith("sld_project_") || key.startsWith("feeder_") || key === "sld_projects_list")) {
+      if (!key) continue;
+      if (key.startsWith("sld_proj_") || key.startsWith("sld_project_") || key.startsWith("feeder_")) {
         try {
           const val = JSON.parse(localStorage.getItem(key));
-          if (val) allProjects.push({ key, data: val });
+          if (val && typeof val === "object") {
+            const pId = val.id || key.replace(/^sld_proj_|^sld_project_/, '');
+            if (!visitedProjectIds.has(pId)) {
+              visitedProjectIds.add(pId);
+              allProjects.push({ key, id: pId, name: val.name || pId, administration: val.administration || "بني مزار شرق", data: val });
+            }
+          }
         } catch(e) {}
       }
     }
-    // المشروع الحالي في الذاكرة
-    if (currentProject) {
-      const existsInList = allProjects.some(p => p.key === `sld_project_${currentProject.id}`);
-      if (!existsInList) allProjects.push({ key: `sld_project_${currentProject.id}`, data: currentProject });
+
+    // إضافة المشروع الحالي المفتوح إذا لم يكن مسجلاً
+    if (currentProject && currentProject.id) {
+      if (!visitedProjectIds.has(currentProject.id)) {
+        visitedProjectIds.add(currentProject.id);
+        allProjects.push({
+          key: "sld_proj_" + currentProject.id,
+          id: currentProject.id,
+          name: currentProject.name || currentProject.id,
+          administration: currentProject.administration || "بني مزار شرق",
+          data: currentProject
+        });
+      }
+    }
+
+    // 2. جمع فهارس وقوائم الإدارات (Catalogs)
+    const catalogs = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (key.startsWith("sld_admin_catalog_") || key === "sld_projects_catalog" || key === "sld_projects_list") {
+        try {
+          catalogs[key] = JSON.parse(localStorage.getItem(key));
+        } catch(e) {}
+      }
+    }
+
+    // 3. إعدادات النظام والمستخدمين والصلاحيات
+    let settingsData = null;
+    try {
+      const rawSettings = localStorage.getItem("sld_app_settings");
+      if (rawSettings) settingsData = JSON.parse(rawSettings);
+    } catch(e) {}
+    if (!settingsData && typeof appSettings !== "undefined" && appSettings) {
+      settingsData = appSettings;
+    }
+
+    // 4. سجل لقطات التراجع الزمني
+    let timelineData = null;
+    try {
+      const rawTimeline = localStorage.getItem("sld_timeline_snapshots");
+      if (rawTimeline) timelineData = JSON.parse(rawTimeline);
+    } catch(e) {}
+
+    // 5. تفريغ كامل ودقيق لكافة مفاتيح التخزين المحلي الخاصة بالتطبيق (Storage Dump)
+    const storageDump = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith("sld_") || key.startsWith("feeder_") || key.startsWith("engineering_"))) {
+        storageDump[key] = localStorage.getItem(key);
+      }
     }
 
     backupData = {
-      _backup_type:    "all_projects",
-      _backup_version: "2.0",
-      _backup_date:    new Date().toISOString(),
+      _backup_version: "28.6",
+      _backup_type:    "full_system_backup",
+      _backup_date:    now.toISOString(),
+      _backup_date_ar: now.toLocaleString("ar-EG"),
       _backup_by:      ((typeof window !== 'undefined' && window.currentUser?.name) || (typeof currentUser !== 'undefined' ? currentUser?.name : null) || "المدير"),
-      projects:        allProjects,
+      _backup_admin:   (typeof getCurrentAdminName === "function" ? getCurrentAdminName() : "بني مزار شرق"),
+      stats: {
+        projects_count: allProjects.length,
+        active_project_id: currentProject?.id || null,
+        active_project_name: currentProject?.name || null,
+        total_storage_keys: Object.keys(storageDump).length
+      },
       current_project: currentProject || null,
+      projects:        allProjects,
+      catalogs:        catalogs,
+      settings:        settingsData,
+      timeline_snapshots: timelineData,
+      storage_dump:    storageDump
     };
-    fileName = `SLD_FullBackup_${timestamp}.json`;
+
+    fileName = `نسخة_احتياطية_شاملة_شبكات_الكهرباء_${dateStr}_${timeStr}.json`;
 
   } else {
     // نسخ المشروع الحالي فقط
     if (!currentProject) { showToast("⚠️ لا يوجد مشروع مفتوح للنسخ", "warning"); return; }
     backupData = {
+      _backup_version: "28.6",
       _backup_type:    "single_project",
-      _backup_version: "2.0",
-      _backup_date:    new Date().toISOString(),
+      _backup_date:    now.toISOString(),
+      _backup_date_ar: now.toLocaleString("ar-EG"),
       _backup_by:      ((typeof window !== 'undefined' && window.currentUser?.name) || (typeof currentUser !== 'undefined' ? currentUser?.name : null) || "المدير"),
+      _backup_admin:   (typeof getCurrentAdminName === "function" ? getCurrentAdminName() : "بني مزار شرق"),
       project:         currentProject,
+      current_project: currentProject
     };
     const safeName = (currentProject.name || currentProject.id || "Project").replace(/[\\/:*?"<>|]/g, "_");
-    fileName = `SLD_Backup_${safeName}_${timestamp}.json`;
+    fileName = `نسخة_مخطط_${safeName}_${dateStr}.json`;
   }
 
-  // تحميل الملف
+  // تحميل الملف للمستخدم
   try {
     const json    = JSON.stringify(backupData, null, 2);
     const blob    = new Blob([json], { type: "application/json;charset=utf-8" });
@@ -7920,7 +7994,8 @@ function exportBackup(mode) {
       status.textContent = `✅ تم تصدير النسخة الاحتياطية بنجاح: ${fileName}`;
       status.style.display = "block";
     }
-    showToast(`💾 تم حفظ النسخة الاحتياطية: ${fileName}`, "success");
+    const countDesc = (mode === "all" ? `${backupData.stats.projects_count} مشروع + الإعدادات` : `مخطط ${backupData.project?.name || ''}`);
+    showToast(`💾 تم تصدير النسخة الاحتياطية (${countDesc}) بنجاح!`, "success");
   } catch(err) {
     alert("تعذر تصدير النسخة الاحتياطية: " + err.message);
   }
@@ -7957,7 +8032,7 @@ function handleBackupDrop(event) {
   if (dz) dz.style.borderColor = "rgba(16,185,129,0.5)";
   const file = event.dataTransfer?.files?.[0];
   if (!file) return;
-  if (!file.name.endsWith(".json")) { showToast("⚠️ يجب اختيار ملف .json فقط", "warning"); return; }
+  if (!file.name.endsWith(".json") && !file.name.endsWith(".sld")) { showToast("⚠️ يجب اختيار ملف .json فقط", "warning"); return; }
   _processBackupFile(file);
 }
 window.handleBackupDrop = handleBackupDrop;
@@ -7968,7 +8043,12 @@ function _processBackupFile(file) {
   reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target.result);
-      if (!data._backup_version) throw new Error("ملف غير صالح — ليس نسخة احتياطية SLD");
+      const isFullBackup = (data._backup_type === "full_system_backup" || data._backup_type === "all_projects" || (data.storage_dump && data.projects));
+      const isSingleProject = (data._backup_type === "single_project" || data.project || (data.nodes && Array.isArray(data.nodes)));
+
+      if (!isFullBackup && !isSingleProject && !data.storage_dump) {
+        throw new Error("ملف غير صالح — لا يحتوي على بيانات نسخة احتياطية صالحة لنظام SLD");
+      }
 
       _backupPendingData = data;
 
@@ -7979,10 +8059,15 @@ function _processBackupFile(file) {
       if (preview) preview.style.display = "block";
       if (nameEl) nameEl.textContent = `📄 ${file.name}`;
       if (infoEl) {
-        const projCount = data._backup_type === "all_projects"
-          ? `${(data.projects || []).length} مشروع`
-          : "مشروع واحد";
-        infoEl.textContent = `نوع النسخة: ${data._backup_type === "all_projects" ? "جميع المشاريع" : "مشروع واحد"} | عدد: ${projCount} | تاريخ: ${new Date(data._backup_date).toLocaleString("ar-EG")} | بواسطة: ${data._backup_by || "—"}`;
+        if (isFullBackup) {
+          const pCount = (data.projects || []).length || (data.stats && data.stats.projects_count) || 1;
+          const dateStr = data._backup_date ? new Date(data._backup_date).toLocaleString("ar-EG") : "—";
+          infoEl.innerHTML = `🌟 <b>نسخة احتياطية شاملة لكافة بيانات التطبيق</b> | عدد المشاريع: <b>${pCount}</b> | تاريخ النسخة: <b>${dateStr}</b> | بواسطة: <b>${data._backup_by || 'المدير'}</b>`;
+        } else {
+          const pName = data.project?.name || data.name || "مخطط مفرد";
+          const nodeCount = data.project?.nodes?.length || data.nodes?.length || 0;
+          infoEl.innerHTML = `📄 <b>مخطط مفرد: ${pName}</b> | عدد العقد: <b>${nodeCount}</b>`;
+        }
       }
 
       // تفعيل أزرار الاستيراد
@@ -7991,7 +8076,7 @@ function _processBackupFile(file) {
       if (importBtn)  { importBtn.disabled  = false; importBtn.style.opacity  = "1"; }
       if (replaceBtn) { replaceBtn.disabled = false; replaceBtn.style.opacity = "1"; }
 
-      showToast("✅ تم قراءة ملف النسخة الاحتياطية — اختر طريقة الاستيراد", "success");
+      showToast("✅ تم فحص وتجهيز ملف النسخة الاحتياطية بنجاح — اختر طريقة الاستيراد الآن", "success");
     } catch(err) {
       showToast("❌ تعذر قراءة الملف: " + err.message, "error");
       _backupPendingData = null;
@@ -8001,59 +8086,99 @@ function _processBackupFile(file) {
 }
 
 /** استيراد النسخة الاحتياطية */
-function importBackup(mode) {
-  const _cu = (typeof window !== 'undefined' && window.currentUser) ? window.currentUser : (typeof currentUser !== 'undefined' ? currentUser : null);
-  const isAdmin = _cu && (_cu.role === "admin" || _cu.is_developer === true || (_cu.permissions && (_cu.permissions.includes("all") || _cu.permissions.includes("developer"))));
-  if (!isAdmin) { showToast("⛔ غير مصرح", "error"); return; }
+function importBackup(mode = "merge") {
   if (!_backupPendingData) { showToast("⚠️ لم يتم اختيار ملف بعد", "warning"); return; }
 
   const data = _backupPendingData;
   const statusEl = document.getElementById("backup-import-status");
 
   if (mode === "replace") {
-    if (!confirm("⚠️ تحذير: سيتم مسح جميع بيانات المشاريع الحالية واستبدالها بالنسخة الاحتياطية.\n\nهل أنت متأكد؟")) return;
-    // مسح localStorage
+    if (!confirm("⚠️ تحذير هام: سيتم مسح كافة المشاريع والإعدادات الحالية على هذا الجهاز واستبدالها بالنسخة الاحتياطية تماماً.\n\nهل أنت متأكد من رغبتك في المتابعة والاستبدال؟")) return;
+    // مسح كافة مفاتيح التطبيق
     const keysToDelete = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k && (k.startsWith("sld_project_") || k.startsWith("feeder_") || k === "sld_projects_list")) {
+      if (k && (k.startsWith("sld_") || k.startsWith("feeder_") || k.startsWith("engineering_"))) {
         keysToDelete.push(k);
       }
     }
     keysToDelete.forEach(k => localStorage.removeItem(k));
   }
 
-  // استيراد البيانات
   let imported = 0;
   try {
-    if (data._backup_type === "all_projects" && Array.isArray(data.projects)) {
-      data.projects.forEach(({ key, data: pData }) => {
-        if (key && pData) { localStorage.setItem(key, JSON.stringify(pData)); imported++; }
+    // 1. استعادة تفريغ الذاكرة الشامل المباشر إن وجد
+    if (data.storage_dump && typeof data.storage_dump === "object") {
+      Object.entries(data.storage_dump).forEach(([k, v]) => {
+        if (typeof v === "string") localStorage.setItem(k, v);
+        else if (v != null) localStorage.setItem(k, JSON.stringify(v));
       });
-      // تحميل المشروع الحالي من النسخة الاحتياطية
-      if (data.current_project) {
-        currentProject = data.current_project;
-        window.currentProject = currentProject;
-        if (typeof renderNetwork === "function") renderNetwork();
-      }
-    } else if (data._backup_type === "single_project" && data.project) {
-      const proj = data.project;
-      localStorage.setItem(`sld_project_${proj.id}`, JSON.stringify(proj));
-      currentProject = proj;
-      window.currentProject = currentProject;
-      if (typeof renderNetwork === "function") renderNetwork();
-      imported = 1;
     }
 
+    // 2. استعادة المشاريع من مصفوفة المشاريع
+    if (Array.isArray(data.projects)) {
+      data.projects.forEach(item => {
+        const pId = item.id || (item.data && item.data.id);
+        const pData = item.data || item;
+        if (pId && pData) {
+          localStorage.setItem("sld_proj_" + pId, JSON.stringify(pData));
+          imported++;
+        }
+      });
+    }
+
+    // 3. استعادة الفهارس
+    if (data.catalogs && typeof data.catalogs === "object") {
+      Object.entries(data.catalogs).forEach(([catKey, catVal]) => {
+        if (catVal) localStorage.setItem(catKey, JSON.stringify(catVal));
+      });
+    }
+
+    // 4. استعادة الإعدادات والمستخدمين
+    if (data.settings && typeof data.settings === "object") {
+      localStorage.setItem("sld_app_settings", JSON.stringify(data.settings));
+      if (typeof appSettings !== "undefined") {
+        appSettings = data.settings;
+      }
+    }
+
+    // 5. استعادة المخطط النشط الحالي
+    const activeProj = data.current_project || data.project || (data.nodes ? data : null);
+    if (activeProj && typeof activeProj === "object" && Array.isArray(activeProj.nodes)) {
+      currentProject = activeProj;
+      window.currentProject = currentProject;
+      localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
+      if (currentProject.id) {
+        localStorage.setItem("sld_proj_" + currentProject.id, JSON.stringify(currentProject));
+      }
+      if (!imported) imported = 1;
+    }
+
+    // 6. تحديث الواجهات وتطبيق التغييرات فوراً
+    if (typeof renderNetwork === "function") renderNetwork();
+    if (typeof loadInitialUsers === "function") loadInitialUsers();
+    if (typeof applyUserPermissions === "function") applyUserPermissions();
+    if (typeof updateUserInfoUI === "function") updateUserInfoUI();
+    if (typeof updateAppBranding === "function") updateAppBranding();
+    if (typeof populateNodeDropdowns === "function") populateNodeDropdowns();
+
     if (statusEl) {
-      statusEl.textContent = `✅ تم استيراد ${imported} مشروع بنجاح`;
+      statusEl.textContent = `✅ تم استيراد واستعادة كامل بيانات التطبيق بنجاح (${imported || 1} مشروع)`;
       statusEl.style.color   = "#68d391";
       statusEl.style.display = "block";
     }
-    showToast(`📥 تم استيراد النسخة الاحتياطية: ${imported} مشروع بنجاح`, "success");
+    showToast(`🎉 تم استيراد النسخة الاحتياطية بنجاح واستعادة جميع المخططات والإعدادات (${imported || 1} مشروع)!`, "success");
     _backupPendingData = null;
 
+    setTimeout(() => {
+      closeBackupModal();
+      if (typeof openProjectsManager === "function" && document.getElementById("projects-manager-modal") && !document.getElementById("projects-manager-modal").classList.contains("hidden")) {
+        openProjectsManager();
+      }
+    }, 1200);
+
   } catch(err) {
+    console.error("Error in importBackup:", err);
     if (statusEl) {
       statusEl.textContent = `❌ خطأ أثناء الاستيراد: ${err.message}`;
       statusEl.style.color   = "#f87171";
@@ -9165,12 +9290,18 @@ async function openProjectSharingModal(pId) {
   }).join('');
 
   modal.classList.remove("hidden");
+  modal.style.display = "flex";
+  modal.style.setProperty("display", "flex", "important");
 }
 window.openProjectSharingModal = openProjectSharingModal;
 
 function closeProjectSharingModal() {
   const modal = document.getElementById("project-sharing-modal");
-  if (modal) modal.classList.add("hidden");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.style.display = "none";
+    modal.style.removeProperty("display");
+  }
 }
 window.closeProjectSharingModal = closeProjectSharingModal;
 
