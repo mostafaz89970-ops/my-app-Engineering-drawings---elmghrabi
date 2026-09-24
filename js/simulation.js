@@ -81,9 +81,9 @@ const SimulationEngine = {
       }
     });
 
-    // خريطة حالة السكاكين (مفتوحة أو مغلقة)
+    // خريطة حالة السكاكين ومفاتيح LBS (مفتوحة أو مغلقة)
     const switchOpenMap = {};
-    nodes.filter(n => n.type === "switch").forEach(sw => {
+    nodes.filter(n => n.type === "switch" || n.type === "lbs").forEach(sw => {
       switchOpenMap[sw.id] = (sw.state === "open");
     });
 
@@ -106,9 +106,9 @@ const SimulationEngine = {
 
         if (!nextNode) continue;
 
-        // إذا كانت العقدة الحالية سكينة وهي مفتوحة:
-        // السكينة المفتوحة تسمح بمرور الكهرباء فقط للخطوط المتفرعة قبل السكينة (على الخط الرئيسي المغذي)
-        if (currentNode && currentNode.type === "switch" && switchOpenMap[currentId]) {
+        // إذا كانت العقدة الحالية سكينة أو مفتاح LBS وهي مفتوحة:
+        // المفتاح المفتوح يسمح بمرور الكهرباء فقط للخطوط المتفرعة قبل السكينة (على الخط الرئيسي المغذي)
+        if (currentNode && (currentNode.type === "switch" || currentNode.type === "lbs") && switchOpenMap[currentId]) {
           const isBefore = this.isSectionBeforeSwitch(sec, currentNode, nextNode);
           if (!isBefore) {
             // هذا الخط يقع بعد سيف السكينة والسكينة مفتوحة، إذن لا تمر الكهرباء إليه

@@ -99,7 +99,7 @@
         <div class="header-branding" style="cursor:pointer;" onclick="openDeveloperModal()" title="صفحة المطور والمهندس المصمم للنظام ENG-MOSTAFA ELMGHRABY (انقر لعرض النبذة)">
           <div class="brand-icon">⚡</div>
           <div class="title-group">
-            <h1 class="system-title" id="main-system-title">هندسة كهرباء بني مزار</h1>
+            <h1 class="system-title" id="main-system-title">هندسة كهرباء بني مزار (الشئون الفنية بني مزار شرق)</h1>
           </div>
           <span class="brand-ver">ENG-MOSTAFAELMGHRABY</span>
           <div class="header-sep"></div>
@@ -345,7 +345,10 @@
           <button class="cad-tool-btn" onclick="openSwitchModal('down')" title="إضافة سكينة هوائية مفصلية">
             <span>⚡ سكينة</span>
           </button>
-          <button class="cad-tool-btn" onclick="toggleAllSwitches()" title="تبديل حالة جميع السكاكين دفعة واحدة (فتح أو غلق الكل)" style="background: rgba(245, 158, 11, 0.15); border-color: #f59e0b; color: #fbbf24; font-weight: bold;">
+          <button class="cad-tool-btn" data-perm="btn_lbs" onclick="openLBSModal()" title="إضافة مفتاح فصل على الحمل (LBS - Load Break Switch)" style="background: rgba(14, 165, 233, 0.15); border-color: #0284c7; color: #38bdf8; font-weight: bold;">
+            <span>🔘 مفتاح LBS</span>
+          </button>
+          <button class="cad-tool-btn" onclick="toggleAllSwitches()" title="تبديل حالة جميع السكاكين والمفاتيح دفعة واحدة (فتح أو غلق الكل)" style="background: rgba(245, 158, 11, 0.15); border-color: #f59e0b; color: #fbbf24; font-weight: bold;">
             <span>⚡ فتح/غلق الكل</span>
           </button>
         </div>
@@ -482,7 +485,7 @@
         <!-- ترويسة القائمة الجانبية مع زر طي وفرد القائمة -->
         <div class="sidebar-header-bar">
           <div class="sidebar-header-text">
-            <span class="sidebar-brand-title" id="sidebar-brand-title">هندسة كهرباء بني مزار</span>
+            <span class="sidebar-brand-title" id="sidebar-brand-title">هندسة كهرباء بني مزار (الشئون الفنية بني مزار شرق)</span>
             <span class="sidebar-sub-badge">⚡ مكتبة العناصر الكهربائية</span>
           </div>
           <button type="button" class="btn-sidebar-collapse" id="btn-sidebar-collapse" onclick="toggleSidebarCollapse()" title="طي القائمة الجانبية">
@@ -504,6 +507,11 @@
           <div class="palette-item" onclick="openSwitchModal('right')" title="سكينة هوائية مفصلية أفقية">
             <div class="item-icon">➖</div>
             <span class="item-name">سكينة أفقية</span>
+          </div>
+
+          <div class="palette-item" data-perm="btn_lbs" onclick="openLBSModal()" title="مفتاح فصل على الحمل LBS (Load Break Switch)">
+            <div class="item-icon">🔘</div>
+            <span class="item-name">مفتاح LBS</span>
           </div>
 
           <div class="palette-item" onclick="openElbowModal()" title="رسم مسار منكسر بزاوية 90° بجميع الاتجاهات">
@@ -1571,6 +1579,108 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeSwitchModal()">إلغاء</button>
         <button class="btn btn-primary" id="sw-submit-btn" onclick="submitSwitchModal()"><span>⚡ تطبيق وضبط السكينة فوراً ➔</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نافذة إضافة وضبط مفتاح فصل على الحمل (LBS - Load Break Switch) -->
+  <div id="lbs-modal" class="modal-overlay hidden">
+    <div class="modal-dialog" style="max-width: 530px;">
+      <div class="modal-header">
+        <h3 id="lbs-modal-title" style="color:#38bdf8; font-size:16px;">🔘 إضافة مفتاح فصل على الحمل (LBS - Load Break Switch)</h3>
+        <button class="modal-close" onclick="closeLBSModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:16px 20px;">
+
+        <!-- 1. النود المغذي / نقطة البداية -->
+        <div class="form-group" style="margin-bottom:12px;">
+          <label style="color:#63b3ed; font-weight:bold; font-size:12.5px;">📍 النود المغذي (نقطة الأخذ):</label>
+          <select id="lbs-source-node" class="form-control"></select>
+        </div>
+
+        <!-- 2. بيانات المفتاح -->
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label>اسم المفتاح:</label>
+            <input type="text" id="lbs-name" class="form-control" value="مفتاح LBS 1">
+          </div>
+          <div class="form-group">
+            <label>رقم النود:</label>
+            <input type="text" id="lbs-node-id" class="form-control" value="N3">
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label>الحمل المقنن بالأمبير (A):</label>
+            <select id="lbs-rating-amp" class="form-control">
+              <option value="630" selected>630 A (المعيار المعتمد بالشبكة)</option>
+              <option value="400">400 A</option>
+              <option value="800">800 A</option>
+              <option value="1250">1250 A</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>الحالة المبدئية:</label>
+            <select id="lbs-state" class="form-control">
+              <option value="closed" selected>🟢 مغلق (توصيل)</option>
+              <option value="open">🔴 مفتوح (فصل وعزل)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 3. اتجاه ومسار المفتاح -->
+        <div class="form-group">
+          <label>اتجاه ومسار المفتاح لمواصلة التغذية:</label>
+          <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; margin-top:4px;">
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="lbs-dir" value="down" checked> أسفل ⬇️
+            </label>
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="lbs-dir" value="right"> يمين ➡️
+            </label>
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="lbs-dir" value="up"> أعلى ⬆️
+            </label>
+            <label style="background:var(--bg-tertiary); padding:8px; border-radius:4px; text-align:center; cursor:pointer; font-size:12px;">
+              <input type="radio" name="lbs-dir" value="left"> شمال ⬅️
+            </label>
+          </div>
+        </div>
+
+        <!-- 4. مواصفات خط التوصيل -->
+        <div style="background:rgba(14, 165, 233, 0.08); border:1px solid rgba(14, 165, 233, 0.25); border-radius:8px; padding:12px; margin-top:10px;">
+          <div style="font-size:12px; font-weight:bold; color:#38bdf8; margin-bottom:8px;">⚡ خط التوصيل من النود المغذي إلى مفتاح LBS:</div>
+          <div class="form-grid-3">
+            <div class="form-group" style="margin-bottom:0;">
+              <label>نوع التوصيل:</label>
+              <select id="lbs-line-type" class="form-control" onchange="onLBSLineTypeChange()">
+                <option value="هوائي" selected>⚡ خط هوائي</option>
+                <option value="كابل">🔌 كابل أرضي</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label>المقطع:</label>
+              <select id="lbs-line-size" class="form-control">
+                <option value="150/25" selected>150/25</option>
+                <option value="70/12">70/12</option>
+                <option value="35/6">35/6</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label>الطول (متر):</label>
+              <input type="number" id="lbs-line-len" class="form-control" value="100" min="1" step="10">
+            </div>
+          </div>
+        </div>
+
+        <div style="background:#1a202c; border:1px solid #2d3748; border-radius:6px; padding:10px; margin-top:12px; font-size:11.5px; color:#38bdf8;">
+          💡 <b>مفتاح فصل على الحمل (LBS)</b>: مزود بغرفة إطفاء القوس الكهربائي (Arc Chute) بقدرة قطع أحمال حتى 630A، يظهر بالرمز الهندسي المعتمد دولياً مع إمكانية الفصل والتشغيل في وضع المحاكاة بنقرة زر واحدة.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeLBSModal()">إلغاء</button>
+        <button class="btn btn-primary" onclick="submitLBSModal()" style="background:#0284c7; border-color:#0369a1;"><span>🔘 إضافة مفتاح LBS فوراً ➔</span></button>
       </div>
     </div>
   </div>
@@ -2907,14 +3017,14 @@
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <!-- PptxGenJS: تصدير PowerPoint مباشرة من المتصفح بدون خادم -->
   <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-  <script src="js/default_projects.js?v=28.5"></script>
-  <script src="js/auth.js?v=28.5"></script>
-  <script src="js/realtime_sync.js?v=28.5"></script>
-  <script src="js/components.js?v=28.5"></script>
-  <script src="js/simulation.js?v=28.5"></script>
-  <script src="js/canvas.js?v=28.5"></script>
-  <script src="js/app.js?v=28.5"></script>
-  <script src="js/settings.js?v=28.5"></script>
+  <script src="js/default_projects.js?v=28.6"></script>
+  <script src="js/auth.js?v=28.6"></script>
+  <script src="js/realtime_sync.js?v=28.6"></script>
+  <script src="js/components.js?v=28.6"></script>
+  <script src="js/simulation.js?v=28.6"></script>
+  <script src="js/canvas.js?v=28.6"></script>
+  <script src="js/app.js?v=28.6"></script>
+  <script src="js/settings.js?v=28.6"></script>
 </body>
 </html>
 

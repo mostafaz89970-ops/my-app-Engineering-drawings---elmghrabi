@@ -651,6 +651,16 @@ function updateDesignerName(name) {
   }
 }
 
+// دالة موحدة لتنسيق مسمى الإدارة الهندسية والشئون الفنية
+function formatEngineeringTitle(adminName) {
+  if (!adminName) return "شركة مصر الوسطى لتوزيع الكهرباء";
+  const clean = String(adminName).trim();
+  // إزالة شرق أو غرب من اسم الهندسة الأساسي لعرضه بجواره بين قوسين
+  const baseAdmin = clean.replace(/\s+(شرق|غرب)$/, '').trim();
+  return `هندسة كهرباء ${baseAdmin} (الشئون الفنية ${clean})`;
+}
+window.formatEngineeringTitle = formatEngineeringTitle;
+
 function updateUserInfoUI() {
   const user = currentUser || window.currentUser;
   if (!user) return;
@@ -659,9 +669,9 @@ function updateUserInfoUI() {
 
   updateDesignerName(user.name);
 
-  // الإدارة العامة المسجلة دخول
+  // الإدارة العامة المسجلة دخول وتنسيق المسمى الرسمي
   const adm = user.administration || "بني مزار شرق";
-  const engineeringTitle = `هندسة كهرباء ${adm}`;
+  const engineeringTitle = formatEngineeringTitle(adm);
 
   // تحديث عنوان هندسة الكهرباء في الشريط العلوي ديناميكياً
   const titleEl = document.getElementById("main-system-title");

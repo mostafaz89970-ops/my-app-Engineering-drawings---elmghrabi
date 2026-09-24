@@ -100,6 +100,7 @@ const DEFAULT_APP_SETTINGS = {
     { key: "btn_quick_line",      label: "➕ زر رسم خط/كابل سريع من الشريط الجانبي", category: "lines" },
     { key: "btn_substation",      label: "🏭 زر إضافة محطة محولات / لوحة توزيع", category: "equipment" },
     { key: "btn_switch",          label: "⚡ زر إضافة وضبط السكاكين الهوائية", category: "equipment" },
+    { key: "btn_lbs",             label: "🔘 زر إضافة مفتاح فصل على الحمل LBS", category: "equipment" },
     { key: "btn_trans",           label: "⚙️ زر إضافة محول معلق", category: "equipment" },
     { key: "btn_cascade_trans",   label: "🔄 زر تفريع محول من محول آخر", category: "equipment" },
     { key: "btn_kiosk",           label: "🔺 زر إضافة كشك محولات", category: "equipment" },
@@ -121,7 +122,7 @@ const DEFAULT_APP_SETTINGS = {
       is_active: true,
       password: "123450",
       password_plain: "123450",
-      permissions: ["all", "developer", "edit_network", "export", "sync", "settings", "manage_users", "btn_projects", "delete_project", "lock_project", "share_project", "btn_save", "btn_print", "btn_excel", "btn_pptx_export", "btn_pptx_import", "btn_share_live", "btn_reconcile_sync", "btn_copy_drawing_code", "btn_paste_drawing_code", "btn_cable", "btn_overhead", "btn_line_between", "btn_quick_line", "btn_substation", "btn_switch", "btn_trans", "btn_cascade_trans", "btn_kiosk", "btn_kiosk_from_kiosk", "btn_rmu", "btn_avr", "btn_simulation", "btn_calculations", "btn_undo", "btn_delete", "btn_settings"]
+      permissions: ["all", "developer", "edit_network", "export", "sync", "settings", "manage_users", "btn_projects", "delete_project", "lock_project", "share_project", "btn_save", "btn_print", "btn_excel", "btn_pptx_export", "btn_pptx_import", "btn_share_live", "btn_reconcile_sync", "btn_copy_drawing_code", "btn_paste_drawing_code", "btn_cable", "btn_overhead", "btn_line_between", "btn_quick_line", "btn_substation", "btn_switch", "btn_lbs", "btn_trans", "btn_cascade_trans", "btn_kiosk", "btn_kiosk_from_kiosk", "btn_rmu", "btn_avr", "btn_simulation", "btn_calculations", "btn_undo", "btn_delete", "btn_settings"]
     },
     {
       id: "planning_eng",
@@ -132,7 +133,7 @@ const DEFAULT_APP_SETTINGS = {
       is_active: true,
       password: "eng123",
       password_plain: "eng123",
-      permissions: ["edit_network", "export", "calculations"]
+      permissions: ["edit_network", "export", "calculations", "btn_lbs"]
     },
     {
       id: "operation_eng",
@@ -143,7 +144,7 @@ const DEFAULT_APP_SETTINGS = {
       is_active: true,
       password: "oper123",
       password_plain: "oper123",
-      permissions: ["simulate_switching", "export", "view"]
+      permissions: ["simulate_switching", "export", "view", "btn_lbs"]
     },
     {
       id: "technician",
@@ -165,7 +166,7 @@ const DEFAULT_APP_SETTINGS = {
       is_active: true,
       password: "123456",
       password_plain: "123456",
-      permissions: ["all", "btn_projects", "btn_save", "btn_print", "btn_excel", "btn_cable", "btn_overhead", "btn_line_between", "btn_quick_line", "btn_substation", "btn_switch", "btn_trans", "btn_cascade_trans", "btn_kiosk", "btn_kiosk_from_kiosk", "btn_rmu", "btn_avr", "btn_simulation", "btn_calculations", "btn_undo", "btn_delete"]
+      permissions: ["all", "btn_projects", "btn_save", "btn_print", "btn_excel", "btn_cable", "btn_overhead", "btn_line_between", "btn_quick_line", "btn_substation", "btn_switch", "btn_lbs", "btn_trans", "btn_cascade_trans", "btn_kiosk", "btn_kiosk_from_kiosk", "btn_rmu", "btn_avr", "btn_simulation", "btn_calculations", "btn_undo", "btn_delete"]
     }
   ]
 };

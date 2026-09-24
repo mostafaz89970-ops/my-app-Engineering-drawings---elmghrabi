@@ -324,7 +324,7 @@ function onEditNodeDirectionChange() {
   const node = currentProject.nodes.find(n => n.id === currentEditTarget.id);
   if (!node) return;
 
-  if (node.type === "switch") {
+  if (node.type === "switch" || node.type === "lbs") {
     node.dir = newDir;
     node.direction = (newDir === "left" || newDir === "right") ? "horizontal" : "vertical";
   } else if (node.type === "transformer" || node.type === "kiosk") {
@@ -333,13 +333,14 @@ function onEditNodeDirectionChange() {
   renderNetwork();
 }
 
-// حذف السكينة مباشرة وإعادة توصيل المسار تلقائياً
+// حذف السكينة أو مفتاح LBS مباشرة وإعادة توصيل المسار تلقائياً
 function deleteSwitchDirectly(nodeId) {
   if (!currentProject) return;
   const node = currentProject.nodes.find(n => n.id === nodeId);
   if (!node) return;
 
-  if (confirm(`هل أنت متأكد من رغبتك في حذف السكينة (${node.name || nodeId})؟\nسيتم دمج الخطين وتوصيل المسار تلقائياً دون انقطاع التغذية.`)) {
+  const typeName = (node.type === "lbs") ? "مفتاح LBS" : "السكينة";
+  if (confirm(`هل أنت متأكد من رغبتك في حذف ${typeName} (${node.name || nodeId})؟\nسيتم دمج الخطين وتوصيل المسار تلقائياً دون انقطاع التغذية.`)) {
     originalNodeState = null;
     closeEditElementModal();
     executeSmartDelete("node", nodeId, "auto_adjust");
@@ -520,6 +521,7 @@ function openEditElementModal(type, id) {
     if (node.type === "transformer") { typeTitle = "المحول المعلق"; icon = "🔄"; }
     else if (node.type === "kiosk") { typeTitle = "كشك المحولات"; icon = "🏢"; }
     else if (node.type === "switch") { typeTitle = "السكينة الهوائية / القاطع"; icon = "⚡"; }
+    else if (node.type === "lbs") { typeTitle = "مفتاح فصل على الحمل (LBS)"; icon = "🔘"; }
     else if (node.type === "substation") { typeTitle = "محطة المحولات الرئيسية (المصدر)"; icon = "⚡"; }
     else if (node.type === "rmu") { typeTitle = "وحدة الربط الحلقي RMU"; icon = "🔲"; }
     else if (node.type === "avr") { typeTitle = "منظم الجهد AVR"; icon = "🔋"; }
@@ -669,6 +671,52 @@ function openEditElementModal(type, id) {
           </button>
           <div style="font-size:11px; color:#94A3B8; margin-top:5px; text-align:center;">
             ⚡ سيتم إزالة السكينة ودمج الخطين وتوصيل التغذية دون أي انقطاع
+          </div>
+        </div>
+      `;
+    } else if (node.type === "lbs") {
+      const isClosed = (node.state !== "open");
+      const curDir = node.dir || (node.direction === "horizontal" ? "right" : "down");
+      const rating = node.rating_amp || 630;
+      specificFieldsHTML = `
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+          <div class="form-group">
+            <label style="font-size:12px; font-weight:bold; color:#E2E8F0; margin-bottom:4px; display:block;">حالة مفتاح LBS:</label>
+            <select id="edit-node-state" class="form-control" style="background:#1E293B; border:1px solid #475569; color:#F8FAFC; padding:8px 10px; border-radius:6px; width:100%; font-weight:bold;">
+              <option value="closed" ${isClosed ? 'selected' : ''}>🟢 مغلق (توصيل)</option>
+              <option value="open" ${!isClosed ? 'selected' : ''}>🔴 مفتوح (عزل وفصل)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label style="font-size:12px; font-weight:bold; color:#E2E8F0; margin-bottom:4px; display:block;">الحمل المقنن (A):</label>
+            <select id="edit-node-rating-amp" class="form-control" style="background:#1E293B; border:1px solid #475569; color:#F8FAFC; padding:8px 10px; border-radius:6px; width:100%; font-weight:bold;">
+              <option value="630" ${rating == 630 ? 'selected' : ''}>630 A</option>
+              <option value="400" ${rating == 400 ? 'selected' : ''}>400 A</option>
+              <option value="800" ${rating == 800 ? 'selected' : ''}>800 A</option>
+              <option value="1250" ${rating == 1250 ? 'selected' : ''}>1250 A</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:10px;">
+          <label style="font-size:12px; font-weight:bold; color:#E2E8F0; margin-bottom:4px; display:block;">اتجاه ومسار المفتاح:</label>
+          <select id="edit-node-direction" class="form-control" onchange="onEditNodeDirectionChange()" style="background:#1E293B; border:1px solid #475569; color:#F8FAFC; padding:8px 10px; border-radius:6px; width:100%; font-weight:bold;">
+            <option value="down" ${(curDir === "down") ? 'selected' : ''}>⬇️ رأسي لأسفل</option>
+            <option value="up" ${(curDir === "up") ? 'selected' : ''}>⬆️ رأسي لأعلى</option>
+            <option value="right" ${(curDir === "right") ? 'selected' : ''}>➡️ أفقي لليمين</option>
+            <option value="left" ${(curDir === "left") ? 'selected' : ''}>⬅️ أفقي لليسار</option>
+          </select>
+        </div>
+      `;
+
+      directDeleteButtonHTML = `
+        <div style="margin-top:14px; padding-top:12px; border-top:1px solid #334155;">
+          <button type="button" class="btn btn-block" style="background:#7F1D1D; color:#FECACA; border:1px solid #DC2626; font-weight:bold; padding:8px 12px; border-radius:6px; display:flex; align-items:center; justify-content:center; gap:8px; width:100%; cursor:pointer;" onclick="deleteSwitchDirectly('${node.id}')">
+            <span>🗑️</span> <span>حذف مفتاح LBS وإعادة توصيل المسار تلقائياً</span>
+          </button>
+          <div style="font-size:11px; color:#94A3B8; margin-top:5px; text-align:center;">
+            ⚡ سيتم إزالة مفتاح LBS ودمج الخطين وتوصيل التغذية دون أي انقطاع
           </div>
         </div>
       `;
@@ -823,7 +871,7 @@ function saveElementEdits(event) {
     const dirInput = document.getElementById("edit-node-direction");
     if (dirInput) {
       const dVal = dirInput.value;
-      if (node.type === "switch") {
+      if (node.type === "switch" || node.type === "lbs") {
         node.dir = dVal;
         node.direction = (dVal === "left" || dVal === "right") ? "horizontal" : "vertical";
       } else if (node.type === "transformer" || node.type === "kiosk") {
@@ -862,9 +910,16 @@ function saveElementEdits(event) {
           node.outgoing_terminal = outTermInput.value;
         }
       }
-    } else if (node.type === "switch") {
+    } else if (node.type === "switch" || node.type === "lbs") {
       const stateInput = document.getElementById("edit-node-state");
       if (stateInput) node.state = stateInput.value;
+      if (node.type === "lbs") {
+        const ratingInput = document.getElementById("edit-node-rating-amp");
+        if (ratingInput) {
+          const rVal = parseInt(ratingInput.value, 10);
+          if (!isNaN(rVal) && rVal > 0) node.rating_amp = rVal;
+        }
+      }
     } else if (node.type === "substation") {
       const voltInput = document.getElementById("edit-node-voltage");
       if (voltInput) {
@@ -951,6 +1006,7 @@ function openSmartDeleteModal(type, id) {
     let typeLabel = "نقطة تفريع / عمود";
     let icon = "📍";
     if (node.type === "switch") { typeLabel = "سكينة هوائية"; icon = "⚡"; }
+    else if (node.type === "lbs") { typeLabel = "مفتاح فصل على الحمل LBS"; icon = "🔘"; }
     else if (node.type === "transformer") { typeLabel = "محول معلق"; icon = "🔄"; }
     else if (node.type === "kiosk") { typeLabel = "كشك كهربائي"; icon = "🏢"; }
     else if (node.type === "substation") { typeLabel = "محطة المحولات الرئيسية"; icon = "⚡"; }
@@ -1386,6 +1442,7 @@ function populateNodeDropdowns() {
   const kfkSourceSelect = document.getElementById("kfk-source-node");
   const transSourceSelect = document.getElementById("dlg-trans-source");
   const swSourceSelect = document.getElementById("sw-source-node");
+  const lbsSourceSelect = document.getElementById("lbs-source-node");
 
   let optionsHTML = "";
   nodes.forEach(n => {
@@ -1393,6 +1450,7 @@ function populateNodeDropdowns() {
     if (n.type === 'transformer') typeName = `⚙️ محول (${n.capacity || 100}KVA)`;
     else if (n.type === 'kiosk') typeName = `🔺 كشك (${n.capacity || 500}KVA)`;
     else if (n.type === 'switch') typeName = `⚡ سكينة (${n.direction === 'horizontal' ? 'أفقية' : 'رأسية'})`;
+    else if (n.type === 'lbs') typeName = `🔘 مفتاح LBS (${n.rating_amp || 630}A)`;
     else if (n.type === 'substation') typeName = `🏭 محطة/لوحة`;
     else if (n.type === 'avr') typeName = `🔋 منظم AVR (${n.rated_amp || 200}A)`;
     else if (n.type === 'rmu') typeName = `🔄 RMU ربط حلقي`;
@@ -1410,6 +1468,7 @@ function populateNodeDropdowns() {
   if (avrSourceSelect) avrSourceSelect.innerHTML = optionsHTML;
   if (transSourceSelect) transSourceSelect.innerHTML = optionsHTML;
   if (swSourceSelect) swSourceSelect.innerHTML = optionsHTML;
+  if (lbsSourceSelect) lbsSourceSelect.innerHTML = optionsHTML;
 
   if (kfkSourceSelect) {
     const kiosksAndSubs = nodes.filter(n => n.type === 'kiosk' || n.type === 'substation' || n.type === 'rmu' || n.type === 'transformer');
@@ -2098,6 +2157,7 @@ function _populateExistingNodeDropdown() {
     if (n.id === fromId) return; // استبعاد نود البداية
     const typeLabel = n.type === "substation" ? "محطة" :
                       n.type === "switch" ? "سكينة" :
+                      n.type === "lbs" ? "مفتاح LBS" :
                       n.type === "kiosk" ? "كشك" :
                       n.type === "transformer" ? "محول" :
                       n.type === "junction" ? "نقطة ربط" : n.type;
@@ -3506,6 +3566,7 @@ async function exportToExcel() {
       ["محولات وأكشاك (عام)",   transPublicCount],
       ["محولات وأكشاك (خاص)",   transPrivateCount],
       ["إجمالي السكاكين",       nodes.filter(n => n.type === "switch").length],
+      ["مفاتيح فصل LBS",        nodes.filter(n => n.type === "lbs").length],
       ["⚡ إجمالي القدرات المركبة للخط", `${sum.total_capacity_kva} kVA`],
       ["🚨 أقصى سعة مصرح بها للمغذي", `${sum.feeder_max_load_kva || 5000} kVA`],
       ["📊 إجمالي الحمل الفعلي المتوقع للخط", `${sum.total_actual_load_kva} kVA`],
@@ -3529,6 +3590,7 @@ async function exportToExcel() {
         n.type === "transformer" ? "محول معلق"   :
         n.type === "kiosk"       ? "كشك محولات"  :
         n.type === "switch"      ? "سكينة هوائية":
+        n.type === "lbs"         ? `مفتاح LBS (${n.rating_amp || 630}A)` :
         n.type === "junction"    ? "نقطة ربط"    :
         n.type === "rmu"         ? "وحدة RMU"    :
         n.type === "avr"         ? "منظم AVR"    : n.type || "—",
@@ -3813,6 +3875,7 @@ async function downloadProjectPPTX() {
       ["محولات وأكشاك (عامة)",  transPub + " وحدة"],
       ["محولات وأكشاك (خاصة)",  transPriv + " وحدة"],
       ["سكاكين هوائية",        nodes.filter(n => n.type === "switch").length + " سكينة"],
+      ["مفاتيح فصل LBS",        nodes.filter(n => n.type === "lbs").length + " مفتاح"],
       ["إجمالي القدرات المركبة للخط", `${sum.total_capacity_kva} kVA`],
       ["إجمالي الحمل الفعلي المتوقع للخط", `${sum.total_actual_load_kva} kVA`],
       ["نسبة تحميل الخط بالكامل", `${sum.overall_loading_pct}%`],
@@ -3858,7 +3921,7 @@ async function downloadProjectPPTX() {
           return [
             { text: String(i+1) },
             { text: n.id || "—" },
-            { text: n.type === "substation" ? "محطة" : n.type === "transformer" ? "محول" : n.type === "kiosk" ? "كشك" : n.type === "switch" ? "سكينة" : n.type === "junction" ? "ربط" : n.type || "—" },
+            { text: n.type === "substation" ? "محطة" : n.type === "transformer" ? "محول" : n.type === "kiosk" ? "كشك" : n.type === "switch" ? "سكينة" : n.type === "lbs" ? "مفتاح LBS" : n.type === "junction" ? "ربط" : n.type || "—" },
             { text: n.name || "—" },
             { text: isLoadNode ? (n.ownership === "private" || n.ownership === "خاص" ? "خاص" : "عام") : (n.type === "substation" ? "عام" : "—") },
             { text: n.capacity ? n.capacity + " kVA" : "—" },
@@ -5245,6 +5308,177 @@ function quickAddSwitchPrompt() {
 window.quickAddSwitch = quickAddSwitch;
 window.quickAddSwitchPrompt = quickAddSwitchPrompt;
 
+// --- مفتاح فصل على الحمل (LBS - Load Break Switch) المعتمد ---
+function openLBSModal() {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
+  if (window.hasPermission && !window.hasPermission('btn_lbs')) {
+    showToast("⛔ ليس لديك صلاحية إضافة مفتاح LBS", "error");
+    return;
+  }
+  if (!requireSubstationFirst()) return;
+
+  const modal = document.getElementById("lbs-modal");
+  if (!modal) {
+    console.error("lbs-modal element not found in DOM");
+    alert("تعذر العثور على نافذة مفتاح LBS");
+    return;
+  }
+
+  modal.classList.remove("hidden");
+  modal.style.display = "flex";
+  modal.style.setProperty("display", "flex", "important");
+  modal.style.setProperty("z-index", "99999", "important");
+
+  try {
+    if (!currentProject.nodes) currentProject.nodes = [];
+    if (!currentProject.sections) currentProject.sections = [];
+
+    populateNodeDropdowns();
+
+    // نود البداية الافتراضي: إذا كان هناك نود محدد بالماوس، أو آخر نود
+    const lastNode = currentProject.nodes[currentProject.nodes.length - 1];
+    let defaultTargetId = (selectedElement && selectedElement.type === 'node') ? selectedElement.id : (lastNode ? lastNode.id : null);
+    const sourceSelect = document.getElementById("lbs-source-node");
+    if (defaultTargetId && sourceSelect) {
+      sourceSelect.value = defaultTargetId;
+    }
+
+    // ترقيم المفتاح والنود تلقائياً
+    const lbsCount = (currentProject.nodes || []).filter(n => n.type === "lbs").length + 1;
+    const nameEl = document.getElementById("lbs-name");
+    if (nameEl) nameEl.value = `مفتاح LBS ${lbsCount}`;
+
+    let nextNum = currentProject.nodes.length + 1;
+    while (currentProject.nodes.some(n => n.id === "N" + nextNum)) nextNum++;
+    const idEl = document.getElementById("lbs-node-id");
+    if (idEl) idEl.value = "N" + nextNum;
+
+    onLBSLineTypeChange();
+  } catch (err) {
+    console.error("Error in openLBSModal:", err);
+  }
+}
+
+function closeLBSModal() {
+  const modal = document.getElementById("lbs-modal");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.style.display = "none";
+    modal.style.removeProperty("display");
+    modal.style.removeProperty("z-index");
+  }
+}
+
+function onLBSLineTypeChange() {
+  const lineType = document.getElementById("lbs-line-type")?.value || "هوائي";
+  const sizeSelect = document.getElementById("lbs-line-size");
+  if (!sizeSelect) return;
+
+  if (lineType === "كابل") {
+    sizeSelect.innerHTML = `
+      <option value="3*240" selected>3×240 مم²</option>
+      <option value="3*150">3×150 مم²</option>
+      <option value="3*300">3×300 مم²</option>
+      <option value="3*400">3×400 مم²</option>
+      <option value="3*70">3×70 مم²</option>
+    `;
+  } else {
+    sizeSelect.innerHTML = `
+      <option value="150/25" selected>150/25 مم²</option>
+      <option value="70/12">70/12 مم²</option>
+      <option value="35/6">35/6 مم²</option>
+    `;
+  }
+}
+
+function submitLBSModal() {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
+  if (!currentProject) return;
+
+  const sourceId = document.getElementById("lbs-source-node")?.value;
+  const sourceNode = currentProject.nodes.find(n => n.id === sourceId);
+  if (!sourceNode) {
+    showToast("⚠️ يرجى اختيار النود المغذي أولاً", "warning");
+    return;
+  }
+
+  const lbsName = document.getElementById("lbs-name")?.value.trim() || ("مفتاح LBS " + (currentProject.nodes.length + 1));
+  let lbsNodeId = document.getElementById("lbs-node-id")?.value.trim();
+  if (!lbsNodeId) {
+    let nextNum = currentProject.nodes.length + 1;
+    while (currentProject.nodes.some(n => n.id === "N" + nextNum)) nextNum++;
+    lbsNodeId = "N" + nextNum;
+  }
+
+  if (currentProject.nodes.some(n => n.id === lbsNodeId)) {
+    showToast(`⚠️ رقم النود [${lbsNodeId}] مستخدم بالفعل، يرجى اختيار رقم آخر`, "error");
+    return;
+  }
+
+  const ratingAmp = parseInt(document.getElementById("lbs-rating-amp")?.value, 10) || 630;
+  const lbsState = document.getElementById("lbs-state")?.value || "closed";
+  const lbsDir = document.querySelector('input[name="lbs-dir"]:checked')?.value || "down";
+  const isHoriz = (lbsDir === "right" || lbsDir === "left");
+
+  const lineType = document.getElementById("lbs-line-type")?.value || "هوائي";
+  const lineSize = document.getElementById("lbs-line-size")?.value || (lineType === "كابل" ? "3*240" : "150/25");
+  const lineLen = parseFloat(document.getElementById("lbs-line-len")?.value) || 100;
+
+  saveHistoryState();
+
+  // حساب إحداثيات المفتاح الجديد بناءً على اتجاهه وموضعه بالنسبة للنود المغذي
+  let swX = sourceNode.x;
+  let swY = sourceNode.y;
+  if (lbsDir === "right") swX += 140;
+  else if (lbsDir === "left") swX -= 140;
+  else if (lbsDir === "down") swY += 130;
+  else if (lbsDir === "up") swY -= 130;
+
+  // إضافة نود المفتاح LBS
+  currentProject.nodes.push({
+    id: lbsNodeId,
+    type: "lbs",
+    name: lbsName,
+    direction: isHoriz ? "horizontal" : "vertical",
+    dir: lbsDir,
+    state: lbsState,
+    rating_amp: ratingAmp,
+    x: swX,
+    y: swY
+  });
+
+  // إضافة خط/كابل التغذية الواصل من النود المغذي إلى مفتاح LBS
+  let nextSecNum = currentProject.sections.length + 1;
+  while (currentProject.sections.some(s => s.id === "S" + nextSecNum)) nextSecNum++;
+
+  currentProject.sections.push({
+    id: "S" + nextSecNum,
+    name: `تغذية ${lbsName}`,
+    from_node: sourceId,
+    to_node: lbsNodeId,
+    type: lineType,
+    size: lineSize,
+    length: lineLen,
+    direction: lbsDir
+  });
+
+  closeLBSModal();
+  populateNodeDropdowns();
+  renderNetwork();
+  showToast(`🔘 تم إضافة مفتاح LBS (${ratingAmp}A) [${lbsNodeId}] بنجاح`, "success");
+}
+
+window.openLBSModal = openLBSModal;
+window.closeLBSModal = closeLBSModal;
+window.onLBSLineTypeChange = onLBSLineTypeChange;
+window.submitLBSModal = submitLBSModal;
+
 // --- نافذة ودوال رسم كوع (مسار منكسر 90°) بجميع الاتجاهات ---
 function openElbowModal() {
   if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
@@ -5304,6 +5538,7 @@ function _populateElbowExistingNodes() {
     if (n.id === fromId) return;
     const typeLabel = n.type === "substation" ? "محطة" :
                       n.type === "switch" ? "سكينة" :
+                      n.type === "lbs" ? "مفتاح LBS" :
                       n.type === "kiosk" ? "كشك" :
                       n.type === "transformer" ? "محول" :
                       n.type === "junction" ? "نقطة ربط" : n.type;
@@ -5729,12 +5964,15 @@ function loadAdminWorkspace(adminName) {
     try { sessionStorage.setItem("sld_user", JSON.stringify(window.currentUser)); } catch(_) {}
   }
 
-  // تحديث الترويسة في القائمة الجانبية
+  // تحديث الترويسة في القائمة الجانبية والشريط العلوي
+  const formattedTitle = (typeof formatEngineeringTitle === "function") 
+    ? formatEngineeringTitle(adminName) 
+    : ("هندسة كهرباء " + adminName);
   const sidebarTitle = document.getElementById("sidebar-brand-title");
-  if (sidebarTitle) sidebarTitle.textContent = "هندسة كهرباء " + adminName;
+  if (sidebarTitle) sidebarTitle.textContent = formattedTitle;
 
   const mainTitle = document.getElementById("main-system-title");
-  if (mainTitle) mainTitle.textContent = "هندسة كهرباء " + adminName;
+  if (mainTitle) mainTitle.textContent = formattedTitle;
 
   const aKey = adminName.trim().replace(/\s+/g, '_');
   const catalog = getCatalogForAdmin(adminName);
@@ -6705,7 +6943,9 @@ function updateAppBranding(appName) {
     adminName = window.currentUser.administration;
   }
 
-  const engineeringTitle = adminName ? `هندسة كهرباء ${adminName}` : (appName || "شركة مصر الوسطى لتوزيع الكهرباء");
+  const engineeringTitle = adminName 
+    ? ((typeof formatEngineeringTitle === "function") ? formatEngineeringTitle(adminName) : `هندسة كهرباء ${adminName}`)
+    : (appName || "شركة مصر الوسطى لتوزيع الكهرباء");
 
   const mainTitle = document.getElementById("main-system-title");
   if (mainTitle) mainTitle.textContent = engineeringTitle;

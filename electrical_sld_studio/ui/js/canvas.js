@@ -189,7 +189,7 @@ function handleNodeDrag(e) {
         incomingSection.direction = newDir;
         incomingSection.is_slanted = isSlanted;
       }
-      if (dragNode.type === "switch") {
+      if (dragNode.type === "switch" || dragNode.type === "lbs") {
         dragNode.dir = newDir;
         dragNode.direction = (newDir === "left" || newDir === "right") ? "horizontal" : "vertical";
       } else if (dragNode.type === "transformer" || dragNode.type === "kiosk") {
@@ -259,7 +259,7 @@ function finishNodeDrag(e) {
       const draggedNode = currentProject.nodes.find(n => n.id === targetNodeId);
       if (draggedNode) {
         draggedNode.updated_at = Date.now();
-        if (draggedNode.type === "switch") {
+        if (draggedNode.type === "switch" || draggedNode.type === "lbs") {
           welded = checkAndWeldSwitchOnDrop(draggedNode);
         }
       }
@@ -645,7 +645,7 @@ function initCanvas() {
       const nodeId = stretchGroup ? stretchGroup.dataset.nodeId : nodeGroup.id.replace("node-", "");
       if (isSimulationActive) {
         const targetNode = currentProject?.nodes?.find(n => n.id === nodeId);
-        if (targetNode && targetNode.type === "switch") {
+        if (targetNode && (targetNode.type === "switch" || targetNode.type === "lbs")) {
           e.preventDefault();
           e.stopPropagation();
           toggleSwitch(nodeId);
@@ -845,11 +845,11 @@ function toggleSimulationMode() {
 
 let lastSwitchToggleTime = 0;
 
-// دالة موحدة وفورية لتبديل حالة السكينة مع تحديث المحاكاة
+// دالة موحدة وفورية لتبديل حالة السكينة أو مفتاح LBS مع تحديث المحاكاة
 function toggleSwitch(nodeId) {
   if (!currentProject) return;
   const node = currentProject.nodes.find(n => n.id === nodeId);
-  if (!node || node.type !== "switch") return;
+  if (!node || (node.type !== "switch" && node.type !== "lbs")) return;
 
   if (Date.now() - lastSwitchToggleTime < 150) return;
   lastSwitchToggleTime = Date.now();
@@ -857,8 +857,9 @@ function toggleSwitch(nodeId) {
   node.state = (node.state === "open") ? "closed" : "open";
   const isOpen = (node.state === "open");
 
+  const elemTitle = (node.type === "lbs") ? (node.name || "مفتاح LBS") : (node.name || "سكينة");
   showToast(
-    `⚡ ${node.name || 'سكينة'} (${node.id}): تم ${isOpen ? 'فصل الدائرة (فتح السكينة 🔴)' : 'توصيل الدائرة (إغلاق السكينة 🟢)'}`,
+    `⚡ ${elemTitle} (${node.id}): تم ${isOpen ? 'فصل الدائرة 🔴' : 'توصيل الدائرة 🟢'}`,
     isOpen ? 'danger' : 'success'
   );
 
@@ -874,9 +875,9 @@ function openAllSwitches() {
     if (window.showToast) window.showToast("⚠️ لا يوجد مخطط محمل حالياً!", "warning");
     return;
   }
-  const switches = currentProject.nodes.filter(n => n && n.type === "switch");
+  const switches = currentProject.nodes.filter(n => n && (n.type === "switch" || n.type === "lbs"));
   if (switches.length === 0) {
-    if (window.showToast) window.showToast("ℹ️ لا توجد سكاكين هوائية مضافة في هذا المخطط.", "info");
+    if (window.showToast) window.showToast("ℹ️ لا توجد سكاكين أو مفاتيح LBS مضافة في هذا المخطط.", "info");
     return;
   }
 
@@ -889,7 +890,7 @@ function openAllSwitches() {
   } catch(e) {}
 
   if (window.showToast) {
-    window.showToast(`🔴 تم فتح وفصل جميع السكاكين (${switches.length} سكينة) وتحديث مسارات التغذية.`, "danger");
+    window.showToast(`🔴 تم فتح وفصل جميع السكاكين ومفاتيح LBS (${switches.length} مفتاح) وتحديث مسارات التغذية.`, "danger");
   }
 
   renderNetwork();
@@ -904,9 +905,9 @@ function closeAllSwitches() {
     if (window.showToast) window.showToast("⚠️ لا يوجد مخطط محمل حالياً!", "warning");
     return;
   }
-  const switches = currentProject.nodes.filter(n => n && n.type === "switch");
+  const switches = currentProject.nodes.filter(n => n && (n.type === "switch" || n.type === "lbs"));
   if (switches.length === 0) {
-    if (window.showToast) window.showToast("ℹ️ لا توجد سكاكين هوائية مضافة في هذا المخطط.", "info");
+    if (window.showToast) window.showToast("ℹ️ لا توجد سكاكين أو مفاتيح LBS مضافة في هذا المخطط.", "info");
     return;
   }
 
@@ -919,7 +920,7 @@ function closeAllSwitches() {
   } catch(e) {}
 
   if (window.showToast) {
-    window.showToast(`🟢 تم غلق وتوصيل جميع السكاكين (${switches.length} سكينة) وتغذية الشبكة بالكامل.`, "success");
+    window.showToast(`🟢 تم غلق وتوصيل جميع السكاكين ومفاتيح LBS (${switches.length} مفتاح) وتغذية الشبكة بالكامل.`, "success");
   }
 
   renderNetwork();
@@ -931,7 +932,7 @@ function closeAllSwitches() {
 // ─── زر تبديلي ذكي لجميع السكاكين (فتح أو غلق الكل) ─────────────────────────
 function toggleAllSwitches() {
   if (!currentProject || !Array.isArray(currentProject.nodes)) return;
-  const switches = currentProject.nodes.filter(n => n && n.type === "switch");
+  const switches = currentProject.nodes.filter(n => n && (n.type === "switch" || n.type === "lbs"));
   if (switches.length === 0) {
     if (window.showToast) window.showToast("ℹ️ لا توجد سكاكين في هذا المخطط.", "info");
     return;
@@ -953,7 +954,7 @@ function handleNodeClick(e, nodeId) {
   if (!node) return;
 
   // في وضع المحاكاة: النقر يبدل حالة السكينة فوراً للفصل والتوصيل
-  if (isSimulationActive && node.type === "switch") {
+  if (isSimulationActive && (node.type === "switch" || node.type === "lbs")) {
     toggleSwitch(nodeId);
     return;
   }
@@ -971,7 +972,7 @@ function handleNodeDblClick(e, nodeId) {
   // في وضع المحاكاة: النقر المزدوج أيضاً يبدل السكينة ولا يفتح نافذة التعديل لضمان سلاسة المحاكاة
   if (isSimulationActive) {
     const node = currentProject.nodes.find(n => n.id === nodeId);
-    if (node && node.type === "switch") {
+    if (node && (node.type === "switch" || node.type === "lbs")) {
       toggleSwitch(nodeId);
       return;
     }
@@ -1195,6 +1196,9 @@ function renderNetwork() {
       case "switch":
         nodesHTML += Components.renderSwitch(node, isEnergized, isSelected, isSimulationActive);
         break;
+      case "lbs":
+        nodesHTML += Components.renderLBS(node, isEnergized, isSelected, isSimulationActive);
+        break;
       case "transformer":
         nodesHTML += Components.renderTransformer(node, isEnergized, isSelected);
         break;
@@ -1301,7 +1305,8 @@ function openDeveloperModal() {
     const u = (typeof _getLoggedInUser === "function") ? _getLoggedInUser() : (window.currentUser || null);
     const uName = u ? (u.name || u.id) : "غير مسجل";
     const uRole = u ? (u.role === 'admin' ? 'المدير العام (صلاحيات كاملة)' : (u.role === 'engineer' ? 'مهندس تشغيل وتخطيط' : (u.role || 'مستخدم'))) : "-";
-    const uAdmin = (u && u.administration) ? ("هندسة كهرباء " + u.administration) : (window.getCurrentAdminName ? ("هندسة كهرباء " + window.getCurrentAdminName()) : "-");
+    const rawAdm = (u && u.administration) ? u.administration : (window.getCurrentAdminName ? window.getCurrentAdminName() : "");
+    const uAdmin = rawAdm ? ((typeof formatEngineeringTitle === "function") ? formatEngineeringTitle(rawAdm) : ("هندسة كهرباء " + rawAdm)) : "-";
     const uSector = (u && u.sector) ? ("قطاع " + u.sector) : "قطاع المنيا شمال";
 
     const nameEl = document.getElementById("dev-active-user-name");

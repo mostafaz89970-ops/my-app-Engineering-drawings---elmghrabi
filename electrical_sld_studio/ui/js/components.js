@@ -301,6 +301,198 @@ const Components = {
     `;
   },
 
+  // ─── رسم مفتاح الفصل على الحمل (LBS - Load Break Switch) ────────────────────
+  renderLBS(node, isEnergized = true, isSelected = false, isSimulationMode = false) {
+    const x = node.x;
+    const y = node.y;
+    const isClosed = (node.state !== "open");
+    const dir = this.getSwitchDirection(node);
+    const isHoriz = (dir === "left" || dir === "right");
+    const strokeColor = isEnergized ? (isClosed ? "#10b981" : "#ef4444") : "#718096";
+    const selClass = isSelected ? "sld-selected" : "";
+    const simClass = isSimulationMode ? "sim-switch-interactive" : "";
+
+    const SW_OFFSET = 14;
+    const SW_LEN = 32;
+    let bladeMarkup = "";
+    let leadMarkup = "";
+    let chamberMarkup = "";
+    let p1x = 0, p1y = 0, p2x = 0, p2y = 0;
+
+    if (dir === "left") {
+      leadMarkup = `<line x1="0" y1="0" x2="-${SW_OFFSET}" y2="0" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round" />`;
+      p1x = -SW_OFFSET; p1y = 0;
+      p2x = -(SW_OFFSET + SW_LEN); p2y = 0;
+      chamberMarkup = `
+        <rect x="${p2x - 6}" y="-6" width="12" height="12" rx="2" fill="#0f172a" stroke="#0ea5e9" stroke-width="1.8" />
+        <line x1="${p2x}" y1="-4" x2="${p2x}" y2="4" stroke="#38bdf8" stroke-width="1.5" />
+      `;
+      if (isClosed) {
+        bladeMarkup = `
+          <line x1="${p1x}" y1="0" x2="${p2x}" y2="0" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
+          <line x1="${p2x}" y1="0" x2="${p2x + 6}" y2="-6" stroke="${strokeColor}" stroke-width="2.2" stroke-linecap="round" />
+        `;
+      } else {
+        bladeMarkup = `
+          <line x1="${p1x}" y1="0" x2="${p1x - 22}" y2="-15" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
+          <circle cx="${p1x - 22}" cy="-15" r="2.5" fill="${strokeColor}" />
+        `;
+      }
+    } else if (dir === "right") {
+      leadMarkup = `<line x1="0" y1="0" x2="${SW_OFFSET}" y2="0" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round" />`;
+      p1x = SW_OFFSET; p1y = 0;
+      p2x = SW_OFFSET + SW_LEN; p2y = 0;
+      chamberMarkup = `
+        <rect x="${p2x - 6}" y="-6" width="12" height="12" rx="2" fill="#0f172a" stroke="#0ea5e9" stroke-width="1.8" />
+        <line x1="${p2x}" y1="-4" x2="${p2x}" y2="4" stroke="#38bdf8" stroke-width="1.5" />
+      `;
+      if (isClosed) {
+        bladeMarkup = `
+          <line x1="${p1x}" y1="0" x2="${p2x}" y2="0" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
+          <line x1="${p2x}" y1="0" x2="${p2x - 6}" y2="-6" stroke="${strokeColor}" stroke-width="2.2" stroke-linecap="round" />
+        `;
+      } else {
+        bladeMarkup = `
+          <line x1="${p1x}" y1="0" x2="${p1x + 22}" y2="-15" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
+          <circle cx="${p1x + 22}" cy="-15" r="2.5" fill="${strokeColor}" />
+        `;
+      }
+    } else if (dir === "up") {
+      p1x = 0; p1y = 0;
+      p2x = 0; p2y = -SW_LEN;
+      chamberMarkup = `
+        <rect x="-6" y="${p2y - 6}" width="12" height="12" rx="2" fill="#0f172a" stroke="#0ea5e9" stroke-width="1.8" />
+        <line x1="-4" y1="${p2y}" x2="4" y2="${p2y}" stroke="#38bdf8" stroke-width="1.5" />
+      `;
+      if (isClosed) {
+        bladeMarkup = `
+          <line x1="0" y1="0" x2="0" y2="-${SW_LEN}" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
+          <line x1="0" y1="-${SW_LEN}" x2="6" y2="-${SW_LEN - 6}" stroke="${strokeColor}" stroke-width="2.2" stroke-linecap="round" />
+        `;
+      } else {
+        bladeMarkup = `
+          <line x1="0" y1="0" x2="16" y2="-22" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
+          <circle cx="16" cy="-22" r="2.5" fill="${strokeColor}" />
+        `;
+      }
+    } else { // "down"
+      p1x = 0; p1y = 0;
+      p2x = 0; p2y = SW_LEN;
+      chamberMarkup = `
+        <rect x="-6" y="${p2y - 6}" width="12" height="12" rx="2" fill="#0f172a" stroke="#0ea5e9" stroke-width="1.8" />
+        <line x1="-4" y1="${p2y}" x2="4" y2="${p2y}" stroke="#38bdf8" stroke-width="1.5" />
+      `;
+      if (isClosed) {
+        bladeMarkup = `
+          <line x1="0" y1="0" x2="0" y2="${SW_LEN}" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
+          <line x1="0" y1="${SW_LEN}" x2="6" y2="${SW_LEN - 6}" stroke="${strokeColor}" stroke-width="2.2" stroke-linecap="round" />
+        `;
+      } else {
+        bladeMarkup = `
+          <line x1="0" y1="0" x2="16" y2="22" stroke="${strokeColor}" stroke-width="2.8" stroke-linecap="round" />
+          <circle cx="16" cy="22" r="2.5" fill="${strokeColor}" />
+        `;
+      }
+    }
+
+    // فحص مسارات الخطوط المتصلة لتجنب تداخل النصوص
+    let hasLineRight = false, hasLineLeft = false, hasLineUp = false, hasLineDown = false;
+    if (typeof currentProject !== "undefined" && currentProject && currentProject.sections) {
+      currentProject.sections.forEach(sec => {
+        let otherId = null;
+        if (sec.from_node === node.id) otherId = sec.to_node;
+        else if (sec.to_node === node.id) otherId = sec.from_node;
+        if (otherId) {
+          const other = currentProject.nodes.find(n => n.id === otherId);
+          if (other) {
+            const dx = other.x - node.x;
+            const dy = other.y - node.y;
+            if (Math.abs(dx) >= Math.abs(dy)) {
+              if (dx > 25) hasLineRight = true;
+              else if (dx < -25) hasLineLeft = true;
+            } else {
+              if (dy > 25) hasLineDown = true;
+              else if (dy < -25) hasLineUp = true;
+            }
+          }
+        }
+      });
+    }
+
+    const midBladeX = (p1x + p2x) / 2;
+    const midBladeY = (p1y + p2y) / 2;
+    let labelX = 0, labelY = 0;
+
+    if (!isHoriz) {
+      labelY = midBladeY;
+      labelX = (node.label_position === "right" || (hasLineLeft && !hasLineRight)) ? 58 : -58;
+    } else {
+      labelX = midBladeX;
+      labelY = (node.label_position === "above" || (hasLineDown && !hasLineUp)) ? -48 : 48;
+    }
+
+    let simHighlightMarkup = "";
+    if (isSimulationMode) {
+      const glowColor = isClosed ? "#10b981" : "#ef4444";
+      const glowBg = isClosed ? "rgba(16, 185, 129, 0.25)" : "rgba(239, 68, 68, 0.25)";
+      let badgeX = midBladeX;
+      let badgeY = -34;
+      if (!isHoriz) {
+        if (hasLineUp && !hasLineDown) badgeY = 38;
+        else if (hasLineUp && hasLineDown) {
+          badgeX = (labelX < 0) ? 52 : -52;
+          badgeY = 16;
+        }
+      } else {
+        if (hasLineUp && !hasLineDown) badgeY = 38;
+        else if (!hasLineUp && hasLineDown) badgeY = -38;
+      }
+
+      simHighlightMarkup = `
+        <circle cx="${midBladeX}" cy="${midBladeY}" r="30" fill="${glowBg}" stroke="${glowColor}" stroke-width="2" stroke-dasharray="5 3" class="sim-switch-pulse" />
+        <g transform="translate(${badgeX}, ${badgeY})" style="filter: drop-shadow(0 2px 5px rgba(0,0,0,0.8)); pointer-events: none;">
+          <rect x="-45" y="-10" width="90" height="20" rx="10" fill="${isClosed ? '#064e3b' : '#7f1d1d'}" stroke="${glowColor}" stroke-width="1.6" />
+          <text x="0" y="4" text-anchor="middle" fill="#FFFFFF" font-size="10" font-weight="bold">${isClosed ? '🟢 انقر للفصل' : '🔴 انقر للتوصيل'}</text>
+        </g>
+      `;
+    }
+
+    const rating = node.rating_amp || 630;
+
+    return `
+      <g class="sld-node-group sld-switch-interactive ${simClass} ${selClass}" id="node-${node.id}" transform="translate(${x}, ${y})" onclick="handleNodeClick(event, '${node.id}')" ondblclick="handleNodeDblClick(event, '${node.id}')" style="cursor:pointer;">
+        <!-- منطقة نقر تفاعلية عريضة -->
+        <circle cx="${midBladeX}" cy="${midBladeY}" r="32" fill="transparent" style="cursor:pointer; pointer-events:all;" />
+
+        <!-- تظليل وضع المحاكاة -->
+        ${simHighlightMarkup}
+
+        <!-- وصلة تفرع الخط المباشرة -->
+        ${leadMarkup}
+
+        <!-- نقطة التلامس الأولى والطرف الخارجي -->
+        <circle cx="${p1x}" cy="${p1y}" r="3.5" fill="#FFFFFF" stroke="${strokeColor}" stroke-width="2" />
+        <circle cx="${p2x}" cy="${p2y}" r="3.5" fill="#FFFFFF" stroke="${strokeColor}" stroke-width="2" />
+
+        <!-- غرفة إطفاء القوس الكهربائي (LBS Arc Chute) -->
+        ${chamberMarkup}
+
+        <!-- سيف المفتاح المفصلي -->
+        ${bladeMarkup}
+
+        <!-- كارت وبادج مفتاح LBS المميز بالأزرق السماوي والكحلي -->
+        <g transform="translate(${labelX}, ${labelY})">
+          <rect x="-48" y="-18" width="96" height="36" rx="6" style="fill:rgba(15,23,42,0.95); stroke:#0284c7; stroke-width:1.5px; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5));" />
+          <rect x="-48" y="-18" width="96" height="12" rx="5" style="fill:#0369a1;" />
+          <text x="0" y="-9" text-anchor="middle" fill="#f0f9ff" font-size="9" font-weight="bold">🔘 مفتاح LBS (${rating}A)</text>
+          <text x="0" y="5" text-anchor="middle" class="sld-badge-text" fill="#FFFFFF" font-size="10" font-weight="bold">${node.name || 'LBS'}</text>
+          <text x="0" y="15" text-anchor="middle" class="sld-badge-text" fill="#38bdf8" font-size="8.5" font-weight="bold">${node.id}</text>
+        </g>
+        <title>مفتاح فصل على الحمل ${node.name || node.id} (${rating}A) - (${isClosed ? 'مغلق 🟢' : 'مفتوح 🔴'})</title>
+      </g>
+    `;
+  },
+
   // رسم المحول المعلق: مسميات منظمة ومرتبة رأسياً فوق بعضها بذكاء هندسي مثل الأكشاك بعيداً عن مسارات الكابلات والمحول
   renderTransformer(node, isEnergized = true, isSelected = false) {
     const x = node.x;
@@ -905,12 +1097,12 @@ const Components = {
       return { x: node.x + offset.dx, y: node.y + offset.dy };
     }
 
-    // 2. إذا كانت العقدة سكينة
-    if (node.type === "switch") {
+    // 2. إذا كانت العقدة سكينة أو مفتاح LBS
+    if (node.type === "switch" || node.type === "lbs") {
       const dir = this.getSwitchDirection(node);
       const isHorizSw = (dir === "left" || dir === "right");
       const SW_OFFSET = 14;
-      const SW_LEN = 30;
+      const SW_LEN = (node.type === "lbs") ? 32 : 30;
 
       // طرف بداية السكينة (على الخط المستقيم تماماً) والطرف الخارجي
       const pBase = { x: node.x, y: node.y };
