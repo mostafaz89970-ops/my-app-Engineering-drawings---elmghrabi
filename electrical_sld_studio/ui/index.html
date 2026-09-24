@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>شركة مصر الوسطى لتوزيع الكهرباء | ENG-MOSTAFAELMGHRABY</title>
-  <link rel="stylesheet" href="css/style.css?v=28.8">
-  <link rel="stylesheet" href="css/canvas.css?v=28.8">
-  <link rel="stylesheet" href="css/settings.css?v=28.8">
+  <link rel="stylesheet" href="css/style.css?v=28.9">
+  <link rel="stylesheet" href="css/canvas.css?v=28.9">
+  <link rel="stylesheet" href="css/settings.css?v=28.9">
 </head>
 <body>
 
@@ -3019,167 +3019,19 @@
     </div>
   </div>
 
-  <!-- ==================== نافذة ضبط وإعدادات الطباعة الهندسية للمخطط ==================== -->
-  <div id="sld-print-settings-modal" class="modal-overlay hidden" style="display:none; z-index:99999;">
-    <div class="modal-dialog print-settings-dialog" style="background:#1e293b; border:1px solid #475569; border-radius:12px; width:95%; max-width:940px; box-shadow:0 14px 40px rgba(0,0,0,0.85); overflow:hidden; display:flex; flex-direction:column; max-height:92vh;">
-      <div class="modal-header" style="background:#0f172a; border-bottom:1px solid #334155; padding:12px 20px; display:flex; justify-content:space-between; align-items:center;">
-        <h3 style="margin:0; font-size:16px; color:#f8fafc; display:flex; align-items:center; gap:8px;">
-          <span>🖨️</span> ضبط وإعدادات الطباعة الهندسية للمخطط (حجم وسُمك عريض واضح)
-        </h3>
-        <button type="button" class="modal-close" onclick="closePrintSettingsModal()" style="background:transparent; border:none; color:#94a3b8; font-size:18px; cursor:pointer;" title="إغلاق">✕</button>
-      </div>
-
-      <div class="modal-body print-settings-body" style="padding:16px 20px; overflow-y:auto; display:grid; grid-template-columns: 1fr 340px; gap:18px;">
-        <!-- العمود الأيمن: عناصر التحكم والضبط -->
-        <div class="print-controls-col" style="display:flex; flex-direction:column; gap:12px;">
-          
-          <div style="background:rgba(59,130,246,0.12); border:1px solid rgba(59,130,246,0.3); border-radius:8px; padding:10px 14px; font-size:12px; color:#bfdbfe; line-height:1.6;">
-            💡 <strong>رؤية واضحة ومباشرة بالعين المجردة:</strong> تحكم هنا في تكبير حجم المخطط لملء الورقة، وزيادة سُمك الخطوط وتكبير مسميات المحولات والأكشاك لتخرج واضحة وقوية جداً بعد الطباعة دون أي بهتان أو خطوط رفيعة.
-          </div>
-
-          <!-- 1. مقياس وحجم الرسم على الورقة -->
-          <div class="print-control-card" style="background:#0f172a; border:1px solid #334155; border-radius:8px; padding:12px 14px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-              <label style="font-size:13px; font-weight:bold; color:#e2e8f0; display:flex; align-items:center; gap:6px;">
-                <span>🔍</span> مقياس وحجم الرسم على الورقة:
-              </label>
-              <span id="print-scale-val" style="font-size:13px; font-weight:bold; color:#38bdf8; background:rgba(56,189,248,0.15); padding:2px 8px; border-radius:4px;">130%</span>
-            </div>
-            <input type="range" id="print-scale-slider" min="60" max="250" step="5" value="130" oninput="onPrintSettingChange('scale', this.value)" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
-            <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">
-              <button type="button" class="btn-print-preset" onclick="setPrintScalePreset(100)">100% احتواء</button>
-              <button type="button" class="btn-print-preset active" onclick="setPrintScalePreset(130)">130% واضح ⭐</button>
-              <button type="button" class="btn-print-preset" onclick="setPrintScalePreset(160)">160% عريض</button>
-              <button type="button" class="btn-print-preset" onclick="setPrintScalePreset(200)">200% مضاعف</button>
-            </div>
-            <div style="margin-top:10px; display:flex; align-items:center; gap:8px;">
-              <input type="checkbox" id="print-optimize-aspect" checked onchange="onPrintSettingChange('optimizeAspect', this.checked)" style="accent-color:#38bdf8; cursor:pointer; width:16px; height:16px;">
-              <label for="print-optimize-aspect" style="font-size:11.5px; color:#cbd5e1; cursor:pointer;">استغلال كامل ارتفاع الورقة ومنع انضغاط المخطط في شريط ضيق</label>
-            </div>
-          </div>
-
-          <!-- 2. سُمك مسارات الخطوط والكابلات -->
-          <div class="print-control-card" style="background:#0f172a; border:1px solid #334155; border-radius:8px; padding:12px 14px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-              <label style="font-size:13px; font-weight:bold; color:#e2e8f0; display:flex; align-items:center; gap:6px;">
-                <span>⚡</span> سُمك مسارات الخطوط والكابلات:
-              </label>
-              <span id="print-stroke-val" style="font-size:13px; font-weight:bold; color:#4ade80; background:rgba(74,222,128,0.15); padding:2px 8px; border-radius:4px;">عريض جداً (8px)</span>
-            </div>
-            <input type="range" id="print-stroke-slider" min="3" max="16" step="1" value="8" oninput="onPrintSettingChange('stroke', this.value)" style="width:100%; accent-color:#4ade80; cursor:pointer;">
-            <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">
-              <button type="button" class="btn-stroke-preset" onclick="setPrintStrokePreset(4, 'قياسي (4px)')">قياسي (4px)</button>
-              <button type="button" class="btn-stroke-preset" onclick="setPrintStrokePreset(6, 'عريض (6px)')">عريض (6px)</button>
-              <button type="button" class="btn-stroke-preset active" onclick="setPrintStrokePreset(8, 'عريض جداً (8px)')">عريض جداً (8px) ⭐</button>
-              <button type="button" class="btn-stroke-preset" onclick="setPrintStrokePreset(12, 'فائق الوضوح (12px)')">فائق الوضوح (12px)</button>
-            </div>
-          </div>
-
-          <!-- 3. حجم النصوص ومسميات المحولات والقدرات -->
-          <div class="print-control-card" style="background:#0f172a; border:1px solid #334155; border-radius:8px; padding:12px 14px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-              <label style="font-size:13px; font-weight:bold; color:#e2e8f0; display:flex; align-items:center; gap:6px;">
-                <span>📝</span> حجم الخطوط والنصوص والقدرات (kVA):
-              </label>
-              <span id="print-font-val" style="font-size:13px; font-weight:bold; color:#f59e0b; background:rgba(245,158,11,0.15); padding:2px 8px; border-radius:4px;">كبير وواضح (150%)</span>
-            </div>
-            <input type="range" id="print-font-slider" min="90" max="250" step="10" value="150" oninput="onPrintSettingChange('font', this.value)" style="width:100%; accent-color:#f59e0b; cursor:pointer;">
-            <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">
-              <button type="button" class="btn-font-preset" onclick="setPrintFontPreset(100, 'عادي (100%)')">عادي (100%)</button>
-              <button type="button" class="btn-font-preset" onclick="setPrintFontPreset(125, 'متوسط (125%)')">متوسط (125%)</button>
-              <button type="button" class="btn-font-preset active" onclick="setPrintFontPreset(150, 'كبير (150%)')">كبير وواضح (150%) ⭐</button>
-              <button type="button" class="btn-font-preset" onclick="setPrintFontPreset(190, 'كبير جداً (190%)')">كبير جداً (190%)</button>
-            </div>
-          </div>
-
-          <!-- 4. إعدادات الورقة والمظهر -->
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-            <div style="background:#0f172a; border:1px solid #334155; border-radius:8px; padding:10px 12px;">
-              <label style="font-size:12px; font-weight:bold; color:#94a3b8; display:block; margin-bottom:6px;">📄 مقاس الورقة:</label>
-              <select id="print-paper-size" class="form-control" onchange="onPrintSettingChange('paperSize', this.value)" style="background:#1e293b; color:#fff; border:1px solid #475569; border-radius:6px; padding:5px 8px; width:100%; font-size:12px;">
-                <option value="A4" selected>A4 (القياسي المعتاد)</option>
-                <option value="A3">A3 (عريض - مخططات التوزيع)</option>
-                <option value="A2">A2 (كبير جداً)</option>
-              </select>
-            </div>
-
-            <div style="background:#0f172a; border:1px solid #334155; border-radius:8px; padding:10px 12px;">
-              <label style="font-size:12px; font-weight:bold; color:#94a3b8; display:block; margin-bottom:6px;">🔄 اتجاه الورقة:</label>
-              <select id="print-orientation" class="form-control" onchange="onPrintSettingChange('orientation', this.value)" style="background:#1e293b; color:#fff; border:1px solid #475569; border-radius:6px; padding:5px 8px; width:100%; font-size:12px;">
-                <option value="auto" selected>تلقائي ذكي (حسب الرسم)</option>
-                <option value="landscape">أفقي (Landscape) ↔️</option>
-                <option value="portrait">رأسي (Portrait) ↕️</option>
-              </select>
-            </div>
-
-            <div style="background:#0f172a; border:1px solid #334155; border-radius:8px; padding:10px 12px;">
-              <label style="font-size:12px; font-weight:bold; color:#94a3b8; display:block; margin-bottom:6px;">🎨 نمط الألوان:</label>
-              <select id="print-color-mode" class="form-control" onchange="onPrintSettingChange('colorMode', this.value)" style="background:#1e293b; color:#fff; border:1px solid #475569; border-radius:6px; padding:5px 8px; width:100%; font-size:12px;">
-                <option value="color" selected>ألوان واضحة عالية التباين</option>
-                <option value="bw">أبيض وأسود صريح هندسي (B&W)</option>
-              </select>
-            </div>
-
-            <div style="background:#0f172a; border:1px solid #334155; border-radius:8px; padding:10px 12px;">
-              <label style="font-size:12px; font-weight:bold; color:#94a3b8; display:block; margin-bottom:6px;">📋 الخرطوشة الرسمية:</label>
-              <select id="print-titleblock-mode" class="form-control" onchange="onPrintSettingChange('titleblock', this.value)" style="background:#1e293b; color:#fff; border:1px solid #475569; border-radius:6px; padding:5px 8px; width:100%; font-size:12px;">
-                <option value="full" selected>خرطوشة كاملة أعلى الصفحة</option>
-                <option value="compact">خرطوشة مدمجة سطر واحد</option>
-                <option value="none">بدون خرطوشة (الرسم فقط)</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <!-- العمود الأيسر: المعاينة الحية للورقة -->
-        <div class="print-preview-col" style="display:flex; flex-direction:column;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <span style="font-size:12px; font-weight:bold; color:#94a3b8;">👁️ معاينة شكل الصفحة المطبوعة:</span>
-            <span id="preview-paper-badge" style="font-size:11px; color:#38bdf8; background:#0f172a; border:1px solid #334155; padding:2px 6px; border-radius:4px;">A4 أفقي</span>
-          </div>
-          <div id="print-sheet-preview-wrap" style="flex:1; min-height:280px; max-height:360px; background:#0b1120; border:1px solid #334155; border-radius:8px; padding:12px; display:flex; align-items:center; justify-content:center; overflow:hidden;">
-            <div id="print-sheet-paper" style="background:#ffffff; border:1px solid #cbd5e1; box-shadow:0 6px 20px rgba(0,0,0,0.5); width:100%; aspect-ratio:1.414; border-radius:3px; display:flex; flex-direction:column; overflow:hidden; padding:6px; box-sizing:border-box; transition:all 0.25s;">
-              <div id="mini-preview-tb" style="border:1px solid #000; border-radius:2px; padding:2px 4px; margin-bottom:4px; font-size:7.5px; color:#000; font-weight:bold; text-align:center; background:#f8fafc; line-height:1.2;">
-                شركة مصر الوسطى لتوزيع الكهرباء | هندسة الكهرباء
-              </div>
-              <div id="mini-preview-svg-container" style="flex:1; width:100%; height:100%; overflow:hidden; display:flex; align-items:center; justify-content:center;">
-                <!-- يتم حقن المعاينة المصغرة ديناميكياً -->
-              </div>
-            </div>
-          </div>
-          <div style="margin-top:6px; font-size:11px; color:#64748b; text-align:center;">
-            * المعاينة توضح تناسق العناصر وسُمك الخطوط داخل الورقة المختارة.
-          </div>
-        </div>
-      </div>
-
-      <div class="modal-footer" style="background:#0f172a; border-top:1px solid #334155; padding:12px 20px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
-        <button type="button" class="btn btn-outline btn-sm" onclick="savePrintSettingsAsDefault()" style="border-color:#475569; color:#94a3b8; font-size:12px; cursor:pointer;" title="حفظ هذه الإعدادات لتكون الافتراضية دائماً عند كل طباعة">
-          <span>💾 حفظ كإعداد افتراضي</span>
-        </button>
-        <div style="display:flex; gap:8px;">
-          <button type="button" class="btn btn-secondary btn-sm" onclick="closePrintSettingsModal()">إلغاء</button>
-          <button type="button" class="btn btn-primary btn-sm" onclick="applyAndExecutePrint()" style="background:#2563eb; border-color:#3b82f6; font-size:13px; font-weight:bold; padding:8px 18px; cursor:pointer; display:flex; align-items:center; gap:6px;">
-            <span>🖨️ بدء الطباعة الآن</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <script src="js/jszip.min.js"></script>
   <!-- SheetJS: تصدير Excel مباشرة من المتصفح بدون خادم -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <!-- PptxGenJS: تصدير PowerPoint مباشرة من المتصفح بدون خادم -->
   <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-  <script src="js/default_projects.js?v=28.8"></script>
-  <script src="js/auth.js?v=28.8"></script>
-  <script src="js/realtime_sync.js?v=28.8"></script>
-  <script src="js/components.js?v=28.8"></script>
-  <script src="js/simulation.js?v=28.8"></script>
-  <script src="js/canvas.js?v=28.8"></script>
-  <script src="js/app.js?v=28.8"></script>
-  <script src="js/settings.js?v=28.8"></script>
+  <script src="js/default_projects.js?v=28.9"></script>
+  <script src="js/auth.js?v=28.9"></script>
+  <script src="js/realtime_sync.js?v=28.9"></script>
+  <script src="js/components.js?v=28.9"></script>
+  <script src="js/simulation.js?v=28.9"></script>
+  <script src="js/canvas.js?v=28.9"></script>
+  <script src="js/app.js?v=28.9"></script>
+  <script src="js/settings.js?v=28.9"></script>
 </body>
 </html>
 
