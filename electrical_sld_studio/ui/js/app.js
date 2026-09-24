@@ -6733,7 +6733,36 @@ async function printProjectFromManager(p_id) {
   }, 400);
 }
 
-function printFullSchematic() {
+/* ==========================================================================
+   إعدادات وضبط الطباعة الهندسية المتطورة (Print Scaling & Stroke Tuning Engine)
+   ========================================================================== */
+
+function getDefaultPrintSettings() {
+  const defaults = {
+    scale: 130,             // مقياس التكبير بالنسبة المئوية (60 - 250%)
+    stroke: 8,              // سُمك الخطوط والكابلات بالبكسل (3 - 16px)
+    font: 150,              // نسبة تكبير النصوص والقدرات (90 - 250%)
+    paperSize: "A4",        // A4, A3, A2
+    orientation: "auto",    // auto, landscape, portrait
+    optimizeAspect: true,   // استغلال كامل مساحة الورقة ومنع الانضغاط
+    colorMode: "color",     // color, bw
+    titleblock: "full"      // full, compact, none
+  };
+
+  try {
+    const saved = localStorage.getItem("sld_print_settings");
+    if (saved) {
+      return Object.assign(defaults, JSON.parse(saved));
+    }
+  } catch (e) {
+    console.warn("Could not load print settings from localStorage", e);
+  }
+  return defaults;
+}
+
+window.currentPrintSettings = getDefaultPrintSettings();
+
+function openPrintSettingsModal() {
   if (window.hasPermission && !window.hasPermission('btn_print')) {
     showToast("⛔ ليس لديك صلاحية طباعة المخطط", "error");
     return;
@@ -6743,9 +6772,283 @@ function printFullSchematic() {
     return;
   }
 
-  showToast("🖨️ جاري ضبط المخطط والورقة هندسياً حسب اتجاه الرسم...", "info");
+  const modal = document.getElementById("sld-print-settings-modal");
+  if (!modal) {
+    printFullSchematic(true);
+    return;
+  }
 
-  // 1. حساب أبعاد ومحيط المخطط الفعلي (Bounding Box)
+  const s = window.currentPrintSettings || getDefaultPrintSettings();
+
+  const scaleSlider = document.getElementById("print-scale-slider");
+  const scaleVal = document.getElementById("print-scale-val");
+  if (scaleSlider && scaleVal) {
+    scaleSlider.value = s.scale;
+    scaleVal.textContent = s.scale + "%";
+  }
+
+  const strokeSlider = document.getElementById("print-stroke-slider");
+  const strokeVal = document.getElementById("print-stroke-val");
+  if (strokeSlider && strokeVal) {
+    strokeSlider.value = s.stroke;
+    strokeVal.textContent = getStrokeLabel(s.stroke);
+  }
+
+  const fontSlider = document.getElementById("print-font-slider");
+  const fontVal = document.getElementById("print-font-val");
+  if (fontSlider && fontVal) {
+    fontSlider.value = s.font;
+    fontVal.textContent = getFontLabel(s.font);
+  }
+
+  const optAspect = document.getElementById("print-optimize-aspect");
+  if (optAspect) optAspect.checked = !!s.optimizeAspect;
+
+  const paperSelect = document.getElementById("print-paper-size");
+  if (paperSelect) paperSelect.value = s.paperSize || "A4";
+
+  const orientSelect = document.getElementById("print-orientation");
+  if (orientSelect) orientSelect.value = s.orientation || "auto";
+
+  const colorSelect = document.getElementById("print-color-mode");
+  if (colorSelect) colorSelect.value = s.colorMode || "color";
+
+  const tbSelect = document.getElementById("print-titleblock-mode");
+  if (tbSelect) tbSelect.value = s.titleblock || "full";
+
+  updatePresetButtonsState();
+  updatePrintPreview();
+
+  modal.classList.remove("hidden");
+  modal.style.display = "flex";
+}
+
+function closePrintSettingsModal() {
+  const modal = document.getElementById("sld-print-settings-modal");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.style.display = "none";
+  }
+}
+
+function getStrokeLabel(stroke) {
+  stroke = Number(stroke);
+  if (stroke <= 4) return `قياسي (${stroke}px)`;
+  if (stroke <= 6) return `عريض (${stroke}px)`;
+  if (stroke <= 10) return `عريض جداً (${stroke}px) ⭐`;
+  return `فائق الوضوح (${stroke}px)`;
+}
+
+function getFontLabel(font) {
+  font = Number(font);
+  if (font <= 100) return `عادي (${font}%)`;
+  if (font <= 130) return `متوسط (${font}%)`;
+  if (font <= 165) return `كبير وواضح (${font}%) ⭐`;
+  return `كبير جداً (${font}%)`;
+}
+
+function onPrintSettingChange(key, value) {
+  if (!window.currentPrintSettings) {
+    window.currentPrintSettings = getDefaultPrintSettings();
+  }
+
+  if (key === "scale") {
+    window.currentPrintSettings.scale = Number(value);
+    const valEl = document.getElementById("print-scale-val");
+    if (valEl) valEl.textContent = value + "%";
+  } else if (key === "stroke") {
+    window.currentPrintSettings.stroke = Number(value);
+    const valEl = document.getElementById("print-stroke-val");
+    if (valEl) valEl.textContent = getStrokeLabel(value);
+  } else if (key === "font") {
+    window.currentPrintSettings.font = Number(value);
+    const valEl = document.getElementById("print-font-val");
+    if (valEl) valEl.textContent = getFontLabel(value);
+  } else if (key === "optimizeAspect") {
+    window.currentPrintSettings.optimizeAspect = !!value;
+  } else if (key === "paperSize") {
+    window.currentPrintSettings.paperSize = value;
+  } else if (key === "orientation") {
+    window.currentPrintSettings.orientation = value;
+  } else if (key === "colorMode") {
+    window.currentPrintSettings.colorMode = value;
+  } else if (key === "titleblock") {
+    window.currentPrintSettings.titleblock = value;
+  }
+
+  updatePresetButtonsState();
+  updatePrintPreview();
+}
+
+function setPrintScalePreset(val) {
+  const slider = document.getElementById("print-scale-slider");
+  if (slider) slider.value = val;
+  onPrintSettingChange("scale", val);
+}
+
+function setPrintStrokePreset(val) {
+  const slider = document.getElementById("print-stroke-slider");
+  if (slider) slider.value = val;
+  onPrintSettingChange("stroke", val);
+}
+
+function setPrintFontPreset(val) {
+  const slider = document.getElementById("print-font-slider");
+  if (slider) slider.value = val;
+  onPrintSettingChange("font", val);
+}
+
+function updatePresetButtonsState() {
+  const s = window.currentPrintSettings || getDefaultPrintSettings();
+
+  document.querySelectorAll(".btn-print-preset").forEach(btn => {
+    const text = btn.textContent;
+    btn.classList.toggle("active", text.includes(s.scale + "%"));
+  });
+
+  document.querySelectorAll(".btn-stroke-preset").forEach(btn => {
+    const text = btn.textContent;
+    btn.classList.toggle("active", text.includes(s.stroke + "px"));
+  });
+
+  document.querySelectorAll(".btn-font-preset").forEach(btn => {
+    const text = btn.textContent;
+    btn.classList.toggle("active", text.includes(s.font + "%"));
+  });
+}
+
+function savePrintSettingsAsDefault() {
+  try {
+    const s = window.currentPrintSettings || getDefaultPrintSettings();
+    localStorage.setItem("sld_print_settings", JSON.stringify(s));
+    showToast("💾 تم حفظ إعدادات وسُمك الطباعة كإعداد افتراضي دائماً", "success");
+  } catch (e) {
+    showToast("تعذر حفظ الإعدادات: " + e.message, "error");
+  }
+}
+
+/**
+ * تحديث المعاينة الحية للورقة المصغرة
+ */
+function updatePrintPreview() {
+  const s = window.currentPrintSettings || getDefaultPrintSettings();
+  const paperEl = document.getElementById("print-sheet-paper");
+  const badgeEl = document.getElementById("preview-paper-badge");
+  const miniTb = document.getElementById("mini-preview-tb");
+  const svgWrap = document.getElementById("mini-preview-svg-container");
+  if (!paperEl || !svgWrap) return;
+
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  if (currentProject && currentProject.nodes && currentProject.nodes.length > 0) {
+    currentProject.nodes.forEach(n => {
+      if (n.x < minX) minX = n.x;
+      if (n.x > maxX) maxX = n.x;
+      if (n.y < minY) minY = n.y;
+      if (n.y > maxY) maxY = n.y;
+    });
+  } else {
+    minX = 0; maxX = 1000; minY = 0; maxY = 500;
+  }
+  const drawingWidth = Math.max(maxX - minX, 100);
+  const drawingHeight = Math.max(maxY - minY, 100);
+
+  let isLandscape = true;
+  if (s.orientation === "landscape") isLandscape = true;
+  else if (s.orientation === "portrait") isLandscape = false;
+  else isLandscape = drawingWidth >= drawingHeight;
+
+  const paperAspect = isLandscape ? 1.414 : (1 / 1.414);
+  paperEl.style.aspectRatio = paperAspect.toString();
+
+  if (badgeEl) {
+    badgeEl.textContent = `${s.paperSize || 'A4'} ${isLandscape ? 'أفقي ↔️' : 'رأسي ↕️'}`;
+  }
+
+  if (miniTb) {
+    if (s.titleblock === "none") {
+      miniTb.style.display = "none";
+    } else if (s.titleblock === "compact") {
+      miniTb.style.display = "block";
+      miniTb.style.padding = "1px 3px";
+      miniTb.style.fontSize = "6.5px";
+      miniTb.textContent = (currentProject ? currentProject.name : "مخطط الشبكة");
+    } else {
+      miniTb.style.display = "block";
+      miniTb.style.padding = "2px 4px";
+      miniTb.style.fontSize = "7.5px";
+      const adminName = currentProject && currentProject.admin ? currentProject.admin : "هندسة الكهرباء";
+      miniTb.textContent = `شركة مصر الوسطى لتوزيع الكهرباء | ${adminName} - ${currentProject ? currentProject.name : 'مخطط التوزيع'}`;
+    }
+  }
+
+  let padX = 60;
+  let padY = 60;
+
+  if (s.optimizeAspect) {
+    const targetRatio = isLandscape ? 1.45 : 0.69;
+    const currentRatio = drawingWidth / drawingHeight;
+    if (currentRatio > targetRatio) {
+      const idealH = drawingWidth / targetRatio;
+      padY = Math.max(60, (idealH - drawingHeight) / 2);
+    } else {
+      const idealW = drawingHeight * targetRatio;
+      padX = Math.max(60, (idealW - drawingWidth) / 2);
+    }
+  }
+
+  const zoomFactor = Math.max(0.6, (s.scale || 130) / 100);
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+  const vbW = (drawingWidth + padX * 2) / zoomFactor;
+  const vbH = (drawingHeight + padY * 2) / zoomFactor;
+  const vbX = centerX - vbW / 2;
+  const vbY = centerY - vbH / 2;
+
+  const strokeVal = s.stroke || 8;
+  const fontVal = s.font || 150;
+  const isBW = s.colorMode === "bw";
+
+  const mainSvg = document.getElementById("sld-canvas");
+  if (mainSvg) {
+    const stageClone = document.getElementById("canvas-stage");
+    if (stageClone) {
+      const cloneHtml = stageClone.innerHTML;
+      const strokeColorOH = isBW ? "#000000" : "#16a34a";
+      const strokeColorCable = isBW ? "#000000" : "#1e88e5";
+
+      svgWrap.innerHTML = `
+        <svg viewBox="${vbX} ${vbY} ${vbW} ${vbH}" preserveAspectRatio="xMidYMid meet" style="width:100%; height:100%; display:block; background:#ffffff;">
+          <defs>
+            <style>
+              .line-path { stroke-width: ${strokeVal * 1.5}px !important; stroke-linecap: round !important; }
+              .line-path.overhead { stroke: ${strokeColorOH} !important; stroke-dasharray: none !important; }
+              .line-path.cable { stroke: ${strokeColorCable} !important; stroke-dasharray: ${strokeVal * 2.8}px ${strokeVal * 1.6}px !important; }
+              .sld-badge-text, .sld-placard-title, .sld-placard-sub, .sld-transformer-name, .sld-kiosk-name, text {
+                font-size: ${12 * (fontVal / 100) * 1.5}px !important;
+                font-weight: 800 !important;
+                fill: #000000 !important;
+              }
+              .sld-stretch-handle-group, .sld-deflect-handle-group, #bg-grid { display: none !important; }
+            </style>
+          </defs>
+          <g transform="translate(0, 0) scale(1)">
+            ${cloneHtml}
+          </g>
+        </svg>
+      `;
+    }
+  }
+}
+
+/**
+ * تطبيق الإعدادات وبدء أمر الطباعة فورياً
+ */
+function applyAndExecutePrint() {
+  const s = window.currentPrintSettings || getDefaultPrintSettings();
+  closePrintSettingsModal();
+
+  showToast("🖨️ جاري تطبيق مقياس وسُمك الطباعة العريض...", "info");
+
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   currentProject.nodes.forEach(n => {
     if (n.x < minX) minX = n.x;
@@ -6757,47 +7060,152 @@ function printFullSchematic() {
   const drawingWidth = Math.max(maxX - minX, 100);
   const drawingHeight = Math.max(maxY - minY, 100);
 
-  // تحديد اتجاه الورقة حسب اتجاه الرسم (أفقي Landscape إذا كان العرض أكبر، أو رأسي Portrait)
-  const isLandscape = drawingWidth >= drawingHeight;
+  let isLandscape = true;
+  if (s.orientation === "landscape") isLandscape = true;
+  else if (s.orientation === "portrait") isLandscape = false;
+  else isLandscape = drawingWidth >= drawingHeight;
 
-  // 2. تطبيق اتجاه الورقة ديناميكياً على المتصفح عبر @page
+  const paper = s.paperSize || "A4";
+
+  let padX = 60;
+  let padY = 60;
+
+  if (s.optimizeAspect) {
+    const targetRatio = isLandscape ? 1.45 : 0.69;
+    const currentRatio = drawingWidth / drawingHeight;
+    if (currentRatio > targetRatio) {
+      const idealH = drawingWidth / targetRatio;
+      padY = Math.max(60, (idealH - drawingHeight) / 2);
+    } else {
+      const idealW = drawingHeight * targetRatio;
+      padX = Math.max(60, (idealW - drawingWidth) / 2);
+    }
+  }
+
+  const zoomFactor = Math.max(0.6, (s.scale || 130) / 100);
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+  const vbW = (drawingWidth + padX * 2) / zoomFactor;
+  const vbH = (drawingHeight + padY * 2) / zoomFactor;
+  const vbX = centerX - vbW / 2;
+  const vbY = centerY - vbH / 2;
+
+  // معايرة فيزيائية ذكية للخطوط والنصوص
+  const basePaperWidth = paper === "A3" ? 1580 : (paper === "A2" ? 2200 : 1100);
+  const paperPrintWidth = isLandscape ? basePaperWidth : (basePaperWidth * 0.707);
+  const scaleDownRatio = Math.min(1.0, paperPrintWidth / vbW);
+
+  const compensationFactor = Math.max(1.0, 1 / Math.max(0.2, scaleDownRatio));
+
+  const chosenStroke = s.stroke || 8;
+  const computedLineStroke = Math.round(chosenStroke * compensationFactor);
+  const computedSymbolStroke = Math.max(2.5, Math.round(computedLineStroke * 0.5));
+  const computedDash1 = Math.round(computedLineStroke * 2.2);
+  const computedDash2 = Math.round(computedLineStroke * 1.4);
+
+  const chosenFontPct = (s.font || 150) / 100;
+  const computedFontSize = Math.round(13 * chosenFontPct * compensationFactor);
+
+  const isBW = s.colorMode === "bw";
+  const strokeColorOH = isBW ? "#000000" : "#16a34a";
+  const strokeColorCable = isBW ? "#000000" : "#1e88e5";
+
   let printStyleEl = document.getElementById("sld-dynamic-print-style");
   if (!printStyleEl) {
     printStyleEl = document.createElement("style");
     printStyleEl.id = "sld-dynamic-print-style";
     document.head.appendChild(printStyleEl);
   }
+
+  let titleBlockCss = "";
+  if (s.titleblock === "none") {
+    titleBlockCss = ".official-title-block { display: none !important; }";
+  } else if (s.titleblock === "compact") {
+    titleBlockCss = `
+      .official-title-block {
+        padding: 4px 10px !important;
+        margin-bottom: 6px !important;
+      }
+      .official-title-block .block-company-header {
+        font-size: 11px !important;
+        margin-bottom: 3px !important;
+        padding-bottom: 2px !important;
+      }
+      .official-title-block .block-row {
+        font-size: 9.5px !important;
+      }
+    `;
+  }
+
   printStyleEl.textContent = `
     @media print {
       @page {
-        size: ${isLandscape ? 'A4 landscape' : 'A4 portrait'};
-        margin: 6mm 8mm;
+        size: ${paper} ${isLandscape ? 'landscape' : 'portrait'};
+        margin: 5mm 6mm;
       }
+      .infinite-svg {
+        position: static !important;
+        width: 100% !important;
+        height: auto !important;
+        max-height: none !important;
+        display: block !important;
+        background: #ffffff !important;
+        overflow: visible !important;
+      }
+      .line-path {
+        stroke-width: ${computedLineStroke}px !important;
+        stroke-linecap: round !important;
+      }
+      .line-path.overhead {
+        stroke: ${strokeColorOH} !important;
+        stroke-dasharray: none !important;
+      }
+      .line-path.cable {
+        stroke: ${strokeColorCable} !important;
+        stroke-dasharray: ${computedDash1}px ${computedDash2}px !important;
+      }
+      .sld-badge-text,
+      .sld-placard-title,
+      .sld-placard-sub,
+      .sld-placard-sub tspan,
+      .sld-transformer-name,
+      .sld-transformer-cap,
+      .sld-transformer-id,
+      .sld-kiosk-name,
+      .sld-kiosk-cap,
+      .sld-kiosk-id,
+      .sld-node-group text {
+        font-size: ${computedFontSize}px !important;
+        font-weight: 900 !important;
+        fill: #000000 !important;
+        stroke: none !important;
+      }
+      .sld-length-pill {
+        stroke-width: ${Math.max(1.5, Math.round(computedLineStroke * 0.25))}px !important;
+      }
+      .sld-node-group circle,
+      .sld-node-group rect {
+        stroke-width: ${computedSymbolStroke}px !important;
+      }
+      .sld-switch-interactive path,
+      .sld-switch-interactive line {
+        stroke-width: ${Math.round(computedLineStroke * 0.8)}px !important;
+      }
+      ${titleBlockCss}
     }
   `;
 
-  // 3. ضبط viewBox للـ SVG ليبدأ المخطط في الورقة بدقة متناهية دون فراغات أو قص
   const svg = document.getElementById("sld-canvas");
   const stage = document.getElementById("canvas-stage");
   if (!svg || !stage) return;
 
-  const padX = 60;
-  const padY = 60;
-  const vbX = minX - padX;
-  const vbY = minY - padY;
-  const vbW = drawingWidth + padX * 2;
-  const vbH = drawingHeight + padY * 2;
-
-  // حفظ الحالة التفاعلية الحالية قبل الطباعة
   const savedTransform = stage.getAttribute("transform");
   const savedViewBox = svg.getAttribute("viewBox");
 
-  // ضبط الـ SVG للطباعة: يبدأ المخطط من أول الورقة متناسقاً تماماً
   svg.setAttribute("viewBox", `${vbX} ${vbY} ${vbW} ${vbH}`);
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
   stage.setAttribute("transform", "translate(0, 0) scale(1)");
 
-  // 4. استعادة الحالة التفاعلية للمستخدم بعد انتهاء أمر الطباعة أو إلغائه
   let restored = false;
   const restoreAfterPrint = () => {
     if (restored) return;
@@ -6816,12 +7224,35 @@ function printFullSchematic() {
 
   setTimeout(() => {
     window.print();
-    setTimeout(restoreAfterPrint, 2000);
+    setTimeout(restoreAfterPrint, 2500);
   }, 350);
+}
+
+function printFullSchematic(immediate = false) {
+  if (immediate) {
+    applyAndExecutePrint();
+  } else {
+    openPrintSettingsModal();
+  }
 }
 
 // اختصارات الكيبورد
 window.addEventListener("keydown", (e) => {
+  // اختصار الطباعة الهندسي Ctrl+P
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
+    e.preventDefault();
+    openPrintSettingsModal();
+    return;
+  }
+
+  const printModal = document.getElementById("sld-print-settings-modal");
+  const isPrintModalOpen = printModal && !printModal.classList.contains("hidden");
+  if (isPrintModalOpen && e.key === "Escape") {
+    e.preventDefault();
+    closePrintSettingsModal();
+    return;
+  }
+
   const editModal = document.getElementById("edit-element-modal");
   const isEditModalOpen = editModal && !editModal.classList.contains("hidden");
   if (isEditModalOpen && e.key === "Escape") {
