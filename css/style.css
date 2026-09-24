@@ -1372,21 +1372,26 @@ body {
     position: static !important;
     width: 100% !important;
     height: auto !important;
-    max-height: calc(100vh - 120px) !important;
+    max-height: none !important;
     display: block !important;
     background: #fff !important;
+    overflow: visible !important;
   }
   #bg-grid,
   .sld-stretch-handle-group,
   .sld-deflect-handle-group {
     display: none !important;
   }
+  .line-path {
+    stroke-linecap: round !important;
+  }
   .line-path.overhead {
     stroke: #000 !important;
+    stroke-dasharray: none !important;
   }
   .line-path.cable {
     stroke: #000 !important;
-    stroke-dasharray: 8 5 !important;
+    stroke-dasharray: 12 7 !important;
   }
   .sld-length-pill {
     fill: #ffffff !important;
@@ -2431,3 +2436,43 @@ body[data-header-mode="classic"] #classic-row3 {
 body[data-header-mode="classic"] #classic-system-actions {
   display: flex !important;
 }
+
+/* ==================== أنماط نافذة إعدادات وضبط الطباعة الهندسية ==================== */
+.btn-print-preset,
+.btn-stroke-preset,
+.btn-font-preset {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  font-size: 11px;
+  padding: 4px 9px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.btn-print-preset:hover,
+.btn-stroke-preset:hover,
+.btn-font-preset:hover {
+  background: #334155;
+  color: #ffffff;
+  border-color: #475569;
+}
+
+.btn-print-preset.active,
+.btn-stroke-preset.active,
+.btn-font-preset.active {
+  background: #2563eb;
+  border-color: #3b82f6;
+  color: #ffffff;
+  font-weight: bold;
+  box-shadow: 0 0 6px rgba(59, 130, 246, 0.4);
+}
+
+@media (max-width: 800px) {
+  .print-settings-body {
+    grid-template-columns: 1fr !important;
+  }
+}
+
