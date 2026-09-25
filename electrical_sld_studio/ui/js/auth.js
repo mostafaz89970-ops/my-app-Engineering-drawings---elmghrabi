@@ -91,18 +91,25 @@ function populateLoginAdminDropdown(sector, selectedAdmin = null) {
   const adminSelect = document.getElementById("login-admin-select");
   if (!adminSelect) return;
 
-  const sec = sector || (document.getElementById("login-sector-select")?.value || "المنيا شمال");
+  const sec = sector || (document.getElementById("login-sector-select")?.value);
+  if (!sec) {
+    adminSelect.innerHTML = `<option value="" disabled selected>— اختر القطاع أولاً —</option>`;
+    adminSelect.value = "";
+    return;
+  }
+
   const sectorsMap = (window.SECTORS_MAP) || SECTORS_MAP;
   const admins = (sectorsMap && sectorsMap[sec]) ? sectorsMap[sec] : (SECTORS_MAP[sec] || []);
 
-  adminSelect.innerHTML = admins.map(adm => 
+  const placeholder = `<option value="" disabled ${!selectedAdmin ? "selected" : ""}>— اختر الإدارة / الفرع —</option>`;
+  adminSelect.innerHTML = placeholder + admins.map(adm => 
     `<option value="${adm}" ${adm === selectedAdmin ? "selected" : ""}>${adm}</option>`
   ).join('');
 
   if (selectedAdmin && admins.includes(selectedAdmin)) {
     adminSelect.value = selectedAdmin;
-  } else if (admins.length > 0) {
-    adminSelect.value = admins[0];
+  } else {
+    adminSelect.value = "";
   }
 }
 
@@ -110,7 +117,7 @@ function onLoginSectorChange() {
   const sectorSelect = document.getElementById("login-sector-select");
   if (!sectorSelect) return;
   const sector = sectorSelect.value;
-  populateLoginAdminDropdown(sector);
+  populateLoginAdminDropdown(sector, null);
   filterLoginUsers();
 }
 
@@ -127,8 +134,20 @@ function filterLoginUsers() {
   if (!userSelect) return;
 
   const usersList = (window.allUsersCache && window.allUsersCache.length > 0) ? window.allUsersCache : allUsersCache;
-  const currentSector = sectorSelect ? sectorSelect.value : "المنيا شمال";
-  const currentAdmin = adminSelect ? adminSelect.value : "بني مزار شرق";
+  const currentSector = sectorSelect ? sectorSelect.value : "";
+  const currentAdmin = adminSelect ? adminSelect.value : "";
+
+  // إذا لم يتم اختيار القطاع أو الإدارة بعد، يتم عرض خيار إرشادي بدون اختيار مسبق
+  if (!currentSector) {
+    userSelect.innerHTML = `<option value="" disabled selected>— اختر القطاع والإدارة أولاً —</option>`;
+    userSelect.value = "";
+    return;
+  }
+  if (!currentAdmin) {
+    userSelect.innerHTML = `<option value="" disabled selected>— اختر الإدارة / الفرع أولاً —</option>`;
+    userSelect.value = "";
+    return;
+  }
 
   let filtered = [];
   if (currentAdmin === "all" || currentSector === "all") {
@@ -147,14 +166,15 @@ function filterLoginUsers() {
   }
 
   if (filtered.length === 0) {
-    userSelect.innerHTML = `<option value="admin">المدير العام (م/ مصطفى المغربي) - ${currentAdmin}</option>`;
+    userSelect.innerHTML = `<option value="" disabled selected>— لا يوجد مستخدمين مسجلين في هذا الفرع —</option>`;
+    userSelect.value = "";
   } else {
-    userSelect.innerHTML = filtered.map(u => {
+    userSelect.innerHTML = `<option value="" disabled selected>— اختر اسم المستخدم —</option>` + filtered.map(u => {
       const statusLabel = u.is_active === false ? ' ⛔ (معطّل / محظور)' : '';
       const branchNote = (u.administration && u.administration !== currentAdmin) ? ` [${u.administration}]` : '';
       return `<option value="${u.id}">${u.name}${branchNote}${statusLabel}</option>`;
     }).join('');
-    userSelect.value = filtered[0].id;
+    userSelect.value = ""; // لا يتم اختيار أي مستخدم تلقائياً
   }
 
   userSelect.disabled = false;
@@ -273,8 +293,10 @@ async function loadInitialUsers() {
 
   window.allUsersCache = allUsersCache;
   const sectorSelect = document.getElementById("login-sector-select");
-  const currentSector = sectorSelect ? sectorSelect.value : "المنيا شمال";
-  populateLoginAdminDropdown(currentSector, "بني مزار شرق");
+  if (sectorSelect) {
+    sectorSelect.value = "";
+  }
+  populateLoginAdminDropdown("", null);
   filterLoginUsers();
 }
 
@@ -289,8 +311,12 @@ function applySyncedUsers(newUsers) {
     try { localStorage.setItem("sld_settings", JSON.stringify(appSettings)); } catch(_) {}
   }
   const sectorSelect = document.getElementById("login-sector-select");
-  const currentSector = sectorSelect ? sectorSelect.value : "المنيا شمال";
-  populateLoginAdminDropdown(currentSector, "بني مزار شرق");
+  const currentSector = sectorSelect ? sectorSelect.value : "";
+  const adminSelect = document.getElementById("login-admin-select");
+  const currentAdmin = adminSelect ? adminSelect.value : "";
+  if (currentSector) {
+    populateLoginAdminDropdown(currentSector, currentAdmin);
+  }
   filterLoginUsers();
   if (typeof renderUsersTab === "function") renderUsersTab();
 }
@@ -298,10 +324,58 @@ window.applySyncedUsers = applySyncedUsers;
 
 async function handleLogin(e) {
   e.preventDefault();
+  const sectorSelect = document.getElementById("login-sector-select");
+  const adminSelect = document.getElementById("login-admin-select");
   const userSelect = document.getElementById("user-select");
   const pwInput = document.getElementById("password-input");
   const errorDiv = document.getElementById("login-error");
   const submitBtn = document.getElementById("btn-submit-login");
+
+  const sectorVal = (sectorSelect?.value || "").trim();
+  const adminVal = (adminSelect?.value || "").trim();
+  const selectedUserId = (userSelect?.value || "").trim();
+  const entered = (pwInput?.value || "").trim();
+
+  // التحقق الإلزامي من اختيار القطاع والإدارة والمستخدم
+  if (!sectorVal) {
+    if (errorDiv) {
+      errorDiv.textContent = "⚠️ يرجى اختيار القطاع أولاً.";
+      errorDiv.style.display = "block";
+      errorDiv.style.color = "#ef4444";
+    }
+    sectorSelect?.focus();
+    return;
+  }
+
+  if (!adminVal) {
+    if (errorDiv) {
+      errorDiv.textContent = "⚠️ يرجى اختيار الإدارة الفرعية / الفرع أولاً.";
+      errorDiv.style.display = "block";
+      errorDiv.style.color = "#ef4444";
+    }
+    adminSelect?.focus();
+    return;
+  }
+
+  if (!selectedUserId) {
+    if (errorDiv) {
+      errorDiv.textContent = "⚠️ يرجى اختيار اسم الموظف / المستخدم أولاً.";
+      errorDiv.style.display = "block";
+      errorDiv.style.color = "#ef4444";
+    }
+    userSelect?.focus();
+    return;
+  }
+
+  if (!entered) {
+    if (errorDiv) {
+      errorDiv.textContent = "⚠️ يرجى إدخال كلمة المرور.";
+      errorDiv.style.display = "block";
+      errorDiv.style.color = "#ef4444";
+    }
+    pwInput?.focus();
+    return;
+  }
 
   if (errorDiv) errorDiv.style.display = "none";
   if (submitBtn) {
@@ -311,9 +385,6 @@ async function handleLogin(e) {
 
   let loggedInUser = null;
   let token = null;
-
-  const entered = (pwInput?.value || "").trim();
-  const selectedUserId = userSelect ? userSelect.value : "admin";
 
   try {
     const controller = new AbortController();

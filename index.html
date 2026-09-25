@@ -22,13 +22,14 @@
         <p class="auth-subtitle">ENG-MOSTAFAELMGHRABY | النظام الهندسي لمخططات التوزيع</p>
       </div>
 
-      <form id="login-form" class="auth-form" onsubmit="handleLogin(event)">
+      <form id="login-form" class="auth-form" onsubmit="handleLogin(event)" autocomplete="off">
         <!-- حقل القطاع -->
         <div class="form-group">
           <label for="login-sector-select">🏢 القطاع (شركة مصر الوسطى)</label>
           <div class="select-wrapper">
-            <select id="login-sector-select" class="form-control" onchange="onLoginSectorChange()">
-              <option value="المنيا شمال" selected>قطاع المنيا شمال</option>
+            <select id="login-sector-select" class="form-control" onchange="onLoginSectorChange()" required>
+              <option value="" disabled selected>— اختر القطاع —</option>
+              <option value="المنيا شمال">قطاع المنيا شمال</option>
               <option value="المنيا جنوب">قطاع المنيا جنوب</option>
               <option value="بني سويف">قطاع بني سويف</option>
               <option value="الفيوم">قطاع الفيوم</option>
@@ -42,14 +43,8 @@
         <div class="form-group">
           <label for="login-admin-select">🏛️ الإدارة الفرعية / العامة (المركز)</label>
           <div class="select-wrapper">
-            <select id="login-admin-select" class="form-control" onchange="onLoginAdminChange()">
-              <option value="بني مزار شرق" selected>بني مزار شرق</option>
-              <option value="بني مزار غرب">بني مزار غرب</option>
-              <option value="مغاغة">مغاغة</option>
-              <option value="العدوة">العدوة</option>
-              <option value="مطاي">مطاي</option>
-              <option value="سمالوط شرق">سمالوط شرق</option>
-              <option value="سمالوط غرب">سمالوط غرب</option>
+            <select id="login-admin-select" class="form-control" onchange="onLoginAdminChange()" required>
+              <option value="" disabled selected>— اختر القطاع أولاً —</option>
             </select>
           </div>
         </div>
@@ -59,7 +54,7 @@
           <label for="user-select">👤 اسم الموظف / المستخدم في هذه الإدارة</label>
           <div class="select-wrapper">
             <select id="user-select" class="form-control" required>
-              <option value="admin">المدير العام (Administrator)</option>
+              <option value="" disabled selected>— اختر الإدارة أولاً —</option>
             </select>
           </div>
         </div>
