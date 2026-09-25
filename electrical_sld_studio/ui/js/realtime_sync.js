@@ -1195,38 +1195,50 @@
 
       lastFirebaseTimestamp = meta.timestamp;
 
-      // 1. حفظ المخطط بالكامل في مسار الإدارة بقاعدة بيانات Firebase Realtime
-      fetch(adminUrl + '/project.json', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(cleanProj)
-      }).catch(function () {});
+      // 1. حفظ المخطط دائماً في مسار المشاريع العام بقاعدة بيانات Firebase لضمان التسميع المركزي
+      if (cleanProj.id) {
+        fetch(FIREBASE_BASE_URL + '/projects/' + encodeURIComponent(cleanProj.id) + '.json', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cleanProj)
+        }).catch(function () {});
+      }
 
-      // 2. تحديث بيانات الميتا لإشعار كافة متصفحات وأجهزة نفس الإدارة
-      fetch(adminUrl + '/meta.json', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(meta)
-      }).catch(function () {});
+      // 2. التحقق من أن المخطط يخص هذه الإدارة فعلياً قبل الكتابة في مسارها الخاص لمنع التسريب
+      var belongsToCurrentAdmin = (!cleanProj.administration || cleanProj.administration === adminName || 
+        (typeof window.isProjectVisibleToAdmin === 'function' && window.isProjectVisibleToAdmin(cleanProj, adminName)));
 
-      // 3. إرسال حدث مباشر عبر قناة live_event الخاصة بالإدارة لمستمعي SSE
-      var livePayload = {
-        type: 'DRAWING_UPDATE',
-        senderId: deviceId,
-        author: author,
-        isAdmin: isAdmin,
-        priority: isAdmin ? 'high' : 'normal',
-        adminKey: adminKey,
-        adminName: adminName,
-        timestamp: meta.timestamp,
-        reason: reason || 'direct_firebase_push',
-        data: { project: cleanProj }
-      };
-      fetch(adminUrl + '/live_event.json', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(livePayload)
-      }).catch(function () {});
+      if (belongsToCurrentAdmin) {
+        fetch(adminUrl + '/project.json', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cleanProj)
+        }).catch(function () {});
+
+        fetch(adminUrl + '/meta.json', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(meta)
+        }).catch(function () {});
+
+        var livePayload = {
+          type: 'DRAWING_UPDATE',
+          senderId: deviceId,
+          author: author,
+          isAdmin: isAdmin,
+          priority: isAdmin ? 'high' : 'normal',
+          adminKey: adminKey,
+          adminName: adminName,
+          timestamp: meta.timestamp,
+          reason: reason || 'direct_firebase_push',
+          data: { project: cleanProj }
+        };
+        fetch(adminUrl + '/live_event.json', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(livePayload)
+        }).catch(function () {});
+      }
 
       console.log('☁️ تم إرسال المخطط إلى سحابة Firebase بنجاح للإدارة [' + adminName + '] (' + cleanProj.nodes.length + ' عقدة)');
       updateBadgeUI('connected');
@@ -1240,6 +1252,7 @@
     try {
       var adminUrl = getAdminFirebaseUrl();
       var currentAdminKey = getAdminKey();
+      var currentAdminName = getCurrentAdminName();
       var metaRes = await fetch(adminUrl + '/meta.json');
       var remoteMeta = metaRes.ok ? await metaRes.json() : null;
 
@@ -1258,8 +1271,32 @@
       }
       if (Array.isArray(effectiveCatalog)) {
         effectiveCatalog = effectiveCatalog.filter(function (p) {
-          return p && (!window.isProjectDeleted || !window.isProjectDeleted(p.id, p.name));
+          return p && (!window.isProjectDeleted || !window.isProjectDeleted(p.id, p.name)) && (!window.isDemoOrDummyProject || !window.isDemoOrDummyProject(p));
         });
+      }
+
+      // إذا كانت الإدارة غير مسجل لها أي مشاريع معتمدة: الشاشة يجب أن تظل بيضاء وفارغة تماماً دون أي رسم
+      if (!effectiveCatalog || effectiveCatalog.length === 0) {
+        console.log('🏛️ الإدارة [' + currentAdminKey + '] لا تملك مشاريع مسجلة: التأكد من تفريغ الشاشة تماماً...');
+        var curP = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+        if (curP && Array.isArray(curP.nodes) && curP.nodes.length > 0) {
+          var blank = {
+            id: "feeder_" + Date.now(),
+            name: "مخطط جديد",
+            administration: currentAdminName,
+            substation: "",
+            feeder_max_load_kva: 5000,
+            voltage_kv: 11,
+            nodes: [],
+            sections: []
+          };
+          if (window.setCurrentProject) window.setCurrentProject(blank);
+          else window.currentProject = blank;
+          if (window.updateFeederInputs) window.updateFeederInputs();
+          if (window.renderNetwork) window.renderNetwork();
+        }
+        updateBadgeUI('connected');
+        return;
       }
 
       var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
@@ -1292,10 +1329,14 @@
 
       // 1. إذا كان المخطط المحلي محفوظاً ومحدثاً أكثر أو مساوياً للسحابة -> المخطط المحلي معتمد
       if (curLocal && localNodesCount > 0 && localSavedTime >= remoteSavedTime) {
-        console.log('🔒 المخطط المحلي معتمد ومحفوظ حديثاً، رفع للسحابة لتحديثها دون لمس الرسم المحلي...');
-        await syncProjectDirectToFirebase(curLocal, 'local_authoritative_sync');
+        var isBelongingLocal = (!curLocal.administration || curLocal.administration === currentAdminName || 
+          (typeof window.isProjectVisibleToAdmin === 'function' && window.isProjectVisibleToAdmin(curLocal, currentAdminName)));
+        if (isBelongingLocal) {
+          console.log('🔒 المخطط المحلي معتمد ومحفوظ حديثاً، رفع للسحابة لتحديثها دون لمس الرسم المحلي...');
+          await syncProjectDirectToFirebase(curLocal, 'local_authoritative_sync');
+        }
       } 
-      // 2. إذا كان المخطط المحلي فارغاً ولكن السحابة تحتوي على رسم غير محذوف ينتمي للإدارة
+      // 2. إذا كان المخطط المحلي فارغاً ولكن السحابة تحتوي على رسم غير محذوف ينتمي للإدارة ومسجل بالكتالوج
       else if ((!curLocal || localNodesCount === 0) && remoteNodesCount > 0) {
         console.log('☁️ استلام المخطط السحابي للإدارة الفارغة محلياً (' + remoteNodesCount + ' عقدة)...');
         var projRes = await fetch(adminUrl + '/project.json');
@@ -1305,8 +1346,13 @@
           if (typeof window.isProjectDeleted === 'function' && remoteProj) {
             isDeleted = window.isProjectDeleted(remoteProj.id, remoteProj.name);
           }
+          var isAllowed = remoteProj && (!remoteProj.administration || remoteProj.administration === currentAdminName ||
+            (typeof window.isProjectVisibleToAdmin === 'function' && window.isProjectVisibleToAdmin(remoteProj, currentAdminName)));
+          var inCatalog = effectiveCatalog.some(function(cp) {
+            return cp && (cp.id === remoteProj.id || (remoteProj.name && cp.name === remoteProj.name));
+          });
 
-          if (!isDeleted && remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
+          if (!isDeleted && isAllowed && inCatalog && remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
             isApplyingRemote = true;
             if (window.setCurrentProject) window.setCurrentProject(remoteProj);
             else window.currentProject = remoteProj;
@@ -1333,7 +1379,13 @@
           if (typeof window.isProjectDeleted === 'function' && remoteProj) {
             isDeleted = window.isProjectDeleted(remoteProj.id, remoteProj.name);
           }
-          if (!isDeleted && remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
+          var isAllowed = remoteProj && (!remoteProj.administration || remoteProj.administration === currentAdminName ||
+            (typeof window.isProjectVisibleToAdmin === 'function' && window.isProjectVisibleToAdmin(remoteProj, currentAdminName)));
+          var inCatalog = effectiveCatalog.some(function(cp) {
+            return cp && (cp.id === remoteProj.id || (remoteProj.name && cp.name === remoteProj.name));
+          });
+
+          if (!isDeleted && isAllowed && inCatalog && remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
             isApplyingRemote = true;
             if (window.setCurrentProject) window.setCurrentProject(remoteProj);
             else window.currentProject = remoteProj;
