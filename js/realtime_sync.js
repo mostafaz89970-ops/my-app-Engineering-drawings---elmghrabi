@@ -950,6 +950,46 @@
       updateBadgeUI('connected');
 
     } else if (type === 'PROJECT_SHARING_UPDATED' || type === 'sharing_update') {
+      var sharedId = (data && data.id) || (payload.data && payload.data.id);
+      var visibleAdmins = (data && data.visible_admins) || (payload.data && payload.data.visible_admins) || [];
+      var incomingProj = (data && data.project) || (payload.data && payload.data.project);
+
+      // إذا وصل المخطط مع البث، نخزنه محلياً بالمعرف المنفصل فوراً
+      if (incomingProj && incomingProj.id) {
+        try {
+          localStorage.setItem('sld_proj_' + incomingProj.id, JSON.stringify(incomingProj));
+        } catch(_) {}
+      }
+
+      // تحديث فهارس الكتالوج المحلي للإدارات المعروض فيها المخطط
+      if (Array.isArray(visibleAdmins) && incomingProj && typeof window.getCatalogForAdmin === 'function' && typeof window.saveCatalogForAdmin === 'function') {
+        visibleAdmins.forEach(function(adm) {
+          try {
+            var cat = window.getCatalogForAdmin(adm) || [];
+            var existingIdx = cat.findIndex(function(c) { return c.id === incomingProj.id || (incomingProj.name && c.name === incomingProj.name); });
+            var meta = {
+              id: incomingProj.id,
+              name: incomingProj.name || 'مخطط شبكة',
+              substation: incomingProj.substation || '',
+              voltage_kv: incomingProj.voltage_kv || 11,
+              nodes_count: (incomingProj.nodes || []).length,
+              sections_count: (incomingProj.sections || []).length,
+              updated_at: incomingProj.updated_at || new Date().toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' }),
+              saved_at: Date.now(),
+              administration: incomingProj.administration,
+              sector: incomingProj.sector,
+              visible_admins: visibleAdmins
+            };
+            if (existingIdx >= 0) {
+              cat[existingIdx] = Object.assign({}, cat[existingIdx], meta);
+            } else {
+              cat.unshift(meta);
+            }
+            window.saveCatalogForAdmin(cat, adm);
+          } catch(_) {}
+        });
+      }
+
       var prModal2 = document.getElementById('projects-manager-modal');
       if (prModal2 && !prModal2.classList.contains('hidden') && typeof window.openProjectsManager === 'function') {
         window.openProjectsManager();
@@ -1915,9 +1955,20 @@
     }, 'project_lock_toggle');
   }
 
-  function broadcastProjectSharingUpdated(projectId, visibleAdmins) {
+  function broadcastProjectSharingUpdated(projectOrId, visibleAdmins) {
+    var pId = (typeof projectOrId === 'object' && projectOrId) ? projectOrId.id : projectOrId;
+    var projectData = (typeof projectOrId === 'object' && projectOrId) ? projectOrId : null;
+    if (!projectData && typeof window.loadProjectDataById === 'function') {
+      try {
+        var raw = localStorage.getItem('sld_proj_' + pId);
+        if (raw) projectData = JSON.parse(raw);
+      } catch(_) {}
+    }
+    var cleanProj = projectData ? compactProjectForCloud(projectData) : null;
+
     postCloudEvent('PROJECT_SHARING_UPDATED', {
-      id: projectId,
+      id: pId,
+      project: cleanProj,
       visible_admins: visibleAdmins
     }, 'sharing_update');
   }
