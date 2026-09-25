@@ -458,7 +458,9 @@ async function handleLogin(e) {
     window.loadAdminWorkspace(adminName);
   } else {
     const key = "sld_feeder_" + adminName.trim().replace(/\s+/g, '_');
-    const savedLocal = localStorage.getItem(key);
+    const cat = (typeof window.getCatalogForAdmin === 'function') ? window.getCatalogForAdmin(adminName) : [];
+    const validCat = (Array.isArray(cat) ? cat : []).filter(p => p && (!window.isProjectDeleted || !window.isProjectDeleted(p.id, p.name)));
+    const savedLocal = (validCat.length > 0) ? localStorage.getItem(key) : null;
     if (savedLocal) {
       try {
         const parsed = JSON.parse(savedLocal);
@@ -474,9 +476,8 @@ async function handleLogin(e) {
       const emptyProj = {
         id: "feeder_" + Date.now(),
         name: "مخطط جديد",
+        administration: adminName,
         substation: "",
-        voltage_kv: 11,
-        feeder_max_load_kva: 5000,
         nodes: [],
         sections: []
       };
@@ -742,7 +743,9 @@ window.addEventListener("DOMContentLoaded", async () => {
       window.loadAdminWorkspace(adminName);
     } else {
       const key = "sld_feeder_" + adminName.trim().replace(/\s+/g, '_');
-      const savedLocal = localStorage.getItem(key);
+      const cat = (typeof window.getCatalogForAdmin === 'function') ? window.getCatalogForAdmin(adminName) : [];
+      const validCat = (Array.isArray(cat) ? cat : []).filter(p => p && (!window.isProjectDeleted || !window.isProjectDeleted(p.id, p.name)));
+      const savedLocal = (validCat.length > 0) ? localStorage.getItem(key) : null;
       if (savedLocal) {
         try {
           const parsed = JSON.parse(savedLocal);
@@ -754,6 +757,19 @@ window.addEventListener("DOMContentLoaded", async () => {
             if (window.fitToScreen) window.fitToScreen();
           }
         } catch(e) {}
+      } else {
+        const emptyProj = {
+          id: "feeder_" + Date.now(),
+          name: "مخطط جديد",
+          administration: adminName,
+          substation: "",
+          nodes: [],
+          sections: []
+        };
+        currentProject = emptyProj;
+        window.currentProject = emptyProj;
+        if (window.updateFeederInputs) window.updateFeederInputs();
+        if (window.renderNetwork) window.renderNetwork();
       }
     }
   }

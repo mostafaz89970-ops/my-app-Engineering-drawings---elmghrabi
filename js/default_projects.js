@@ -7,6 +7,7 @@ window.DEFAULT_BUNDLED_PROJECTS = [
   {
     "id": "feeder_1789823077015",
     "name": "خط المعصرة",
+    "administration": "بني مزار شرق",
     "substation": "لوحة المركز القديمة",
     "voltage_kv": 11,
     "nodes": [

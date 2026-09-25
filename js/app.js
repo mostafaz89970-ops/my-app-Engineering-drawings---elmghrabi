@@ -6078,44 +6078,57 @@ function loadAdminWorkspace(adminName) {
 
   const aKey = adminName.trim().replace(/\s+/g, '_');
   const catalog = getCatalogForAdmin(adminName);
-  const validProjects = (Array.isArray(catalog) ? catalog : []).filter(p => p && !isProjectDeleted(p.id, p.name));
+  const validProjects = (Array.isArray(catalog) ? catalog : []).filter(p => p && !isProjectDeleted(p.id, p.name) && !isDemoOrDummyProject(p));
 
   let proj = null;
-  // 1. أولاً: فحص المخطط الجاري العمل عليه حالياً في هذه الإدارة
-  let saved = getSavedFeederForAdmin(adminName);
-  if (saved && saved.nodes && saved.nodes.length > 0 && !isProjectDeleted(saved.id, saved.name)) {
-    // المخطط الحالي المحفوظ للإدارة موجود ولم يُحذف -> استرجاعه فوراً وحمايته من أي مسح عند التحديث
-    proj = saved;
-  } else if (validProjects.length > 0) {
-    // 2. إذا لم يكن هناك رسم حالي ولكن توجد مشاريع مسجلة بالكتالوج: فتح أحدث مشروع معتمد
-    const firstMeta = validProjects[0];
-    try {
-      const raw = localStorage.getItem("sld_proj_" + firstMeta.id);
-      if (raw) proj = JSON.parse(raw);
-    } catch (_) {}
-    if (!proj || !proj.nodes || proj.nodes.length === 0) {
-      proj = {
-        id: firstMeta.id,
-        name: firstMeta.name || "مخطط شبكة",
-        substation: firstMeta.substation || "",
-        feeder_max_load_kva: firstMeta.feeder_max_load_kva || 5000,
-        voltage_kv: firstMeta.voltage_kv || 11,
-        nodes: [],
-        sections: []
-      };
-    }
-    saveFeederForAdmin(proj, adminName);
-  } else {
-    // 3. الإدارة جديدة أو مفرغة ولا تملك أي رسم سابق: مساحة عمل بيضاء فارغة تماماً
+  // إذا كانت الإدارة غير مسجل لها أي مشاريع معتمدة: شاشة الرسم بيضاء فارغة تماماً
+  if (validProjects.length === 0) {
     proj = {
       id: "feeder_" + Date.now(),
       name: "مخطط جديد",
+      administration: adminName,
       substation: "",
       feeder_max_load_kva: 5000,
       voltage_kv: 11,
       nodes: [],
       sections: []
     };
+    try {
+      localStorage.removeItem("sld_feeder_" + aKey);
+      localStorage.removeItem("sld_saved_time_" + aKey);
+    } catch (_) {}
+  } else {
+    // الإدارة تملك مشاريع مسجلة: نفحص أولاً إن كان الرسم المحفوظ ينتمي لهذه الإدارة ومسجلاً رسمياً
+    let saved = getSavedFeederForAdmin(adminName);
+    const isSavedBelonging = saved && Array.isArray(saved.nodes) && saved.nodes.length > 0 &&
+      !isProjectDeleted(saved.id, saved.name) &&
+      !isDemoOrDummyProject(saved) &&
+      (saved.administration === adminName || isProjectVisibleToAdmin(saved, adminName)) &&
+      validProjects.some(vp => vp.id === saved.id || (saved.name && vp.name === saved.name));
+
+    if (isSavedBelonging) {
+      proj = saved;
+    } else {
+      // فتح أول مشروع معتمد مسجل في كتالوج الإدارة
+      const firstMeta = validProjects[0];
+      try {
+        const raw = localStorage.getItem("sld_proj_" + firstMeta.id);
+        if (raw) proj = JSON.parse(raw);
+      } catch (_) {}
+      if (!proj || !proj.nodes || proj.nodes.length === 0) {
+        proj = {
+          id: firstMeta.id,
+          name: firstMeta.name || "مخطط شبكة",
+          substation: firstMeta.substation || "",
+          feeder_max_load_kva: firstMeta.feeder_max_load_kva || 5000,
+          voltage_kv: firstMeta.voltage_kv || 11,
+          administration: adminName,
+          nodes: [],
+          sections: []
+        };
+      }
+      saveFeederForAdmin(proj, adminName);
+    }
   }
 
   currentProject = proj;
@@ -6243,7 +6256,25 @@ async function saveProjectToStorage(project) {
     try { window.broadcastProjectUpdate("save"); } catch(e) {}
   }
 
-  // 3. إرسال إلى خادم Python المحلي إن كان متصلاً
+  // 3. المزامنة المباشرة مع سحابة جوجل Firebase لضمان التسميع اللحظي في قاعدة البيانات
+  try {
+    const fbBase = "https://elmghrabyelectric-default-rtdb.firebaseio.com/sld_studio";
+    fetch(fbBase + "/projects/" + encodeURIComponent(pId) + ".json", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(project)
+    }).catch(() => {});
+
+    const curAdmin = getCurrentAdminName();
+    const curKey = curAdmin.trim().replace(/\s+/g, '_');
+    fetch(fbBase + "/admins/" + encodeURIComponent(curKey) + "/catalog.json", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(catalog)
+    }).catch(() => {});
+  } catch(_) {}
+
+  // 4. إرسال إلى خادم Python المحلي إن كان متصلاً
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2000);
@@ -6951,11 +6982,17 @@ async function deleteProjectFromManager(p_id, p_name) {
     });
   } catch(e) {}
 
-  // 7. حذف من سحابة Firebase إن كانت متصلة
+  // 7. حذف من سحابة Firebase المعتمدة
   try {
+    const fbBase = "https://elmghrabyelectric-default-rtdb.firebaseio.com/sld_studio";
     const curKey = getCurrentAdminName().trim().replace(/\s+/g, '_');
-    const url = `https://elmghrabyelectric-default-rtdb.firebaseio.com/sld_studio/admins/${encodeURIComponent(curKey)}/projects/${encodeURIComponent(p_id)}.json`;
-    fetch(url, { method: "DELETE" }).catch(() => {});
+    fetch(`${fbBase}/admins/${encodeURIComponent(curKey)}/projects/${encodeURIComponent(p_id)}.json`, { method: "DELETE" }).catch(() => {});
+    fetch(`${fbBase}/projects/${encodeURIComponent(p_id)}.json`, { method: "DELETE" }).catch(() => {});
+    fetch(`${fbBase}/admins/${encodeURIComponent(curKey)}/catalog.json`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(curCatalog)
+    }).catch(() => {});
   } catch(_) {}
 
   showToast(`🗑️ تم حذف المشروع [${p_name}] نهائياً بنجاح!`, "warning");
@@ -10058,8 +10095,8 @@ async function saveProjectSharingSettings() {
       body: JSON.stringify(proj)
     }).catch(() => {});
 
-    // رفع الكتالوج المحدث لكل إدارة تم اختيارها
-    selectedAdmins.forEach(adm => {
+    // رفع الكتالوج المحدث لكل الإدارات (المختارة وغير المختارة لإزالة المخطط المحجوب فوراً من سحابة جوجل)
+    allAdmins.forEach(adm => {
       const aKey = adm.trim().replace(/\s+/g, '_');
       const cat = getCatalogForAdmin(adm);
       fetch(`${fbBase}/admins/${encodeURIComponent(aKey)}/catalog.json`, {
