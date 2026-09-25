@@ -205,7 +205,7 @@ const DEFAULT_FALLBACK_USERS = [
     administration: "بني مزار غرب",
     password_plain: "123456",
     is_active: true,
-    permissions: ["all", "edit_network", "export", "settings"]
+    permissions: ["all", "edit_network", "export"]
   },
   {
     id: "operation_eng",
@@ -627,6 +627,12 @@ function handleLogout() {
 
 function hasPermission(permKey) {
   if (!currentUser) return false;
+
+  // ⚙️ إعدادات النظام: محجوبة حصراً ومخصصة للمطور فقط (لا تُعرض ولا تُمنح لأي مستخدم آخر حتى لو كان مديراً عاماً أو يملك كامل الصلاحيات أو التعديل)
+  if (permKey === "btn_settings" || permKey === "settings") {
+    return (typeof isDeveloperUser === "function") ? isDeveloperUser() : false;
+  }
+
   if (isCurrentUserAdmin()) return true;
   if (!currentUser.permissions) return false;
   const perms = currentUser.permissions;
@@ -648,7 +654,6 @@ function hasPermission(permKey) {
   if (perms.includes("sync") && (permKey === "btn_share_live" || permKey === "btn_reconcile_sync" || permKey === "btn_copy_drawing_code" || permKey === "btn_paste_drawing_code")) return true;
   if ((perms.includes("calculations") || perms.includes("view") || perms.includes("all")) && permKey === "btn_calculations") return true;
   if (perms.includes("simulate_switching") && (permKey === "btn_simulation" || permKey === "btn_toggle_all_switches")) return true;
-  if (perms.includes("settings") && (permKey === "btn_settings" || permKey === "settings")) return true;
   if (perms.includes("manage_users") && permKey === "manage_users") return true;
 
   return false;
@@ -667,10 +672,10 @@ function applyUserPermissions() {
     }
   });
 
-  // زر الإعدادات
+  // زر الإعدادات — محجوب ومقفل حصراً للمطور فقط
   const btnSettings = document.getElementById("btn-settings");
   if (btnSettings) {
-    btnSettings.style.display = (hasPermission("btn_settings") || hasPermission("settings")) ? "" : "none";
+    btnSettings.style.display = (typeof isDeveloperUser === "function" && isDeveloperUser()) ? "" : "none";
   }
 
   // زر تحويل المشروع وزر التراجع الزمني للمدير العام أو من يحمل الصلاحية الصريحة
