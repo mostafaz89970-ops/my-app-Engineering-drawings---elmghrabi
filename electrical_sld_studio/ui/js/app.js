@@ -9374,6 +9374,172 @@ window.refreshTimelineData = refreshTimelineData;
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// 📂 حفظ المشروع الحالي لإدارة محددة (يظهر في فولدر مشاريعها)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function openSaveToAdminModal() {
+  if (!currentProject || !currentProject.nodes || currentProject.nodes.length === 0) {
+    showToast("⚠️ لا يوجد مخطط نشط على الشاشة — ارسم مشروعاً أولاً ثم احفظه لإدارة", "warning");
+    return;
+  }
+  const modal = document.getElementById("save-to-admin-modal");
+  if (!modal) return;
+
+  // تعبئة اسم المشروع
+  const nameEl = document.getElementById("save-admin-project-name");
+  if (nameEl) nameEl.value = currentProject.name || "مخطط شبكة توزيع";
+
+  // تعبئة قائمة القطاعات
+  const sectorSelect = document.getElementById("save-admin-sector-select");
+  const sectorsMap = (typeof getSystemSectorsMap === "function") ? getSystemSectorsMap() : {};
+  const curSector = currentProject.sector || "المنيا شمال";
+  sectorSelect.innerHTML = Object.keys(sectorsMap).map(s =>
+    `<option value="${s}" ${s === curSector ? "selected" : ""}>قطاع ${s}</option>`
+  ).join('');
+
+  // تعبئة قائمة الإدارات بناءً على القطاع الافتراضي
+  onSaveAdminSectorChange(currentProject.administration || null);
+
+  modal.classList.remove("hidden");
+}
+window.openSaveToAdminModal = openSaveToAdminModal;
+
+function closeSaveToAdminModal() {
+  const modal = document.getElementById("save-to-admin-modal");
+  if (modal) modal.classList.add("hidden");
+}
+window.closeSaveToAdminModal = closeSaveToAdminModal;
+
+function onSaveAdminSectorChange(preferredAdmin = null) {
+  const sectorSelect = document.getElementById("save-admin-sector-select");
+  const branchSelect = document.getElementById("save-admin-branch-select");
+  if (!sectorSelect || !branchSelect) return;
+  const selectedSector = sectorSelect.value;
+  const sectorsMap = (typeof getSystemSectorsMap === "function") ? getSystemSectorsMap() : {};
+  const branches = sectorsMap[selectedSector] || [];
+  branchSelect.innerHTML = branches.map(adm =>
+    `<option value="${adm}" ${adm === preferredAdmin ? "selected" : ""}>${adm}</option>`
+  ).join('');
+  if (preferredAdmin && branches.includes(preferredAdmin)) {
+    branchSelect.value = preferredAdmin;
+  }
+}
+window.onSaveAdminSectorChange = onSaveAdminSectorChange;
+
+async function submitSaveToAdmin() {
+  if (!currentProject || !currentProject.nodes || currentProject.nodes.length === 0) {
+    showToast("⚠️ لا يوجد مخطط لحفظه", "warning");
+    return;
+  }
+
+  const targetAdmin = document.getElementById("save-admin-branch-select")?.value;
+  const targetSector = document.getElementById("save-admin-sector-select")?.value;
+  const keepInCurrent = document.getElementById("save-admin-also-current")?.checked !== false;
+
+  if (!targetAdmin) {
+    showToast("⚠️ يرجى اختيار الإدارة المستهدفة", "warning");
+    return;
+  }
+
+  const nowTs = Date.now();
+  const nowStr = new Date(nowTs).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' });
+
+  // تأكيد وجود ID للمشروع
+  if (!currentProject.id) currentProject.id = "proj_" + nowTs;
+  currentProject.saved_at = nowTs;
+  currentProject.user_saved_at = nowTs;
+  currentProject.updated_at = nowStr;
+
+  // تحديد الإدارات المرئية
+  const originalAdmin = currentProject.administration || targetAdmin;
+  if (keepInCurrent) {
+    // مشاركة: الإدارة الأصلية + الجديدة
+    const visAdmins = new Set(Array.isArray(currentProject.visible_admins) ? currentProject.visible_admins : [originalAdmin]);
+    visAdmins.add(targetAdmin);
+    currentProject.visible_admins = Array.from(visAdmins);
+  } else {
+    // نقل الملكية: الإدارة الجديدة فقط
+    currentProject.administration = targetAdmin;
+    currentProject.sector = targetSector;
+    currentProject.visible_admins = [targetAdmin];
+  }
+
+  // حفظ المشروع الكامل في التخزين
+  try { localStorage.setItem("sld_proj_" + currentProject.id, JSON.stringify(currentProject)); } catch(_) {}
+  try { localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject)); } catch(_) {}
+  saveFeederForAdmin(currentProject, currentProject.administration);
+
+  // إضافة للكتالوج الخاص بالإدارة المستهدفة
+  const meta = {
+    id: currentProject.id,
+    name: currentProject.name || "مخطط شبكة",
+    substation: currentProject.substation || "",
+    voltage_kv: currentProject.voltage_kv || 11,
+    nodes_count: (currentProject.nodes || []).length,
+    sections_count: (currentProject.sections || []).length,
+    updated_at: nowStr,
+    saved_at: nowTs,
+    administration: currentProject.administration,
+    sector: currentProject.sector || targetSector,
+    is_locked: !!currentProject.is_locked,
+    locked_admins: currentProject.locked_admins || [],
+    visible_admins: currentProject.visible_admins
+  };
+
+  const targetCatalog = getCatalogForAdmin(targetAdmin);
+  const existIdx = targetCatalog.findIndex(c => c.id === meta.id);
+  if (existIdx >= 0) {
+    targetCatalog[existIdx] = meta;
+  } else {
+    targetCatalog.unshift(meta);
+  }
+  saveCatalogForAdmin(targetCatalog, targetAdmin);
+
+  // إذا "الاحتفاظ بالإدارة الحالية" فنضيف للكتالوج القديم أيضاً
+  if (keepInCurrent && originalAdmin && originalAdmin !== targetAdmin) {
+    const origCatalog = getCatalogForAdmin(originalAdmin);
+    const origIdx = origCatalog.findIndex(c => c.id === meta.id);
+    if (origIdx >= 0) {
+      origCatalog[origIdx] = meta;
+    } else {
+      origCatalog.unshift(meta);
+    }
+    saveCatalogForAdmin(origCatalog, originalAdmin);
+  }
+
+  // مزامنة Firebase في الخلفية
+  try {
+    const fbBase = "https://elmghrabyelectric-default-rtdb.firebaseio.com/sld_studio";
+    const tKey = targetAdmin.trim().replace(/\s+/g, '_');
+    fetch(`${fbBase}/projects/${encodeURIComponent(currentProject.id)}.json`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(currentProject)
+    }).catch(() => {});
+    fetch(`${fbBase}/admins/${encodeURIComponent(tKey)}/catalog.json`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(targetCatalog)
+    }).catch(() => {});
+  } catch(_) {}
+
+  closeSaveToAdminModal();
+
+  // تحديث الشاشة
+  if (typeof updateFeederInputs === "function") updateFeederInputs();
+  if (typeof renderNetwork === "function") renderNetwork();
+
+  // إذا كانت نافذة المشاريع مفتوحة نفتحها على الإدارة الجديدة
+  const projModal = document.getElementById("projects-manager-modal");
+  if (projModal && !projModal.classList.contains("hidden")) {
+    window.modalViewingAdmin = targetAdmin;
+    openProjectsManager(targetAdmin);
+  }
+
+  showToast(`✅ تم حفظ المخطط [${currentProject.name || currentProject.id}] في مشاريع إدارة [${targetAdmin}] بنجاح!`, "success");
+}
+window.submitSaveToAdmin = submitSaveToAdmin;
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // 🔄 نظام تحويل ونقل المشاريع بين الإدارات والقطاعات
 // ═══════════════════════════════════════════════════════════════════════════════
 
