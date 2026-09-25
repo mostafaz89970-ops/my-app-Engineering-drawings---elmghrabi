@@ -46,6 +46,12 @@ function updateDrawingDirectionUI() {
 }
 
 function toggleDrawingDirection(forceDir = null, silent = false) {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    if (!silent && window.showToast) {
+      showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    }
+    return;
+  }
   if (forceDir) {
     window.drawingFlowDirection = forceDir;
   } else {
@@ -71,6 +77,10 @@ function toggleDrawingDirection(forceDir = null, silent = false) {
 }
 
 function flipDrawingVerticalLayout() {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
   if (!currentProject || !currentProject.nodes || currentProject.nodes.length === 0) {
     toggleDrawingDirection();
     return;
@@ -361,6 +371,10 @@ function onEditNodeCoordInput() {
 
 // إزاحة النود (سكينة، كشك، محول، نقطة) في مساحة الرسم بخطوات محددة
 function nudgeNodePosition(stepX, stepY) {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع تحريك أي عنصر", "warning");
+    return;
+  }
   const xInput = document.getElementById("edit-node-x");
   const yInput = document.getElementById("edit-node-y");
   const stepSelect = document.getElementById("edit-node-step");
@@ -385,6 +399,10 @@ function nudgeNodePosition(stepX, stepY) {
 
 // تغيير اتجاه السكينة أو الكشك أو المحول مع التحديث الفوري
 function onEditNodeDirectionChange() {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع تعديل الاتجاه", "warning");
+    return;
+  }
   if (!currentEditTarget || currentEditTarget.type !== "node" || !currentProject) return;
   const dirSelect = document.getElementById("edit-node-direction");
   if (!dirSelect) return;
@@ -403,6 +421,10 @@ function onEditNodeDirectionChange() {
 
 // حذف السكينة أو مفتاح LBS مباشرة وإعادة توصيل المسار تلقائياً
 function deleteSwitchDirectly(nodeId) {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع حذف السكاكين أو التعديل", "warning");
+    return;
+  }
   if (!currentProject) return;
   const node = currentProject.nodes.find(n => n.id === nodeId);
   if (!node) return;
@@ -417,6 +439,10 @@ function deleteSwitchDirectly(nodeId) {
 
 // حذف الكشك أو المحول مباشرة وضبط النود
 function deleteTransformerOrKioskDirectly(nodeId) {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع حذف المحولات أو الأكشاك", "warning");
+    return;
+  }
   if (!currentProject) return;
   const node = currentProject.nodes.find(n => n.id === nodeId);
   if (!node) return;
@@ -1181,6 +1207,10 @@ function confirmSmartDelete(mode = "auto_adjust") {
 }
 
 function executeSmartDelete(type, id, mode = "auto_adjust") {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو الحذف", "warning");
+    return;
+  }
   if (!currentProject) return;
 
   if (type === "annotation") {
@@ -3592,6 +3622,10 @@ window.openCalculationsModal = openCalculationsModal;
 window.closeCalculationsModal = closeCalculationsModal;
 
 async function exportToExcel() {
+  if (typeof isProjectHiddenForUser === "function" && isProjectHiddenForUser()) {
+    showToast("🚫 هذا المخطط محجوب ومخفي تماماً عن إدارتك — غير مسموح بالاطلاع عليه أو تصديره", "error");
+    return;
+  }
   if (window.hasPermission && !window.hasPermission('btn_excel')) {
     showToast("⛔ ليس لديك صلاحية تصدير ملف الإكسيل", "error");
     return;
@@ -3775,6 +3809,10 @@ async function exportToExcel() {
 
 // --- تحميل المشروع بالكامل كعرض باور بوينت (.pptx) — 100% في المتصفح بدون خادم ---
 async function downloadProjectPPTX() {
+  if (typeof isProjectHiddenForUser === "function" && isProjectHiddenForUser()) {
+    showToast("🚫 هذا المخطط محجوب ومخفي تماماً عن إدارتك — غير مسموح بالاطلاع عليه أو تصديره", "error");
+    return;
+  }
   if (window.hasPermission && !window.hasPermission('btn_excel')) {
     showToast("⛔ ليس لديك صلاحية تحميل المشروع", "error");
     return;
@@ -6023,7 +6061,7 @@ function isProjectVisibleToAdmin(p, adminName) {
   // إذا تم تحديد إدارات العرض: هي المرجع الصارم والنهائي للمدير العام
   if (Array.isArray(p.visible_admins) && p.visible_admins.length > 0) {
     const trimmedVis = p.visible_admins.map(v => String(v).trim());
-    return trimmedVis.includes(targetAdm) || trimmedVis.includes("__all__") || pAdmin === targetAdm;
+    return trimmedVis.includes(targetAdm) || trimmedVis.includes("__all__");
   }
 
   // في حال لم يتم تحديد إدارات العرض بعد: يتبع الإدارة الأصلية فقط
@@ -6048,20 +6086,83 @@ function isDemoOrDummyProject(p) {
 }
 window.isDemoOrDummyProject = isDemoOrDummyProject;
 
-// التحقق مما إذا كان المخطط مغلقاً ومجمداً على إدارة معينة أو على كافة الإدارات
+// التحقق مما إذا كان المخطط مغلقاً ومجمداً على إدارة معينة أو على كافة الإدارات لمنع أي تحريك أو تعديل
 function isProjectLockedForAdmin(p, adminName) {
   if (!p) return false;
   if (!adminName || adminName === "__all__") {
     if (Array.isArray(p.locked_admins) && p.locked_admins.length > 0) return true;
     return !!p.is_locked;
   }
+  const targetAdm = String(adminName).trim();
   if (Array.isArray(p.locked_admins)) {
-    if (p.locked_admins.includes("__all__")) return true;
-    return p.locked_admins.includes(adminName);
+    const trimmedLocked = p.locked_admins.map(a => String(a).trim());
+    if (trimmedLocked.includes("__all__")) return true;
+    return trimmedLocked.includes(targetAdm);
   }
   return !!p.is_locked;
 }
 window.isProjectLockedForAdmin = isProjectLockedForAdmin;
+
+// فحص شامل ومحكم: هل هذا المخطط محجوب ومخفي تماماً عن المستخدم أو الإدارة الحالية؟
+function isProjectHiddenForUser(p = null) {
+  const targetProj = p || (window.currentProject || currentProject);
+  if (!targetProj) return false;
+  const isAdmin = (typeof isCurrentUserAdmin === "function") && isCurrentUserAdmin();
+  if (isAdmin) return false; // المدير العام يرى كافة المشاريع دون حجب
+  const curAdmin = (typeof getCurrentAdminName === "function") ? getCurrentAdminName() : null;
+  if (!curAdmin || curAdmin === "__all__") return false;
+  if (typeof isProjectVisibleToAdmin === "function") {
+    return !isProjectVisibleToAdmin(targetProj, curAdmin);
+  }
+  return false;
+}
+window.isProjectHiddenForUser = isProjectHiddenForUser;
+
+function showHiddenProjectOverlay(customAdmin = null) {
+  const curAdmin = customAdmin || ((typeof getCurrentAdminName === "function") ? getCurrentAdminName() : "إدارتك");
+  let overlay = document.getElementById("project-hidden-overlay");
+  const viewport = document.getElementById("viewport");
+  if (!overlay && viewport) {
+    overlay = document.createElement("div");
+    overlay.id = "project-hidden-overlay";
+    viewport.appendChild(overlay);
+  }
+  if (overlay) {
+    overlay.style.cssText = "position:absolute; inset:0; z-index:95; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(15,23,42,0.96); backdrop-filter:blur(8px); text-align:center; padding:30px; color:#f8fafc;";
+    overlay.innerHTML = `
+      <div style="font-size:62px; margin-bottom:14px;">🚫</div>
+      <h2 style="font-size:22px; font-weight:bold; color:#f87171; margin-bottom:10px;">هذا المخطط محجوب ومخفي تماماً عن هذه الإدارة</h2>
+      <p style="font-size:14px; color:#94a3b8; max-width:520px; line-height:1.7; margin-bottom:20px;">
+        تم حجب هذا المخطط وإخفاء الرسم ومكونات الشبكة بالكامل عن <strong>هندسة كهرباء [${curAdmin}]</strong> بأمر الإدارة العامة. غير مسموح بالاطلاع على الرسم أو أي تفاصيل تخص هذا المشروع.
+      </p>
+      <button type="button" class="btn btn-primary" onclick="openProjectsManager()" style="background:#2563eb; border:none; padding:10px 24px; border-radius:6px; color:#fff; font-weight:bold; cursor:pointer; font-size:13.5px; box-shadow:0 4px 14px rgba(37,99,235,0.4);">
+        📁 فتح مجلد مشاريع إدارتك المتاحة
+      </button>
+    `;
+    overlay.style.display = "flex";
+  }
+
+  // حجب بيانات الشريط العلوي (اسم المغذي، المحطة، الجهد، القدرات)
+  const fName = document.getElementById("feeder-name-input");
+  const sName = document.getElementById("substation-name-input");
+  const totalCap = document.getElementById("st-total-cap");
+  const actualLoad = document.getElementById("st-actual-load");
+  const loading = document.getElementById("st-feeder-loading");
+  if (fName) fName.value = "— محجوب تماماً —";
+  if (sName) sName.value = "— محجوب —";
+  if (totalCap) totalCap.textContent = "0 kVA";
+  if (actualLoad) actualLoad.textContent = "0 kVA";
+  if (loading) loading.textContent = "0%";
+}
+window.showHiddenProjectOverlay = showHiddenProjectOverlay;
+
+function hideHiddenProjectOverlay() {
+  const overlay = document.getElementById("project-hidden-overlay");
+  if (overlay) {
+    overlay.style.display = "none";
+  }
+}
+window.hideHiddenProjectOverlay = hideHiddenProjectOverlay;
 
 function getCatalogForAdmin(adminName = null) {
   const aName = adminName || getCurrentAdminName();
@@ -6189,10 +6290,12 @@ function loadAdminWorkspace(adminName) {
 
   const aKey = adminName.trim().replace(/\s+/g, '_');
   const catalog = getCatalogForAdmin(adminName);
-  const validProjects = (Array.isArray(catalog) ? catalog : []).filter(p => p && !isProjectDeleted(p.id, p.name) && !isDemoOrDummyProject(p));
+  const validProjects = (Array.isArray(catalog) ? catalog : []).filter(p => 
+    p && !isProjectDeleted(p.id, p.name) && !isDemoOrDummyProject(p) && isProjectVisibleToAdmin(p, adminName)
+  );
 
   let proj = null;
-  // إذا كانت الإدارة غير مسجل لها أي مشاريع معتمدة: شاشة الرسم بيضاء فارغة تماماً
+  // إذا كانت الإدارة غير مسجل لها أي مشاريع معتمدة أو محجوبة عنها: شاشة الرسم بيضاء فارغة تماماً
   if (validProjects.length === 0) {
     proj = {
       id: "feeder_" + Date.now(),
@@ -6214,7 +6317,7 @@ function loadAdminWorkspace(adminName) {
     const isSavedBelonging = saved && Array.isArray(saved.nodes) && saved.nodes.length > 0 &&
       !isProjectDeleted(saved.id, saved.name) &&
       !isDemoOrDummyProject(saved) &&
-      (saved.administration === adminName || isProjectVisibleToAdmin(saved, adminName)) &&
+      isProjectVisibleToAdmin(saved, adminName) &&
       validProjects.some(vp => vp.id === saved.id || (saved.name && vp.name === saved.name));
 
     if (isSavedBelonging) {
@@ -6246,6 +6349,7 @@ function loadAdminWorkspace(adminName) {
   window.currentProject = proj;
 
   if (typeof updateFeederInputs === "function") updateFeederInputs();
+  if (typeof updateProjectLockUI === "function") updateProjectLockUI();
   if (typeof renderNetwork === "function") renderNetwork();
   if (typeof fitToScreen === "function") fitToScreen();
 
@@ -7344,6 +7448,12 @@ async function loadProjectFromManager(p_id) {
     return;
   }
 
+  // فحص الحجب: هل هذا المخطط محجوب ومخفي عن هذه الإدارة؟
+  if (typeof isProjectHiddenForUser === "function" && isProjectHiddenForUser(projectData)) {
+    showToast("🚫 هذا المخطط محجوب ومخفي تماماً عن إدارتك بأمر الإدارة العامة — غير مصرح بفتحه أو عرضه", "error");
+    return;
+  }
+
   currentProject = projectData;
   window.currentProject = projectData;
 
@@ -7502,6 +7612,10 @@ async function exportProjectAsSLD(p_id) {
     showToast("⚠️ تعذر العثور على بيانات المشروع للتصدير", "error");
     return;
   }
+  if (typeof isProjectHiddenForUser === "function" && isProjectHiddenForUser(projectData)) {
+    showToast("🚫 هذا المخطط محجوب ومخفي عن إدارتك — غير مسموح بالاطلاع عليه أو تنزيله", "error");
+    return;
+  }
   const str = JSON.stringify(projectData, null, 2);
   const blob = new Blob([str], { type: "application/json;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -7601,6 +7715,10 @@ async function printProjectFromManager(p_id) {
    ========================================================================== */
 
 function printFullSchematic() {
+  if (typeof isProjectHiddenForUser === "function" && isProjectHiddenForUser()) {
+    showToast("🚫 هذا المخطط محجوب ومخفي تماماً عن إدارتك — غير مسموح بالاطلاع عليه أو طباعته", "error");
+    return;
+  }
   if (window.hasPermission && !window.hasPermission('btn_print')) {
     showToast("⛔ ليس لديك صلاحية طباعة المخطط", "error");
     return;
@@ -7982,6 +8100,10 @@ window.getLocalProjectsCatalog = getLocalProjectsCatalog;
 
 // ─── توجيه وتبديل زوايا الكابلات القائمة 90 درجة ──────────────────────────────
 function toggleSection90DegreeCorner(secId) {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+    return;
+  }
   if (!currentProject || !currentProject.sections) return;
   const sec = currentProject.sections.find(s => s.id === secId);
   if (!sec) return;
@@ -10336,12 +10458,22 @@ if (document.readyState === "loading") {
 
 function isProjectLockedForUser() {
   if (!currentProject) return false;
+  const isAdmin = (typeof isCurrentUserAdmin === "function") && isCurrentUserAdmin();
+  if (isAdmin) return false;
   const curAdmin = getCurrentAdminName();
   return isProjectLockedForAdmin(currentProject, curAdmin);
 }
 window.isProjectLockedForUser = isProjectLockedForUser;
 
 function updateProjectLockUI() {
+  const isHidden = (typeof isProjectHiddenForUser === "function") && isProjectHiddenForUser();
+  if (isHidden) {
+    if (typeof showHiddenProjectOverlay === "function") showHiddenProjectOverlay();
+    return;
+  } else {
+    if (typeof hideHiddenProjectOverlay === "function") hideHiddenProjectOverlay();
+  }
+
   const banner = document.getElementById("project-locked-banner");
   const unlockBtn = document.getElementById("btn-unlock-banner-action");
   const curAdmin = getCurrentAdminName();
@@ -10361,9 +10493,9 @@ function updateProjectLockUI() {
       const bannerText = document.getElementById("project-locked-banner-text");
       if (bannerText) {
         if (currentProject && Array.isArray(currentProject.locked_admins) && !currentProject.locked_admins.includes("__all__")) {
-          bannerText.textContent = `🔒 هذا المخطط موقوف ومجمد بحزم على هندسة كهرباء [${curAdmin}] بأمر الإدارة — يمنع أي تعديل أو تحريك`;
+          bannerText.textContent = `🔒 هذا المخطط محجوب ومجمد بحزم على هندسة كهرباء [${curAdmin}] بأمر الإدارة — يمنع تحريك أي خط أو محول أو سكينة أو تعديل أي عنصر`;
         } else {
-          bannerText.textContent = `🔒 هذا المخطط موقوف ومجمد بالكامل بأمر الإدارة العامة — يمنع أي تعديل أو تحريك`;
+          bannerText.textContent = `🔒 هذا المخطط محجوب ومجمد بالكامل بأمر الإدارة العامة — يمنع تحريك أي خط أو محول أو سكينة أو تعديل أي عنصر`;
         }
       }
       if (unlockBtn) unlockBtn.style.display = isAdmin ? "inline-flex" : "none";
