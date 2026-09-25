@@ -6646,12 +6646,59 @@ function renderAdminFolders(systemAdmins, container) {
     "المنيا شمال": ["بني مزار شرق", "بني مزار غرب", "مغاغة", "العدوة", "مطاي", "سمالوط شرق", "سمالوط غرب"]
   };
 
-  // حساب عدد المشاريع لكل إدارة من الكتالوج المحلي
+  // حساب عدد المشاريع لكل إدارة من الكتالوج المحلي + مفاتيح sld_proj_*
   const adminCounts = {};
+  systemAdmins.forEach(adm => { adminCounts[adm] = 0; });
+
+  // أولاً: من الكتالوجات
   systemAdmins.forEach(adm => {
     const cat = getCatalogForAdmin(adm) || [];
-    adminCounts[adm] = cat.filter(p => p && !isProjectDeleted(p.id, p.name) && !isDemoOrDummyProject(p)).length;
+    const counted = new Set();
+    cat.forEach(p => {
+      if (p && p.id && !isProjectDeleted(p.id, p.name) && !isDemoOrDummyProject(p)) {
+        counted.add(p.id);
+      }
+    });
+    adminCounts[adm] = counted.size;
   });
+
+  // ثانياً: مسح sld_proj_* لأي مشاريع لم تُسجَّل في الكتالوج بعد
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith("sld_proj_")) {
+      try {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const p = JSON.parse(raw);
+          if (p && p.id && p.administration && !isProjectDeleted(p.id, p.name) && !isDemoOrDummyProject(p)) {
+            if (systemAdmins.includes(p.administration)) {
+              // نفحص هل هو موجود في كتالوج الإدارة أم لا
+              const cat = getCatalogForAdmin(p.administration) || [];
+              const inCat = cat.some(c => c.id === p.id);
+              if (!inCat) {
+                // مشروع جديد لم يُضَف للكتالوج بعد → نضيفه للعدد
+                adminCounts[p.administration] = (adminCounts[p.administration] || 0) + 1;
+                // وننسخه للكتالوج تلقائياً
+                cat.push({
+                  id: p.id, name: p.name, substation: p.substation || "",
+                  voltage_kv: p.voltage_kv || 11,
+                  nodes_count: (p.nodes || []).length,
+                  sections_count: (p.sections || []).length,
+                  updated_at: p.updated_at || "-",
+                  saved_at: p.saved_at || Date.now(),
+                  administration: p.administration,
+                  sector: p.sector || "",
+                  visible_admins: p.visible_admins || [p.administration]
+                });
+                saveCatalogForAdmin(cat, p.administration);
+              }
+            }
+          }
+        }
+      } catch(_) {}
+    }
+  }
+
 
   // ألوان القطاعات
   const sectorColors = [
@@ -9586,13 +9633,34 @@ async function submitTransferProject() {
 
   closeTransferProjectModal();
 
-  // تحديث جدول المشاريع إذا كانت نافذة المشاريع مفتوحة
-  const projectsModal = document.getElementById("projects-manager-modal");
-  if (projectsModal && !projectsModal.classList.contains("hidden")) {
-    openProjectsManager();
+  // ✅ تأكيد تسجيل المشروع المحوَّل في كتالوج الإدارة الجديدة مباشرة
+  const refreshedCatalog = getCatalogForAdmin(newAdmin);
+  const alreadyIn = refreshedCatalog.some(c => c.id === updatedProj.id);
+  if (!alreadyIn) {
+    refreshedCatalog.unshift(meta);
+    saveCatalogForAdmin(refreshedCatalog, newAdmin);
   }
 
-  showToast(`✅ تم تحويل المخطط [${updatedProj.name || updatedProj.id}] بنجاح إلى فرع [${newAdmin}] بقطاع [${newSector}] وتم عزله تماماً لمنع خلط البيانات!`, "success");
+  // ✅ حفظ المشروع بمعرفه في التخزين المحلي مرة أخرى للتأكيد
+  try { localStorage.setItem("sld_proj_" + updatedProj.id, JSON.stringify(updatedProj)); } catch(_) {}
+
+  // ✅ تحديث المشروع الحالي على الشاشة ليعكس الإدارة الجديدة
+  if (currentProject && currentProject.id === updatedProj.id) {
+    currentProject = updatedProj;
+    window.currentProject = updatedProj;
+    if (typeof updateFeederInputs === "function") updateFeederInputs();
+    if (typeof renderNetwork === "function") renderNetwork();
+  }
+
+  // تحديث جدول/فولدرات المشاريع إذا كانت نافذة المشاريع مفتوحة
+  const projectsModal = document.getElementById("projects-manager-modal");
+  if (projectsModal && !projectsModal.classList.contains("hidden")) {
+    // فتح نافذة مشاريع الإدارة الجديدة مباشرة لإظهار المشروع في مكانه الصحيح
+    window.modalViewingAdmin = newAdmin;
+    openProjectsManager(newAdmin);
+  }
+
+  showToast(`✅ تم تحويل المخطط [${updatedProj.name || updatedProj.id}] إلى فرع [${newAdmin}] بقطاع [${newSector}]`, "success");
 }
 window.submitTransferProject = submitTransferProject;
 
