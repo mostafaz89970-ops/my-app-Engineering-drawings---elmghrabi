@@ -6472,6 +6472,26 @@ function ensureAllActualProjectsCollected() {
             if (!localStorage.getItem("sld_proj_" + fObj.id)) {
               localStorage.setItem("sld_proj_" + fObj.id, JSON.stringify(fObj));
             }
+            // إدراج المشروع في كتالوج الإدارة إن لم يكن مسجلاً
+            const cat = getCatalogForAdmin(fObj.administration) || [];
+            if (!cat.some(c => c.id === fObj.id || (fObj.name && c.name === fObj.name))) {
+              cat.unshift({
+                id: fObj.id,
+                name: fObj.name || "مخطط شبكة",
+                substation: fObj.substation || "",
+                voltage_kv: fObj.voltage_kv || 11,
+                nodes_count: (fObj.nodes || []).length,
+                sections_count: (fObj.sections || []).length,
+                updated_at: fObj.updated_at || "-",
+                saved_at: fObj.saved_at || Date.now(),
+                administration: fObj.administration,
+                sector: fObj.sector || "المنيا شمال",
+                is_locked: !!fObj.is_locked,
+                locked_admins: fObj.locked_admins || [],
+                visible_admins: fObj.visible_admins
+              });
+              saveCatalogForAdmin(cat, fObj.administration);
+            }
           }
         }
       } catch(_) {}
@@ -6500,6 +6520,13 @@ async function openProjectsManager(requestedAdmin = null) {
   const loggedUser = (typeof _getLoggedInUser === "function") ? _getLoggedInUser() : null;
   const userAdmin = (loggedUser && loggedUser.administration) ? loggedUser.administration : getCurrentAdminName();
 
+  // فحص ما إذا كان المستخدم مهندس تشغيل ولديه صلاحية متابعة فرعين
+  const userAllowedAdmins = (loggedUser && Array.isArray(loggedUser.allowed_administrations) && loggedUser.allowed_administrations.length > 1)
+    ? loggedUser.allowed_administrations
+    : (loggedUser && loggedUser.secondary_administration ? [loggedUser.administration, loggedUser.secondary_administration] : null);
+
+  const isOperatorMultiBranch = !isAdmin && userAllowedAdmins && userAllowedAdmins.length > 1;
+
   const systemAdmins = (typeof getAllSystemAdmins === "function") ? getAllSystemAdmins() : [
     "بني مزار شرق", "بني مزار غرب", "مغاغة", "العدوة", "مطاي", "سمالوط شرق", "سمالوط غرب"
   ];
@@ -6512,25 +6539,31 @@ async function openProjectsManager(requestedAdmin = null) {
   } else if (window.modalViewingAdmin !== undefined && window.modalViewingAdmin !== null) {
     activeViewingAdmin = window.modalViewingAdmin;
   } else {
-    // المدير العام → عرض شاشة الفولدرات
-    // المستخدم العادي → مباشرة لإدارته
-    if (!isAdmin) {
-      activeViewingAdmin = userAdmin;
-      window.modalViewingAdmin = userAdmin;
-    } else {
-      // المدير يرى شاشة الفولدرات أولاً
+    if (isAdmin) {
+      // المدير يرى شاشة الفولدرات لجميع الإدارات أولاً
       activeViewingAdmin = "__folders__";
       window.modalViewingAdmin = "__folders__";
+    } else if (isOperatorMultiBranch) {
+      // مهندس التشغيل يرى شاشة الفولدرات لفرعيه المصرح له بهما
+      activeViewingAdmin = "__folders__";
+      window.modalViewingAdmin = "__folders__";
+    } else {
+      // المستخدم العادي → مباشرة لمشاريع إدارته
+      activeViewingAdmin = userAdmin;
+      window.modalViewingAdmin = userAdmin;
     }
   }
-  if (!isAdmin) {
+
+  // مستخدم عادي بدون فروع إضافية
+  if (!isAdmin && !isOperatorMultiBranch) {
     activeViewingAdmin = userAdmin;
     window.modalViewingAdmin = userAdmin;
   }
 
-  // ─── عرض شاشة الفولدرات للمدير العام ─────────────────────────────────
+  // ─── عرض شاشة الفولدرات للمدير العام أو لمهندس التشغيل ─────────────────────────────────
   if (activeViewingAdmin === "__folders__") {
-    renderAdminFolders(systemAdmins, container);
+    const foldersToRender = isOperatorMultiBranch ? userAllowedAdmins : systemAdmins;
+    renderAdminFolders(foldersToRender, container);
     return;
   }
 
@@ -6646,23 +6679,21 @@ function renderAdminFolders(systemAdmins, container) {
     "المنيا شمال": ["بني مزار شرق", "بني مزار غرب", "مغاغة", "العدوة", "مطاي", "سمالوط شرق", "سمالوط غرب"]
   };
 
-  // حساب عدد المشاريع لكل إدارة من الكتالوج المحلي + مفاتيح sld_proj_*
-  const adminCounts = {};
-  systemAdmins.forEach(adm => { adminCounts[adm] = 0; });
+  // حساب دقيق وشامل لعدد المشاريع لكل إدارة من الكتالوجات وجميع مفاتيح التخزين
+  const adminProjectSets = {};
+  systemAdmins.forEach(adm => { adminProjectSets[adm] = new Set(); });
 
-  // أولاً: من الكتالوجات
+  // 1. مسح الكتالوجات
   systemAdmins.forEach(adm => {
     const cat = getCatalogForAdmin(adm) || [];
-    const counted = new Set();
     cat.forEach(p => {
       if (p && p.id && !isProjectDeleted(p.id, p.name) && !isDemoOrDummyProject(p)) {
-        counted.add(p.id);
+        adminProjectSets[adm].add(p.id);
       }
     });
-    adminCounts[adm] = counted.size;
   });
 
-  // ثانياً: مسح sld_proj_* لأي مشاريع لم تُسجَّل في الكتالوج بعد
+  // 2. مسح كافة مشاريع التخزين المحلي sld_proj_*
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
     if (k && k.startsWith("sld_proj_")) {
@@ -6670,34 +6701,60 @@ function renderAdminFolders(systemAdmins, container) {
         const raw = localStorage.getItem(k);
         if (raw) {
           const p = JSON.parse(raw);
-          if (p && p.id && p.administration && !isProjectDeleted(p.id, p.name) && !isDemoOrDummyProject(p)) {
-            if (systemAdmins.includes(p.administration)) {
-              // نفحص هل هو موجود في كتالوج الإدارة أم لا
-              const cat = getCatalogForAdmin(p.administration) || [];
-              const inCat = cat.some(c => c.id === p.id);
-              if (!inCat) {
-                // مشروع جديد لم يُضَف للكتالوج بعد → نضيفه للعدد
-                adminCounts[p.administration] = (adminCounts[p.administration] || 0) + 1;
-                // وننسخه للكتالوج تلقائياً
-                cat.push({
-                  id: p.id, name: p.name, substation: p.substation || "",
-                  voltage_kv: p.voltage_kv || 11,
-                  nodes_count: (p.nodes || []).length,
-                  sections_count: (p.sections || []).length,
-                  updated_at: p.updated_at || "-",
-                  saved_at: p.saved_at || Date.now(),
-                  administration: p.administration,
-                  sector: p.sector || "",
-                  visible_admins: p.visible_admins || [p.administration]
-                });
-                saveCatalogForAdmin(cat, p.administration);
+          if (p && p.id && !isProjectDeleted(p.id, p.name) && !isDemoOrDummyProject(p)) {
+            systemAdmins.forEach(adm => {
+              if (p.administration === adm || (Array.isArray(p.visible_admins) && p.visible_admins.includes(adm))) {
+                adminProjectSets[adm].add(p.id);
+                // تأكيد وجوده في الكتالوج إن لم يكن مسجلاً
+                const cat = getCatalogForAdmin(adm) || [];
+                if (!cat.some(c => c.id === p.id)) {
+                  cat.push({
+                    id: p.id,
+                    name: p.name || "مخطط شبكة",
+                    substation: p.substation || "",
+                    voltage_kv: p.voltage_kv || 11,
+                    nodes_count: (p.nodes || []).length,
+                    sections_count: (p.sections || []).length,
+                    updated_at: p.updated_at || "-",
+                    saved_at: p.saved_at || Date.now(),
+                    administration: p.administration || adm,
+                    sector: p.sector || "",
+                    visible_admins: p.visible_admins || [adm]
+                  });
+                  saveCatalogForAdmin(cat, adm);
+                }
               }
+            });
+          }
+        }
+      } catch(_) {}
+    }
+  }
+
+  // 3. مسح مخططات الفروع sld_feeder_*
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith("sld_feeder_")) {
+      try {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const fObj = JSON.parse(raw);
+          if (fObj && Array.isArray(fObj.nodes) && fObj.nodes.length > 0 && !isProjectDeleted(fObj.id, fObj.name) && !isDemoOrDummyProject(fObj)) {
+            const admFromKey = k.replace("sld_feeder_", "").replace(/_/g, " ");
+            const targetAdm = fObj.administration || admFromKey;
+            if (adminProjectSets[targetAdm]) {
+              adminProjectSets[targetAdm].add(fObj.id || ("proj_feeder_" + targetAdm));
             }
           }
         }
       } catch(_) {}
     }
   }
+
+  const adminCounts = {};
+  systemAdmins.forEach(adm => {
+    adminCounts[adm] = adminProjectSets[adm] ? adminProjectSets[adm].size : 0;
+  });
 
 
   // ألوان القطاعات
@@ -9450,26 +9507,31 @@ async function submitSaveToAdmin() {
   currentProject.user_saved_at = nowTs;
   currentProject.updated_at = nowStr;
 
-  // تحديد الإدارات المرئية
+  // تحديد الإدارة والإدارات المرئية
   const originalAdmin = currentProject.administration || targetAdmin;
-  if (keepInCurrent) {
-    // مشاركة: الإدارة الأصلية + الجديدة
+  currentProject.administration = targetAdmin;
+  currentProject.sector = targetSector;
+
+  if (keepInCurrent && originalAdmin && originalAdmin !== targetAdmin) {
+    // مشاركة: الإدارة المستهدفة + الإدارة الأصلية
     const visAdmins = new Set(Array.isArray(currentProject.visible_admins) ? currentProject.visible_admins : [originalAdmin]);
     visAdmins.add(targetAdmin);
+    visAdmins.add(originalAdmin);
     currentProject.visible_admins = Array.from(visAdmins);
   } else {
-    // نقل الملكية: الإدارة الجديدة فقط
-    currentProject.administration = targetAdmin;
-    currentProject.sector = targetSector;
+    // تعيين كامل للإدارة المستهدفة
     currentProject.visible_admins = [targetAdmin];
   }
 
-  // حفظ المشروع الكامل في التخزين
+  // حفظ المشروع الكامل في التخزين لكلا المفتاحين العام والفرعي
   try { localStorage.setItem("sld_proj_" + currentProject.id, JSON.stringify(currentProject)); } catch(_) {}
   try { localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject)); } catch(_) {}
-  saveFeederForAdmin(currentProject, currentProject.administration);
+  saveFeederForAdmin(currentProject, targetAdmin);
+  if (keepInCurrent && originalAdmin && originalAdmin !== targetAdmin) {
+    saveFeederForAdmin(currentProject, originalAdmin);
+  }
 
-  // إضافة للكتالوج الخاص بالإدارة المستهدفة
+  // إضافة وتحديث الكتالوج الخاص بالإدارة المستهدفة
   const meta = {
     id: currentProject.id,
     name: currentProject.name || "مخطط شبكة",
@@ -9479,8 +9541,8 @@ async function submitSaveToAdmin() {
     sections_count: (currentProject.sections || []).length,
     updated_at: nowStr,
     saved_at: nowTs,
-    administration: currentProject.administration,
-    sector: currentProject.sector || targetSector,
+    administration: targetAdmin,
+    sector: targetSector,
     is_locked: !!currentProject.is_locked,
     locked_admins: currentProject.locked_admins || [],
     visible_admins: currentProject.visible_admins
@@ -9507,7 +9569,7 @@ async function submitSaveToAdmin() {
     saveCatalogForAdmin(origCatalog, originalAdmin);
   }
 
-  // مزامنة Firebase في الخلفية
+  // مزامنة سحابة Firebase فوراً
   try {
     const fbBase = "https://elmghrabyelectric-default-rtdb.firebaseio.com/sld_studio";
     const tKey = targetAdmin.trim().replace(/\s+/g, '_');
@@ -9519,6 +9581,10 @@ async function submitSaveToAdmin() {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(targetCatalog)
     }).catch(() => {});
+    fetch(`${fbBase}/admins/${encodeURIComponent(tKey)}/feeder.json`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(currentProject)
+    }).catch(() => {});
   } catch(_) {}
 
   closeSaveToAdminModal();
@@ -9527,14 +9593,14 @@ async function submitSaveToAdmin() {
   if (typeof updateFeederInputs === "function") updateFeederInputs();
   if (typeof renderNetwork === "function") renderNetwork();
 
-  // إذا كانت نافذة المشاريع مفتوحة نفتحها على الإدارة الجديدة
+  // إذا كانت نافذة المشاريع مفتوحة نفتحها على الإدارة الجديدة فوراً ليرى مشروعه
   const projModal = document.getElementById("projects-manager-modal");
   if (projModal && !projModal.classList.contains("hidden")) {
     window.modalViewingAdmin = targetAdmin;
     openProjectsManager(targetAdmin);
   }
 
-  showToast(`✅ تم حفظ المخطط [${currentProject.name || currentProject.id}] في مشاريع إدارة [${targetAdmin}] بنجاح!`, "success");
+  showToast(`✅ تم حفظ ونسبة المخطط [${currentProject.name || currentProject.id}] لإدارة [${targetAdmin}] بنجاح، ويظهر الآن في مشاريعها!`, "success");
 }
 window.submitSaveToAdmin = submitSaveToAdmin;
 

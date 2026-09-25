@@ -566,8 +566,9 @@ function hasPermission(permKey) {
   if (perms.includes("edit_network")) {
     const editPerms = [
       "btn_cable", "btn_overhead", "btn_line_between", "btn_quick_line",
-      "btn_substation", "btn_switch", "btn_trans", "btn_cascade_trans",
-      "btn_kiosk", "btn_kiosk_from_kiosk", "btn_rmu", "btn_avr",
+      "btn_elbow", "btn_substation", "btn_switch", "btn_lbs", "btn_trans",
+      "btn_cascade_trans", "btn_kiosk", "btn_kiosk_from_kiosk", "btn_rmu",
+      "btn_avr", "btn_annotation", "btn_edit_element", "btn_save_to_admin",
       "btn_undo", "btn_delete"
     ];
     if (editPerms.includes(permKey)) return true;
@@ -575,7 +576,7 @@ function hasPermission(permKey) {
   if (perms.includes("export") && (permKey === "btn_excel" || permKey === "btn_print" || permKey === "btn_pptx_export" || permKey === "btn_pptx_import")) return true;
   if (perms.includes("sync") && (permKey === "btn_share_live" || permKey === "btn_reconcile_sync" || permKey === "btn_copy_drawing_code" || permKey === "btn_paste_drawing_code")) return true;
   if ((perms.includes("calculations") || perms.includes("view") || perms.includes("all")) && permKey === "btn_calculations") return true;
-  if (perms.includes("simulate_switching") && permKey === "btn_simulation") return true;
+  if (perms.includes("simulate_switching") && (permKey === "btn_simulation" || permKey === "btn_toggle_all_switches")) return true;
   if (perms.includes("settings") && (permKey === "btn_settings" || permKey === "settings")) return true;
   if (perms.includes("manage_users") && permKey === "manage_users") return true;
 
@@ -601,15 +602,15 @@ function applyUserPermissions() {
     btnSettings.style.display = (hasPermission("btn_settings") || hasPermission("settings")) ? "" : "none";
   }
 
-  // زر تحويل المشروع وزر التراجع الزمني للمدير العام فقط
+  // زر تحويل المشروع وزر التراجع الزمني للمدير العام أو من يحمل الصلاحية الصريحة
   const isAdmin = (currentUser && (currentUser.role === 'admin' || currentUser.id === 'admin' || currentUser.role === 'manager' || currentUser.is_developer || (typeof currentUser.name === 'string' && currentUser.name.includes('المدير'))));
   const btnTransfer = document.getElementById("btn-transfer-project");
   if (btnTransfer) {
-    btnTransfer.style.display = isAdmin ? "inline-flex" : "none";
+    btnTransfer.style.display = (isAdmin || hasPermission("btn_transfer_project")) ? "inline-flex" : "none";
   }
   const btnTimeline = document.getElementById("btn-admin-timeline");
   if (btnTimeline) {
-    btnTimeline.style.display = isAdmin ? "inline-flex" : "none";
+    btnTimeline.style.display = (isAdmin || hasPermission("btn_timeline")) ? "inline-flex" : "none";
   }
 
   // زر وضع الصيانة (يظهر للمطور فقط حصراً — مخفي تماماً عن باقي المستخدمين)
@@ -623,8 +624,69 @@ function applyUserPermissions() {
     }
   }
 
+  // تحديث أداة تبديل الفرعين لمهندس التشغيل
+  setupOperatorBranchSwitcher();
+
   checkMaintenanceState();
 }
+
+// إعداد أداة تبديل الفرعين لمهندس التشغيل للاطلاع على فرعين من إدارات القطاع
+function setupOperatorBranchSwitcher() {
+  const user = currentUser || window.currentUser;
+  if (!user) return;
+
+  const userBadge = document.querySelector(".user-badge");
+  if (!userBadge) return;
+
+  let existingSwitcher = document.getElementById("operator-branch-switcher");
+
+  // التحقق هل لدى المستخدم فرعان
+  const allowed = Array.isArray(user.allowed_administrations) && user.allowed_administrations.length > 1
+    ? user.allowed_administrations
+    : (user.secondary_administration ? [user.administration, user.secondary_administration] : []);
+
+  if (allowed.length <= 1) {
+    if (existingSwitcher) existingSwitcher.remove();
+    return;
+  }
+
+  if (!existingSwitcher) {
+    existingSwitcher = document.createElement("div");
+    existingSwitcher.id = "operator-branch-switcher";
+    existingSwitcher.style.cssText = "display:inline-flex; align-items:center; gap:6px; background:rgba(49,130,206,0.22); border:1px solid #3182ce; padding:2px 8px; border-radius:6px; margin:0 4px;";
+    userBadge.parentNode.insertBefore(existingSwitcher, userBadge);
+  }
+
+  const curAdm = user.administration || allowed[0];
+  existingSwitcher.innerHTML = `
+    <span style="font-size:11px; color:#90cdf4; font-weight:bold; white-space:nowrap;">⚡ فرع التشغيل:</span>
+    <select id="operator-active-branch-select" onchange="switchOperatorActiveBranch(this.value)" style="background:#0f172a; color:#f8fafc; border:1px solid #38bdf8; border-radius:4px; padding:2px 6px; font-size:11px; font-weight:bold; cursor:pointer;">
+      ${allowed.map(adm => `<option value="${adm}" ${adm === curAdm ? 'selected' : ''}>${adm}</option>`).join('')}
+    </select>
+  `;
+}
+window.setupOperatorBranchSwitcher = setupOperatorBranchSwitcher;
+
+// التبديل الفوري لمهندس التشغيل بين فرعيه
+function switchOperatorActiveBranch(branchName) {
+  if (!branchName) return;
+  if (!currentUser) return;
+
+  currentUser.administration = branchName;
+  window.currentUser = currentUser;
+  try { sessionStorage.setItem("sld_user", JSON.stringify(currentUser)); } catch(_) {}
+  try { localStorage.setItem("sld_current_admin", branchName); } catch(_) {}
+
+  // تحديث مساحة عمل الإدارة وعرض مخططها
+  if (typeof loadAdminWorkspace === "function") {
+    loadAdminWorkspace(branchName);
+  }
+  updateUserInfoUI();
+  if (typeof showToast === "function") {
+    showToast(`⚡ تم الانتقال لفرع [${branchName}] — يمكنك الآن متابعة شبكته ومناوراتها!`, "info");
+  }
+}
+window.switchOperatorActiveBranch = switchOperatorActiveBranch;
 
 function isCurrentUserAdmin() {
   if (typeof isDeveloperUser === "function" && isDeveloperUser()) return true;

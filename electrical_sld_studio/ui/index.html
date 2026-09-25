@@ -122,14 +122,14 @@
             <button class="btn-sys btn-sys-save" data-perm="btn_save" onclick="saveCurrentProject()" title="حفظ المخطط الحالي فوراً">
               <span>💾 حفظ</span>
             </button>
-            <button class="btn-sys" data-perm="btn_save" onclick="openSaveToAdminModal()" title="حفظ المخطط الحالي وتعيينه لإدارة محددة لتظهر في فولدر مشاريعها" style="background:rgba(16,185,129,0.18); border-color:#10b981; color:#6ee7b7;">
+            <button class="btn-sys" data-perm="btn_save_to_admin" onclick="openSaveToAdminModal()" title="حفظ المخطط الحالي وتعيينه لإدارة محددة لتظهر في فولدر مشاريعها" style="background:rgba(16,185,129,0.18); border-color:#10b981; color:#6ee7b7;">
               <span>📂 حفظ لإدارة</span>
             </button>
 
-            <button class="btn-sys" id="btn-transfer-project" onclick="openTransferProjectModal()" title="تحويل المشروع الحالي إلى إدارة أو قطاع آخر">
+            <button class="btn-sys" id="btn-transfer-project" data-perm="btn_transfer_project" onclick="openTransferProjectModal()" title="تحويل المشروع الحالي إلى إدارة أو قطاع آخر">
               <span>🔄 تحويل</span>
             </button>
-            <button class="btn-sys" id="btn-backup-system" onclick="openBackupModal()" title="تصدير واستيراد نسخة احتياطية شاملة لكافة بيانات التطبيق والمشاريع" style="background: rgba(139,92,246,0.18); border-color: #8b5cf6; color: #c4b5fd;">
+            <button class="btn-sys" id="btn-backup-system" data-perm="btn_backup" onclick="openBackupModal()" title="تصدير واستيراد نسخة احتياطية شاملة لكافة بيانات التطبيق والمشاريع" style="background: rgba(139,92,246,0.18); border-color: #8b5cf6; color: #c4b5fd;">
               <span>💾 نسخة احتياطية</span>
             </button>
           </div>
@@ -168,10 +168,10 @@
 
           <!-- مجموعة العرض والمظهر -->
           <div class="sys-btn-group" id="grp-view">
-            <button id="btn-toggle-bg" class="btn-sys" onclick="toggleCanvasBackground()" title="تغيير لون خلفية مساحة الرسم إلى أبيض / داكن">
+            <button id="btn-toggle-bg" class="btn-sys" data-perm="btn_toggle_bg" onclick="toggleCanvasBackground()" title="تغيير لون خلفية مساحة الرسم إلى أبيض / داكن">
               <span id="btn-toggle-bg-text">🎨 خلفية بيضاء</span>
             </button>
-            <button id="btn-dev-profile" class="btn-sys" onclick="openDeveloperModal()" title="صفحة المطور والمهندس المصمم للنظام ENG-MOSTAFA ELMGHRABY" style="background:rgba(43,108,176,0.25);border:1px solid #3182ce;color:#63b3ed;">
+            <button id="btn-dev-profile" class="btn-sys" data-perm="btn_dev_profile" onclick="openDeveloperModal()" title="صفحة المطور والمهندس المصمم للنظام ENG-MOSTAFA ELMGHRABY" style="background:rgba(43,108,176,0.25);border:1px solid #3182ce;color:#63b3ed;">
               <span>👨‍💻 المطور</span>
             </button>
           </div>
@@ -193,11 +193,11 @@
 
           <!-- زري اتجاه مسار الرسم لتوفير المساحة في شريط الأدوات السفلي -->
           <div class="header-dir-group" id="cad-group-drawing-dir" style="display:flex;align-items:center;gap:4px;">
-            <button id="btn-toggle-drawing-dir" class="btn-sys cad-btn-dir" onclick="toggleDrawingDirection()" title="التبديل بين اتجاه تدفق الرسم: من أعلى لأسفل (⬇️) أو من أسفل لأعلى (⬆️)">
+            <button id="btn-toggle-drawing-dir" class="btn-sys cad-btn-dir" data-perm="btn_drawing_dir" onclick="toggleDrawingDirection()" title="التبديل بين اتجاه تدفق الرسم: من أعلى لأسفل (⬇️) أو من أسفل لأعلى (⬆️)">
               <span id="drawing-dir-icon">⬇️</span>
               <span id="drawing-dir-label">من أعلى لأسفل</span>
             </button>
-            <button id="btn-flip-vertical" class="btn-sys" onclick="flipDrawingVerticalLayout()" title="عكس اتجاه الرسم والمخطط بالكامل رأساً على عقب (قلب المسار)">
+            <button id="btn-flip-vertical" class="btn-sys" data-perm="btn_flip_vertical" onclick="flipDrawingVerticalLayout()" title="عكس اتجاه الرسم والمخطط بالكامل رأساً على عقب (قلب المسار)">
               <span>🔃 عكس المخطط</span>
             </button>
           </div>
@@ -339,7 +339,7 @@
           <button class="cad-tool-btn" data-perm="btn_line_between" onclick="openLineBetweenNodesModal()" title="أخذ تفريعة أو مناول جديد من خط مارر بين نقطتين ويتجه بالمسار المطلوب">
             <span>⚡ أخذ مناول / تفريعة</span>
           </button>
-          <button class="cad-tool-btn" onclick="openElbowModal()" title="رسم مسار منكسر بزاوية 90° بجميع الاتجاهات" style="background: rgba(14, 165, 233, 0.15); border-color: #38bdf8; color: #38bdf8; font-weight: bold;">
+          <button class="cad-tool-btn" data-perm="btn_elbow" onclick="openElbowModal()" title="رسم مسار منكسر بزاوية 90° بجميع الاتجاهات" style="background: rgba(14, 165, 233, 0.15); border-color: #38bdf8; color: #38bdf8; font-weight: bold;">
             <span>📐 نصف دائرة</span>
           </button>
         </div>
@@ -352,13 +352,13 @@
           <button class="cad-tool-btn" data-perm="btn_substation" onclick="openSubstationModal()" title="إضافة محطة محولات أو لوحة توزيع">
             <span>🏭 محطة / لوحة</span>
           </button>
-          <button class="cad-tool-btn" onclick="openSwitchModal('down')" title="إضافة سكينة هوائية مفصلية">
+          <button class="cad-tool-btn" data-perm="btn_switch" onclick="openSwitchModal('down')" title="إضافة سكينة هوائية مفصلية">
             <span>⚡ سكينة</span>
           </button>
           <button class="cad-tool-btn" data-perm="btn_lbs" onclick="openLBSModal()" title="إضافة مفتاح فصل على الحمل (LBS - Load Break Switch)" style="background: rgba(14, 165, 233, 0.15); border-color: #0284c7; color: #38bdf8; font-weight: bold;">
             <span>🔘 مفتاح LBS</span>
           </button>
-          <button class="cad-tool-btn" onclick="toggleAllSwitches()" title="تبديل حالة جميع السكاكين والمفاتيح دفعة واحدة (فتح أو غلق الكل)" style="background: rgba(245, 158, 11, 0.15); border-color: #f59e0b; color: #fbbf24; font-weight: bold;">
+          <button class="cad-tool-btn" data-perm="btn_toggle_all_switches" onclick="toggleAllSwitches()" title="تبديل حالة جميع السكاكين والمفاتيح دفعة واحدة (فتح أو غلق الكل)" style="background: rgba(245, 158, 11, 0.15); border-color: #f59e0b; color: #fbbf24; font-weight: bold;">
             <span>⚡ فتح/غلق الكل</span>
           </button>
         </div>
@@ -379,7 +379,7 @@
         <!-- مجموعة: التنويهات والملاحظات الهندسية (تتمدد إلى نهاية الصف لاستغلال كامل المساحة) -->
         <div class="cad-group cad-group-end" id="grp-annotations">
           <span class="cad-group-tag">تنويهات المخطط</span>
-          <button class="cad-tool-btn" onclick="openAddAnnotationModal()" title="إضافة كارت تنويه أو ملاحظة هندسية حرة في أي مكان بالرسم" style="background: rgba(245, 158, 11, 0.18); border-color: #f59e0b; color: #fbbf24; font-weight: bold;">
+          <button class="cad-tool-btn" data-perm="btn_annotation" onclick="openAddAnnotationModal()" title="إضافة كارت تنويه أو ملاحظة هندسية حرة في أي مكان بالرسم" style="background: rgba(245, 158, 11, 0.18); border-color: #f59e0b; color: #fbbf24; font-weight: bold;">
             <span>📝 إضافة تنويه</span>
           </button>
         </div>
@@ -416,7 +416,7 @@
         <!-- مجموعة: النسخ الاحتياطي والاستيراد الشامل -->
         <div class="cad-group" id="backup-group">
           <span class="cad-group-tag">النسخ الاحتياطي</span>
-          <button class="cad-tool-btn" onclick="openBackupModal()" title="تصدير واستيراد نسخة احتياطية شاملة لكافة بيانات التطبيق والمشاريع" style="background:rgba(139,92,246,0.18); border-color:#8b5cf6; color:#c4b5fd; font-weight:bold;">
+          <button class="cad-tool-btn" data-perm="btn_backup" onclick="openBackupModal()" title="تصدير واستيراد نسخة احتياطية شاملة لكافة بيانات التطبيق والمشاريع" style="background:rgba(139,92,246,0.18); border-color:#8b5cf6; color:#c4b5fd; font-weight:bold;">
             <span>💾 نسخ احتياطي</span>
           </button>
         </div>
@@ -430,10 +430,10 @@
             <span id="sim-icon">⚡</span>
             <span>محاكاة</span>
           </button>
-          <button id="btn-open-all-switches" class="cad-tool-btn" onclick="openAllSwitches()" title="فتح وفصل جميع السكاكين الهوائية في المخطط بالكامل دفعة واحدة (🔴 دوائر مفصولة)" style="border-color: #ef4444; color: #f87171; font-weight: bold;">
+          <button id="btn-open-all-switches" class="cad-tool-btn" data-perm="btn_toggle_all_switches" onclick="openAllSwitches()" title="فتح وفصل جميع السكاكين الهوائية في المخطط بالكامل دفعة واحدة (🔴 دوائر مفصولة)" style="border-color: #ef4444; color: #f87171; font-weight: bold;">
             <span>🔴 فتح كل السكاكين</span>
           </button>
-          <button id="btn-close-all-switches" class="cad-tool-btn" onclick="closeAllSwitches()" title="غلق وتوصيل جميع السكاكين الهوائية في المخطط بالكامل دفعة واحدة (🟢 تغذية كاملة)" style="border-color: #10b981; color: #34d399; font-weight: bold;">
+          <button id="btn-close-all-switches" class="cad-tool-btn" data-perm="btn_toggle_all_switches" onclick="closeAllSwitches()" title="غلق وتوصيل جميع السكاكين الهوائية في المخطط بالكامل دفعة واحدة (🟢 تغذية كاملة)" style="border-color: #10b981; color: #34d399; font-weight: bold;">
             <span>🟢 غلق كل السكاكين</span>
           </button>
           <button class="cad-tool-btn" data-perm="btn_calculations" onclick="openCalculationsModal()" title="عرض جدول الحسابات وهبوط الجهد">
@@ -447,10 +447,10 @@
           <button class="cad-tool-btn" data-perm="btn_undo" onclick="undoLastStep()" title="تراجع عن آخر خطوة (Ctrl+Z)">
             <span>↩️ تراجع</span>
           </button>
-          <button class="cad-tool-btn" id="btn-admin-timeline" onclick="openTimelineRollbackModal()" style="border-color:#f59e0b; color:#fbbf24; font-weight:bold;" title="سجل التراجع والاسترجاع الزمني للمدير (Time-Machine Rollback)">
+          <button class="cad-tool-btn" id="btn-admin-timeline" data-perm="btn_timeline" onclick="openTimelineRollbackModal()" style="border-color:#f59e0b; color:#fbbf24; font-weight:bold;" title="سجل التراجع والاسترجاع الزمني للمدير (Time-Machine Rollback)">
             <span>⏱️ تراجع زمني</span>
           </button>
-          <button class="cad-tool-btn" id="btn-ribbon-edit" onclick="handleEditAction()" title="تعديل خصائص العنصر المحدد (طول، موصل، قدرة، مسميات...)">
+          <button class="cad-tool-btn" id="btn-ribbon-edit" data-perm="btn_edit_element" onclick="handleEditAction()" title="تعديل خصائص العنصر المحدد (طول، موصل، قدرة، مسميات...)">
             <span>✏️ تعديل</span>
           </button>
           <button class="cad-tool-btn cad-btn-delete" data-perm="btn_delete" onclick="handleDeleteAction()" title="حذف العنصر المحدد أو مسح المخطط">
@@ -509,12 +509,12 @@
             <span class="item-name">محطة / لوحة</span>
           </div>
 
-          <div class="palette-item" onclick="openSwitchModal('down')" title="سكينة هوائية مفصلية رأسية">
+          <div class="palette-item" data-perm="btn_switch" onclick="openSwitchModal('down')" title="سكينة هوائية مفصلية رأسية">
             <div class="item-icon">⚡</div>
             <span class="item-name">سكينة رأسية</span>
           </div>
 
-          <div class="palette-item" onclick="openSwitchModal('right')" title="سكينة هوائية مفصلية أفقية">
+          <div class="palette-item" data-perm="btn_switch" onclick="openSwitchModal('right')" title="سكينة هوائية مفصلية أفقية">
             <div class="item-icon">➖</div>
             <span class="item-name">سكينة أفقية</span>
           </div>
@@ -524,12 +524,12 @@
             <span class="item-name">مفتاح LBS</span>
           </div>
 
-          <div class="palette-item" onclick="openElbowModal()" title="رسم مسار منكسر بزاوية 90° بجميع الاتجاهات">
+          <div class="palette-item" data-perm="btn_elbow" onclick="openElbowModal()" title="رسم مسار منكسر بزاوية 90° بجميع الاتجاهات">
             <div class="item-icon">📐</div>
             <span class="item-name">نصف دائرة</span>
           </div>
 
-          <div class="palette-item" data-perm="btn_switch" onclick="toggleAllSwitches()" title="فتح أو غلق جميع السكاكين الهوائية في المخطط بالكامل" style="background: rgba(245, 158, 11, 0.12); border: 1px solid #f59e0b;">
+          <div class="palette-item" data-perm="btn_toggle_all_switches" onclick="toggleAllSwitches()" title="فتح أو غلق جميع السكاكين الهوائية في المخطط بالكامل" style="background: rgba(245, 158, 11, 0.12); border: 1px solid #f59e0b;">
             <div class="item-icon">⚡</div>
             <span class="item-name">فتح/غلق كل السكاكين</span>
           </div>
@@ -2364,7 +2364,7 @@
                 </select>
               </div>
               <div class="form-group">
-                <label for="user-form-admin">🏛️ الإدارة الفرعية / العامة (المركز):</label>
+                <label for="user-form-admin">🏛️ الإدارة الفرعية / العامة (الفرع الأساسي):</label>
                 <select id="user-form-admin" class="form-control">
                   <option value="بني مزار شرق" selected>بني مزار شرق</option>
                   <option value="بني مزار غرب">بني مزار غرب</option>
@@ -2375,14 +2375,21 @@
                   <option value="سمالوط غرب">سمالوط غرب</option>
                 </select>
               </div>
+              <div class="form-group" id="user-form-second-admin-group">
+                <label for="user-form-second-admin" style="color:#63b3ed;font-weight:bold;">🏛️ الفرع الثاني التابع له (لمهندس التشغيل للاطلاع والمتابعة):</label>
+                <select id="user-form-second-admin" class="form-control" style="border-color:#3182ce;">
+                  <option value="">— لا يوجد (فرع واحد فقط) —</option>
+                </select>
+                <small style="color:#a0aec0;font-size:11px;display:block;margin-top:3px;">💡 يتيح لمهندس التشغيل الاطلاع والتبديل المباشر بين فرعين ومتابعة مشاريع كلا الفرعين.</small>
+              </div>
               <div class="form-group">
                 <label>الدور الوظيفي:</label>
-                <select id="user-form-role" class="form-control">
-                  <option value="admin">مدير النظام</option>
+                <select id="user-form-role" class="form-control" onchange="onUserFormRoleChange()">
+                  <option value="admin">مدير النظام (كامل الصلاحيات)</option>
                   <option value="engineer">مهندس</option>
-                  <option value="operator">مشغّل</option>
-                  <option value="tech">فني</option>
-                  <option value="viewer">مشاهد</option>
+                  <option value="operator">مهندس تشغيل (متابعة فرعين)</option>
+                  <option value="tech">فني شبكات</option>
+                  <option value="viewer">مشاهد فقط</option>
                 </select>
               </div>
               <div class="form-group" id="user-form-password-group">
