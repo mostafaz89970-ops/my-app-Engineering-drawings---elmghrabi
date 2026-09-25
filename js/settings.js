@@ -214,9 +214,13 @@ async function openSettingsPanel() {
   const panel = document.getElementById('settings-panel');
   if (!panel) return;
 
-  // فحص الصلاحية
-  if (!currentUser || (!currentUser.permissions.includes('settings') && !currentUser.permissions.includes('all'))) {
-    showToast('⛔ ليس لديك صلاحية الوصول إلى الإعدادات', 'error');
+  // فحص الصلاحية - محجوبة حصراً ومخصصة للمطور فقط (لا تُفتح لأي مستخدم آخر حتى لو كان مديراً أو يملك كامل الصلاحيات)
+  const isDev = (typeof isDeveloperUser === "function")
+    ? isDeveloperUser()
+    : (currentUser && (currentUser.id === "admin" || currentUser.is_developer === true || currentUser.role === "developer"));
+  if (!isDev) {
+    showToast('⛔ لوحة الإعدادات مخصصة لمطور المنظومة فقط', 'error');
+    if (panel) panel.classList.add('hidden');
     return;
   }
 
@@ -958,7 +962,8 @@ function _renderPermissionsCheckboxes(selected = []) {
   `;
 
   categories.forEach(cat => {
-    const catPerms = perms.filter(p => (p.category || 'general') === cat.id);
+    // استثناء أزرار وصلاحيات الإعدادات والمطور تماماً حتى لا تمنح لأي مستخدم آخر بالخطأ أو بالتحديد الكلي
+    const catPerms = perms.filter(p => (p.category || 'general') === cat.id && p.key !== 'btn_settings' && p.key !== 'settings' && p.key !== 'developer');
     if (catPerms.length === 0) return;
 
     html += `
@@ -1020,8 +1025,13 @@ async function submitUserForm() {
   const role = document.getElementById('user-form-role').value;
   const sector = document.getElementById('user-form-sector') ? document.getElementById('user-form-sector').value : 'المنيا شمال';
   const administration = document.getElementById('user-form-admin') ? document.getElementById('user-form-admin').value : 'بني مزار شرق';
-  const secondaryAdministration = document.getElementById('user-form-second-admin') ? document.getElementById('user-form-second-admin').value : '';
-  const permissions = [...document.querySelectorAll('#user-form-perms input[type=checkbox]:checked')].map(c => c.value);
+  let permissions = [...document.querySelectorAll('#user-form-perms input[type=checkbox]:checked')].map(c => c.value);
+
+  // حماية أمان: تصفية أزرار الإعدادات والمطور ومنع تخزينها لأي مستخدم آخر
+  const isDevTarget = (editingUserId === 'admin' || role === 'developer' || role === 'dev');
+  if (!isDevTarget) {
+    permissions = permissions.filter(p => p !== 'btn_settings' && p !== 'settings' && p !== 'developer');
+  }
 
   if (!name) { showToast('⚠️ يرجى إدخال اسم المستخدم', 'warning'); return; }
 
@@ -1556,11 +1566,13 @@ async function logActivity(action, details = '') {
 // ─── Init (يُستدعى بعد تسجيل الدخول) ────────────────────────────────────────
 async function initSettings() {
   await loadSettings();
-  // إظهار زر الإعدادات للمدير فقط
+  // إظهار زر الإعدادات للمطور فقط
   const btn = document.getElementById('btn-settings');
-  if (btn && currentUser) {
-    const isAdmin = currentUser.permissions.includes('settings') || currentUser.permissions.includes('all');
-    btn.style.display = isAdmin ? '' : 'none';
+  if (btn) {
+    const isDev = (typeof isDeveloperUser === "function")
+      ? isDeveloperUser()
+      : (currentUser && (currentUser.id === "admin" || currentUser.is_developer === true || currentUser.role === "developer"));
+    btn.style.display = isDev ? '' : 'none';
   }
   if (window.applyUserPermissions) {
     window.applyUserPermissions();
