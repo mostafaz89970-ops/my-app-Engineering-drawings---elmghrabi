@@ -7363,6 +7363,10 @@ window.addEventListener("keydown", (e) => {
 
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
     e.preventDefault();
+    if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+      showToast("🔒 المخطط مجمد بأمر الإدارة — التراجع والتعديل معطلان لحين فك التجميد", "warning");
+      return;
+    }
     undoLastStep();
   } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
     e.preventDefault();
@@ -7370,6 +7374,10 @@ window.addEventListener("keydown", (e) => {
   } else if (e.key === "Delete" || e.key === "Backspace") {
     if (selectedElement && !e.target.closest("input") && !e.target.closest("select")) {
       e.preventDefault();
+      if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+        showToast("🔒 المخطط مجمد بأمر الإدارة — لا يمكن حذف أي عنصر لحين فك التجميد", "warning");
+        return;
+      }
       openSmartDeleteModal(selectedElement.type, selectedElement.id);
     }
   }
@@ -9662,10 +9670,8 @@ if (document.readyState === "loading") {
 
 function isProjectLockedForUser() {
   if (!currentProject) return false;
-  if (typeof isCurrentUserAdmin === "function" && isCurrentUserAdmin()) return false;
-  const userAdmin = (typeof _getLoggedInUser === "function" && _getLoggedInUser()?.administration) 
-    || getCurrentAdminName();
-  return isProjectLockedForAdmin(currentProject, userAdmin);
+  const curAdmin = getCurrentAdminName();
+  return isProjectLockedForAdmin(currentProject, curAdmin);
 }
 window.isProjectLockedForUser = isProjectLockedForUser;
 
@@ -9676,15 +9682,22 @@ function updateProjectLockUI() {
   const isAdmin = (typeof isCurrentUserAdmin === "function") && isCurrentUserAdmin();
   const isLocked = isProjectLockedForAdmin(currentProject, curAdmin);
 
+  // تفعيل فئة الحظر والتجميد الصارم على مستوى الصفحة لمنع أي مؤشرات أو حركات سحب
+  if (isLocked) {
+    document.body.classList.add("project-is-locked");
+  } else {
+    document.body.classList.remove("project-is-locked");
+  }
+
   if (banner) {
     if (isLocked) {
       banner.style.display = "flex";
       const bannerText = document.getElementById("project-locked-banner-text");
       if (bannerText) {
         if (currentProject && Array.isArray(currentProject.locked_admins) && !currentProject.locked_admins.includes("__all__")) {
-          bannerText.textContent = `🔒 هذا المخطط موقوف ومجمد على هندسة كهرباء ${curAdmin} بأمر الإدارة`;
+          bannerText.textContent = `🔒 هذا المخطط موقوف ومجمد بحزم على هندسة كهرباء [${curAdmin}] بأمر الإدارة — يمنع أي تعديل أو تحريك`;
         } else {
-          bannerText.textContent = `🔒 هذا المخطط موقوف ومجمد بالكامل بأمر الإدارة العامة لمنع التعديل`;
+          bannerText.textContent = `🔒 هذا المخطط موقوف ومجمد بالكامل بأمر الإدارة العامة — يمنع أي تعديل أو تحريك`;
         }
       }
       if (unlockBtn) unlockBtn.style.display = isAdmin ? "inline-flex" : "none";
@@ -9694,6 +9707,71 @@ function updateProjectLockUI() {
   }
 }
 window.updateProjectLockUI = updateProjectLockUI;
+
+async function unlockCurrentProjectDirectly() {
+  if (!currentProject) return;
+  if (typeof isCurrentUserAdmin === "function" && !isCurrentUserAdmin() && window.hasPermission && !window.hasPermission('lock_project')) {
+    showToast("⛔ صلاحية فك تجميد المشاريع للمدير العام فقط", "error");
+    return;
+  }
+  const curAdmin = getCurrentAdminName();
+  if (confirm(`هل ترغب في فك التجميد عن المخطط [${currentProject.name || currentProject.id}] لإتاحة التعديل والتحريك في [هندسة ${curAdmin}]؟`)) {
+    let locked = Array.isArray(currentProject.locked_admins) ? [...currentProject.locked_admins] : (currentProject.is_locked ? ["__all__"] : []);
+    if (locked.includes("__all__")) {
+      locked = [];
+      currentProject.is_locked = false;
+    } else {
+      locked = locked.filter(a => a !== curAdmin);
+      if (locked.length === 0) currentProject.is_locked = false;
+    }
+    currentProject.locked_admins = locked;
+    
+    // حفظ وتحديث فوري
+    const pId = currentProject.id;
+    try {
+      localStorage.setItem("sld_proj_" + pId, JSON.stringify(currentProject));
+      saveFeederForAdmin(currentProject, currentProject.administration);
+      localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
+    } catch(_) {}
+
+    const allAdmins = (typeof getAllSystemAdmins === "function") ? getAllSystemAdmins() : [];
+    allAdmins.forEach(adm => {
+      let cat = getCatalogForAdmin(adm) || [];
+      const idx = cat.findIndex(c => c.id === pId || c.name === currentProject.name);
+      if (idx >= 0) {
+        cat[idx].is_locked = currentProject.is_locked;
+        cat[idx].locked_admins = locked;
+        saveCatalogForAdmin(cat, adm);
+      }
+    });
+
+    try {
+      const fbBase = "https://elmghrabyelectric-default-rtdb.firebaseio.com/sld_studio";
+      fetch(`${fbBase}/projects/${encodeURIComponent(pId)}.json`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(currentProject)
+      }).catch(() => {});
+
+      allAdmins.forEach(adm => {
+        const aKey = adm.trim().replace(/\s+/g, '_');
+        const cat = getCatalogForAdmin(adm);
+        fetch(`${fbBase}/admins/${encodeURIComponent(aKey)}/catalog.json`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(cat)
+        }).catch(() => {});
+      });
+    } catch(_) {}
+
+    if (typeof window.broadcastProjectLockToggled === "function") {
+      window.broadcastProjectLockToggled(pId, currentProject.name, currentProject.is_locked, locked);
+    }
+    updateProjectLockUI();
+    showToast(`🔓 تم فك التجميد بنجاح! المخطط متاح الآن للتعديل والتحريك في هندسة ${curAdmin}`, "success");
+  }
+}
+window.unlockCurrentProjectDirectly = unlockCurrentProjectDirectly;
 
 async function openProjectLockModal(pId) {
   if (typeof isCurrentUserAdmin === "function" && !isCurrentUserAdmin() && window.hasPermission && !window.hasPermission('lock_project')) {

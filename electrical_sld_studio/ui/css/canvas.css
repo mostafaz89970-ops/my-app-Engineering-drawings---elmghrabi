@@ -509,3 +509,34 @@ line.sld-selected {
 .canvas-viewport.canvas-light .sld-leader-pointer circle {
   opacity: 1 !important;
 }
+
+/* وضع التجميد الصارم للمخطط لمنع أي تعديل أو تحريك بحزم */
+body.project-is-locked .sld-node-group,
+body.project-is-locked .sld-node-group *,
+body.project-is-locked .sld-section-group,
+body.project-is-locked .sld-section-group *,
+body.project-is-locked .canvas-annotation,
+body.project-is-locked .canvas-annotation * {
+  cursor: not-allowed !important;
+}
+
+body.project-is-locked .sld-deflect-handle-group,
+body.project-is-locked .sld-stretch-handle-group,
+body.project-is-locked .sld-section-deflect-handle,
+body.project-is-locked .sld-stretch-circle {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+body.project-is-locked .palette-item {
+  cursor: not-allowed !important;
+  opacity: 0.45 !important;
+  filter: grayscale(0.5);
+}
+
+body.project-is-locked #btn-delete-element,
+body.project-is-locked #btn-ribbon-delete,
+body.project-is-locked #btn-edit-element {
+  pointer-events: none !important;
+  opacity: 0.3 !important;
+}
