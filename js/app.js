@@ -157,6 +157,11 @@ async function saveCurrentProject() {
     return;
   }
 
+  // 1. تحديث بيانات المخطط من حقول الإدخال الحالية على الشاشة أولاً
+  if (typeof updateFeederInfo === "function") {
+    try { updateFeederInfo(true); } catch(_) {}
+  }
+
   const now = Date.now();
   currentProject.user_saved_at = now;
   currentProject.saved_at = now;
@@ -170,25 +175,79 @@ async function saveCurrentProject() {
   if (!currentProject.administration || currentProject.administration === "__all__") {
     currentProject.administration = (curAdmin && curAdmin !== "__all__") ? curAdmin : "بني مزار شرق";
   }
+  const projectAdmin = currentProject.administration;
+  const pKey = projectAdmin.trim().replace(/\s+/g, '_');
+
   if (!Array.isArray(currentProject.visible_admins) || currentProject.visible_admins.length === 0) {
-    currentProject.visible_admins = [currentProject.administration];
+    currentProject.visible_admins = [projectAdmin];
+  } else if (!currentProject.visible_admins.includes(projectAdmin)) {
+    currentProject.visible_admins.push(projectAdmin);
   }
   if (!Array.isArray(currentProject.locked_admins)) {
     currentProject.locked_admins = currentProject.is_locked ? ["__all__"] : [];
   }
 
-  saveFeederForAdmin(currentProject, currentProject.administration);
+  // إزالة معرف أو اسم المشروع من القائمة السوداء للمشاريع المحذوفة لضمان ظهوره دائماً
+  try {
+    const list = (typeof getDeletedProjectsList === "function") ? getDeletedProjectsList() : [];
+    const cleaned = list.filter(item => item !== currentProject.id && item !== currentProject.name);
+    localStorage.setItem("sld_deleted_projects_blacklist", JSON.stringify(cleaned));
+  } catch(_) {}
+
+  saveFeederForAdmin(currentProject, projectAdmin);
   try {
     localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
     localStorage.setItem("sld_proj_" + currentProject.id, JSON.stringify(currentProject));
-    localStorage.setItem("sld_saved_time_" + curKey, String(now));
+    localStorage.setItem("sld_saved_time_" + pKey, String(now));
     localStorage.setItem("sld_authoritative_save_time", String(now));
   } catch(e) {}
 
-  // إشعار حفظ فوري مباشر دون أي لاج أو انتظار
-  showToast(`💾 تم حفظ المخطط [${currentProject.name || 'المحدد'}] فوراً بنجاح!`, "success");
+  // 2. تحديث وتثبيت المشروع مباشرة في كتالوج الإدارة
+  const nowStr = new Date(now).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' });
+  currentProject.updated_at = nowStr;
+  const meta = {
+    id: currentProject.id,
+    name: currentProject.name || "مخطط شبكة",
+    substation: currentProject.substation || "",
+    voltage_kv: currentProject.voltage_kv || 11,
+    nodes_count: (currentProject.nodes || []).length,
+    sections_count: (currentProject.sections || []).length,
+    updated_at: nowStr,
+    saved_at: now,
+    user_saved_at: now,
+    administration: projectAdmin,
+    sector: currentProject.sector || "المنيا شمال",
+    is_locked: !!currentProject.is_locked,
+    locked_admins: currentProject.locked_admins || [],
+    visible_admins: currentProject.visible_admins
+  };
 
-  // 2. مزامنة السحابة والخادم في الخلفية فوراً دون تأخير واجهة المستخدم
+  const projectCatalog = getCatalogForAdmin(projectAdmin);
+  const existIdx = projectCatalog.findIndex(c => c.id === meta.id);
+  if (existIdx >= 0) {
+    projectCatalog[existIdx] = meta;
+  } else {
+    projectCatalog.unshift(meta);
+  }
+  saveCatalogForAdmin(projectCatalog, projectAdmin);
+
+  // تحديث كتالوجات أي إدارات مشاركة أخرى
+  if (Array.isArray(currentProject.visible_admins)) {
+    currentProject.visible_admins.forEach(visAdm => {
+      if (visAdm && visAdm !== projectAdmin && visAdm !== "__all__") {
+        const visCat = getCatalogForAdmin(visAdm);
+        const vIdx = visCat.findIndex(c => c.id === meta.id);
+        if (vIdx >= 0) visCat[vIdx] = meta;
+        else visCat.unshift(meta);
+        saveCatalogForAdmin(visCat, visAdm);
+      }
+    });
+  }
+
+  // إشعار حفظ فوري مباشر دون أي لاج أو انتظار
+  showToast(`💾 تم حفظ المخطط [${currentProject.name || 'المحدد'}] لإدارة [${projectAdmin}] بنجاح، ويظهر في مشاريعها فوراً!`, "success");
+
+  // 3. مزامنة السحابة والخادم في الخلفية فوراً دون تأخير واجهة المستخدم
   saveProjectToStorage(currentProject).catch(() => {});
   if (typeof captureTimelineSnapshot === "function") {
     try { captureTimelineSnapshot("حفظ معتمد للمخطط", currentProject); } catch(_) {}
@@ -5958,24 +6017,33 @@ function isProjectVisibleToAdmin(p, adminName) {
   if (!p) return false;
   if (!adminName || adminName === "__all__") return true;
 
+  const targetAdm = String(adminName).trim();
+  const pAdmin = String(p.administration || "").trim();
+
   // إذا تم تحديد إدارات العرض: هي المرجع الصارم والنهائي للمدير العام
   if (Array.isArray(p.visible_admins) && p.visible_admins.length > 0) {
-    return p.visible_admins.includes(adminName) || p.visible_admins.includes("__all__");
+    const trimmedVis = p.visible_admins.map(v => String(v).trim());
+    return trimmedVis.includes(targetAdm) || trimmedVis.includes("__all__") || pAdmin === targetAdm;
   }
 
   // في حال لم يتم تحديد إدارات العرض بعد: يتبع الإدارة الأصلية فقط
-  const pAdmin = p.administration || "";
-  return pAdmin === adminName;
+  return pAdmin === targetAdm;
 }
 window.isProjectVisibleToAdmin = isProjectVisibleToAdmin;
 
-// استبعاد المخططات التجريبية والوهمية (عرض المخططات الفعلية المحفوظة فقط)
+// استبعاد المخططات الوهمية (مع ضمان عرض كافة المخططات الفعلية التي رسمها وحفظها المستخدم)
 function isDemoOrDummyProject(p) {
   if (!p) return true;
-  const name = String(p.name || "").trim().toLowerCase();
+  // أي مشروع يحتوي على عقد هندسية حقيقية وتم حفظه بواسطة المستخدم فهو مشروع حقيقي 100% ولا يُستبعد أبداً
+  if ((p.nodes && p.nodes.length > 0) && (p.user_saved_at || p.saved_at)) {
+    return false;
+  }
+  if ((p.nodes_count && p.nodes_count > 0) && (p.user_saved_at || p.saved_at)) {
+    return false;
+  }
   const id = String(p.id || "").trim().toLowerCase();
-  if (name.includes("تجريبي") || name.includes("demo") || id.includes("demo")) return true;
-  if (id === "feeder_1789823077015" && name.includes("المعصرة") && (!p.user_saved_at && !p.saved_at)) return true;
+  // فقط المشاريع التجريبية المضمنة في السجل القديم التي لا تحتوي على بيانات حقيقية
+  if (id === "feeder_1789149343114" || id === "rasm_tagreby" || id === "video_demo_feeder") return true;
   return false;
 }
 window.isDemoOrDummyProject = isDemoOrDummyProject;
@@ -6191,12 +6259,23 @@ function loadAdminWorkspace(adminName) {
 }
 
 // ─── إدارة السجل الأسود للمشاريع المحذوفة نهائياً لمنع عودة المشاريع التجريبية ───
+const GENERIC_EXCLUDED_NAMES = [
+  "مخطط جديد", "مخطط شبكة", "مخطط شبكة توزيع", "مخطط غير مسمى", "new project", "feeder", "خط المعصرة"
+];
+
 function getDeletedProjectsList() {
   try {
     const raw = localStorage.getItem("sld_deleted_projects_blacklist");
     if (raw) {
       const arr = JSON.parse(raw);
-      if (Array.isArray(arr)) return arr;
+      if (Array.isArray(arr)) {
+        // تنقية وتطهير القائمة السوداء من أي أسماء افتراضية أو عامة
+        return arr.filter(item => {
+          if (!item) return false;
+          const s = String(item).trim().toLowerCase();
+          return !GENERIC_EXCLUDED_NAMES.some(g => g.toLowerCase() === s);
+        });
+      }
     }
   } catch(e) {}
   return [];
@@ -6206,7 +6285,13 @@ function markProjectAsDeleted(p_id, p_name) {
   try {
     const list = getDeletedProjectsList();
     if (p_id && !list.includes(String(p_id))) list.push(String(p_id));
-    if (p_name && !list.includes(String(p_name))) list.push(String(p_name));
+    if (p_name) {
+      const s = String(p_name).trim().toLowerCase();
+      const isGeneric = GENERIC_EXCLUDED_NAMES.some(g => g.toLowerCase() === s);
+      if (!isGeneric && !list.includes(String(p_name))) {
+        list.push(String(p_name));
+      }
+    }
     localStorage.setItem("sld_deleted_projects_blacklist", JSON.stringify(list));
   } catch(e) {}
 }
@@ -6214,8 +6299,14 @@ function markProjectAsDeleted(p_id, p_name) {
 function isProjectDeleted(p_id, p_name) {
   const list = getDeletedProjectsList();
   if (!list || list.length === 0) return false;
+  // الحظر بالمعرف الفرعي ID حصراً
   if (p_id && list.includes(String(p_id))) return true;
-  if (p_name && list.includes(String(p_name))) return true;
+  // الحظر بالاسم فقط إذا كان اسماً فريداً ومميزاً وليس اسماً افتراضياً
+  if (p_name) {
+    const s = String(p_name).trim().toLowerCase();
+    const isGeneric = GENERIC_EXCLUDED_NAMES.some(g => g.toLowerCase() === s);
+    if (!isGeneric && list.includes(String(p_name))) return true;
+  }
   return false;
 }
 window.getDeletedProjectsList = getDeletedProjectsList;
@@ -6424,6 +6515,31 @@ function ensureAllActualProjectsCollected() {
       localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
       saveFeederForAdmin(currentProject, currentProject.administration);
     } catch(_) {}
+
+    // إدراج المخطط النشط مباشرة في كتالوج الإدارة
+    try {
+      const curCat = getCatalogForAdmin(currentProject.administration) || [];
+      const exIdx = curCat.findIndex(c => c.id === currentProject.id);
+      const meta = {
+        id: currentProject.id,
+        name: currentProject.name || "مخطط شبكة",
+        substation: currentProject.substation || "",
+        voltage_kv: currentProject.voltage_kv || 11,
+        nodes_count: (currentProject.nodes || []).length,
+        sections_count: (currentProject.sections || []).length,
+        updated_at: currentProject.updated_at || new Date().toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' }),
+        saved_at: currentProject.saved_at || Date.now(),
+        user_saved_at: currentProject.user_saved_at || currentProject.saved_at || Date.now(),
+        administration: currentProject.administration,
+        sector: currentProject.sector || "المنيا شمال",
+        is_locked: !!currentProject.is_locked,
+        locked_admins: currentProject.locked_admins || [],
+        visible_admins: currentProject.visible_admins
+      };
+      if (exIdx >= 0) curCat[exIdx] = meta;
+      else curCat.unshift(meta);
+      saveCatalogForAdmin(curCat, currentProject.administration);
+    } catch(_) {}
   }
 
   // 2. فحص sld_saved_feeder في الذاكرة المحلية
@@ -6570,6 +6686,33 @@ async function openProjectsManager(requestedAdmin = null) {
   // ─── جمع المشاريع ─────────────────────────────────────────────────────
   const masterMap = new Map();
 
+  // 0) إدراج المخطط الحالي النشط على الشاشة مباشرة لضمان ظهوره الفوري وعدم اختفائه
+  if (currentProject && ((currentProject.nodes && currentProject.nodes.length > 0) || currentProject.name)) {
+    const curAdm = String(currentProject.administration || userAdmin || "بني مزار شرق").trim();
+    const curVisible = (Array.isArray(currentProject.visible_admins) && currentProject.visible_admins.length > 0)
+      ? currentProject.visible_admins.map(v => String(v).trim())
+      : [curAdm];
+    const curLocked = Array.isArray(currentProject.locked_admins) ? currentProject.locked_admins : (currentProject.is_locked ? ["__all__"] : []);
+    const curId = currentProject.id || ("proj_" + (currentProject.saved_at || Date.now()));
+    currentProject.id = curId;
+
+    masterMap.set(curId, {
+      id: curId,
+      name: currentProject.name || "مخطط شبكة",
+      substation: currentProject.substation || "",
+      voltage_kv: currentProject.voltage_kv || 11,
+      nodes_count: (currentProject.nodes || []).length,
+      sections_count: (currentProject.sections || []).length,
+      updated_at: currentProject.updated_at || new Date().toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' }),
+      saved_at: currentProject.saved_at || currentProject.user_saved_at || Date.now(),
+      administration: curAdm,
+      sector: currentProject.sector || "المنيا شمال",
+      is_locked: (curLocked.length > 0) || !!currentProject.is_locked,
+      locked_admins: curLocked,
+      visible_admins: curVisible
+    });
+  }
+
   // أ) جمع المشاريع من مفاتيح sld_proj_*
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
@@ -6579,8 +6722,10 @@ async function openProjectsManager(requestedAdmin = null) {
         if (raw) {
           const p = JSON.parse(raw);
           if (p && p.id && !isProjectDeleted(p.id, p.name) && !isDemoOrDummyProject(p)) {
-            const pAdmin = p.administration || userAdmin || "بني مزار شرق";
-            const pVisible = (Array.isArray(p.visible_admins) && p.visible_admins.length > 0) ? p.visible_admins : [pAdmin];
+            const pAdmin = String(p.administration || userAdmin || "بني مزار شرق").trim();
+            const pVisible = (Array.isArray(p.visible_admins) && p.visible_admins.length > 0)
+              ? p.visible_admins.map(v => String(v).trim())
+              : [pAdmin];
             const pLocked = Array.isArray(p.locked_admins) ? p.locked_admins : (p.is_locked ? ["__all__"] : []);
             masterMap.set(p.id, {
               id: p.id,
@@ -6609,6 +6754,7 @@ async function openProjectsManager(requestedAdmin = null) {
     cat.forEach(item => {
       if (item && item.id && !isProjectDeleted(item.id, item.name) && !isDemoOrDummyProject(item)) {
         if (!masterMap.has(item.id)) {
+          const itemAdm = String(item.administration || adm).trim();
           masterMap.set(item.id, {
             id: item.id,
             name: item.name || "مخطط شبكة",
@@ -6618,18 +6764,57 @@ async function openProjectsManager(requestedAdmin = null) {
             sections_count: item.sections_count || 0,
             updated_at: item.updated_at || "-",
             saved_at: item.saved_at || Date.now(),
-            administration: item.administration || adm,
+            administration: itemAdm,
             sector: item.sector || "المنيا شمال",
             is_locked: !!item.is_locked,
             locked_admins: Array.isArray(item.locked_admins) ? item.locked_admins : (item.is_locked ? ["__all__"] : []),
-            visible_admins: (Array.isArray(item.visible_admins) && item.visible_admins.length > 0) ? item.visible_admins : [item.administration || adm]
+            visible_admins: (Array.isArray(item.visible_admins) && item.visible_admins.length > 0)
+              ? item.visible_admins.map(v => String(v).trim())
+              : [itemAdm]
           });
         }
       }
     });
   });
 
-  // جـ) مزامنة خلفية من سحابة Firebase للإدارة المعروضة
+  // جـ) مسح مخططات الفروع sld_feeder_*
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith("sld_feeder_")) {
+      try {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const fObj = JSON.parse(raw);
+          if (fObj && (fObj.id || fObj.name) && !isProjectDeleted(fObj.id, fObj.name) && !isDemoOrDummyProject(fObj)) {
+            const admFromKey = k.replace("sld_feeder_", "").replace(/_/g, " ");
+            const targetAdm = String(fObj.administration || admFromKey).trim();
+            const fId = fObj.id || ("feeder_" + targetAdm.replace(/\s+/g, '_'));
+            if (!masterMap.has(fId)) {
+              masterMap.set(fId, {
+                id: fId,
+                name: fObj.name || ("مخطط " + targetAdm),
+                substation: fObj.substation || "",
+                voltage_kv: fObj.voltage_kv || 11,
+                nodes_count: (fObj.nodes || []).length,
+                sections_count: (fObj.sections || []).length,
+                updated_at: fObj.updated_at || "-",
+                saved_at: fObj.saved_at || Date.now(),
+                administration: targetAdm,
+                sector: fObj.sector || "المنيا شمال",
+                is_locked: !!fObj.is_locked,
+                locked_admins: Array.isArray(fObj.locked_admins) ? fObj.locked_admins : [],
+                visible_admins: (Array.isArray(fObj.visible_admins) && fObj.visible_admins.length > 0)
+                  ? fObj.visible_admins.map(v => String(v).trim())
+                  : [targetAdm]
+              });
+            }
+          }
+        }
+      } catch(_) {}
+    }
+  }
+
+  // د) مزامنة خلفية من سحابة Firebase للإدارة المعروضة
   if (activeViewingAdmin !== "__all__") {
     try {
       const aKey = activeViewingAdmin.trim().replace(/\s+/g, '_');
@@ -6665,7 +6850,7 @@ async function openProjectsManager(requestedAdmin = null) {
 
   displayProjects.sort((a, b) => (b.saved_at || 0) - (a.saved_at || 0));
 
-  if (activeViewingAdmin !== "__all__") {
+  if (activeViewingAdmin !== "__all__" && displayProjects.length > 0) {
     saveCatalogForAdmin(displayProjects, activeViewingAdmin);
   }
 
@@ -6682,6 +6867,21 @@ function renderAdminFolders(systemAdmins, container) {
   // حساب دقيق وشامل لعدد المشاريع لكل إدارة من الكتالوجات وجميع مفاتيح التخزين
   const adminProjectSets = {};
   systemAdmins.forEach(adm => { adminProjectSets[adm] = new Set(); });
+
+  // 0. إضافة المشروع النشط على الشاشة مباشرة لضمان احتسابه في عداد الفولدر وظهوره فوراً
+  if (currentProject && ((currentProject.nodes && currentProject.nodes.length > 0) || currentProject.name)) {
+    const curAdm = String(currentProject.administration || "بني مزار شرق").trim();
+    const curVis = (Array.isArray(currentProject.visible_admins) && currentProject.visible_admins.length > 0)
+      ? currentProject.visible_admins.map(v => String(v).trim())
+      : [curAdm];
+    const curId = currentProject.id || "current_active_project";
+    systemAdmins.forEach(adm => {
+      const aTrim = String(adm).trim();
+      if (aTrim === curAdm || curVis.includes(aTrim) || curVis.includes("__all__")) {
+        if (adminProjectSets[adm]) adminProjectSets[adm].add(curId);
+      }
+    });
+  }
 
   // 1. مسح الكتالوجات
   systemAdmins.forEach(adm => {
@@ -6702,8 +6902,11 @@ function renderAdminFolders(systemAdmins, container) {
         if (raw) {
           const p = JSON.parse(raw);
           if (p && p.id && !isProjectDeleted(p.id, p.name) && !isDemoOrDummyProject(p)) {
+            const pAdm = String(p.administration || "").trim();
+            const vis = Array.isArray(p.visible_admins) ? p.visible_admins.map(v => String(v).trim()) : [];
             systemAdmins.forEach(adm => {
-              if (p.administration === adm || (Array.isArray(p.visible_admins) && p.visible_admins.includes(adm))) {
+              const aTrim = String(adm).trim();
+              if (pAdm === aTrim || vis.includes(aTrim) || vis.includes("__all__")) {
                 adminProjectSets[adm].add(p.id);
                 // تأكيد وجوده في الكتالوج إن لم يكن مسجلاً
                 const cat = getCatalogForAdmin(adm) || [];
@@ -6717,7 +6920,7 @@ function renderAdminFolders(systemAdmins, container) {
                     sections_count: (p.sections || []).length,
                     updated_at: p.updated_at || "-",
                     saved_at: p.saved_at || Date.now(),
-                    administration: p.administration || adm,
+                    administration: pAdm || adm,
                     sector: p.sector || "",
                     visible_admins: p.visible_admins || [adm]
                   });
@@ -6741,10 +6944,12 @@ function renderAdminFolders(systemAdmins, container) {
           const fObj = JSON.parse(raw);
           if (fObj && Array.isArray(fObj.nodes) && fObj.nodes.length > 0 && !isProjectDeleted(fObj.id, fObj.name) && !isDemoOrDummyProject(fObj)) {
             const admFromKey = k.replace("sld_feeder_", "").replace(/_/g, " ");
-            const targetAdm = fObj.administration || admFromKey;
-            if (adminProjectSets[targetAdm]) {
-              adminProjectSets[targetAdm].add(fObj.id || ("proj_feeder_" + targetAdm));
-            }
+            const targetAdm = String(fObj.administration || admFromKey).trim();
+            systemAdmins.forEach(adm => {
+              if (String(adm).trim() === targetAdm) {
+                adminProjectSets[adm].add(fObj.id || ("proj_feeder_" + targetAdm));
+              }
+            });
           }
         }
       } catch(_) {}
@@ -9489,6 +9694,11 @@ async function submitSaveToAdmin() {
     return;
   }
 
+  // 1. تحديث بيانات المخطط من حقول الشاشة أولاً
+  if (typeof updateFeederInfo === "function") {
+    try { updateFeederInfo(true); } catch(_) {}
+  }
+
   const targetAdmin = document.getElementById("save-admin-branch-select")?.value;
   const targetSector = document.getElementById("save-admin-sector-select")?.value;
   const keepInCurrent = document.getElementById("save-admin-also-current")?.checked !== false;
@@ -9496,6 +9706,11 @@ async function submitSaveToAdmin() {
   if (!targetAdmin) {
     showToast("⚠️ يرجى اختيار الإدارة المستهدفة", "warning");
     return;
+  }
+
+  const inputName = document.getElementById("save-admin-project-name")?.value;
+  if (inputName && inputName.trim()) {
+    currentProject.name = inputName.trim();
   }
 
   const nowTs = Date.now();
@@ -9506,6 +9721,12 @@ async function submitSaveToAdmin() {
   currentProject.saved_at = nowTs;
   currentProject.user_saved_at = nowTs;
   currentProject.updated_at = nowStr;
+
+  // تنظيف السجل الأسود من معرف أو اسم المشروع
+  try {
+    const bl = getDeletedProjectsList().filter(x => x !== String(currentProject.id) && x !== String(currentProject.name));
+    localStorage.setItem("sld_deleted_projects_blacklist", JSON.stringify(bl));
+  } catch(_) {}
 
   // تحديد الإدارة والإدارات المرئية
   const originalAdmin = currentProject.administration || targetAdmin;
@@ -9541,6 +9762,7 @@ async function submitSaveToAdmin() {
     sections_count: (currentProject.sections || []).length,
     updated_at: nowStr,
     saved_at: nowTs,
+    user_saved_at: nowTs,
     administration: targetAdmin,
     sector: targetSector,
     is_locked: !!currentProject.is_locked,
