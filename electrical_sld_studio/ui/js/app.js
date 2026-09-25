@@ -241,6 +241,12 @@ async function saveCurrentProject() {
   }
   saveCatalogForAdmin(projectCatalog, projectAdmin);
 
+  // تحديث كتالوج الإدارة العامة لضمان ظهور المشروع الجديد للمدير العام فورياً
+  const allCat = getCatalogForAdmin("__all__") || [];
+  const aIdx = allCat.findIndex(c => c.id === meta.id);
+  if (aIdx >= 0) allCat[aIdx] = meta; else allCat.unshift(meta);
+  saveCatalogForAdmin(allCat, "__all__");
+
   // تحديث كتالوجات أي إدارات مشاركة أخرى
   if (Array.isArray(currentProject.visible_admins)) {
     currentProject.visible_admins.forEach(visAdm => {
@@ -253,6 +259,16 @@ async function saveCurrentProject() {
       }
     });
   }
+
+  // إرسال فوري إلى سحابة الفهرس العام Firebase all_projects_meta
+  try {
+    const fbBase = "https://elmghrabyelectric-default-rtdb.firebaseio.com/sld_studio";
+    fetch(fbBase + "/all_projects_meta/" + encodeURIComponent(currentProject.id) + ".json", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(meta)
+    }).catch(() => {});
+  } catch(_) {}
 
   // إشعار حفظ فوري مباشر دون أي لاج أو انتظار
   showToast(`💾 تم حفظ المخطط [${currentProject.name || 'المحدد'}] لإدارة [${projectAdmin}] بنجاح، ويظهر في مشاريعها فوراً!`, "success");
@@ -6129,15 +6145,23 @@ function showHiddenProjectOverlay(customAdmin = null) {
   }
   if (overlay) {
     overlay.style.cssText = "position:absolute; inset:0; z-index:95; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(15,23,42,0.96); backdrop-filter:blur(8px); text-align:center; padding:30px; color:#f8fafc;";
+    const isAdmin = (typeof isCurrentUserAdmin === "function") && isCurrentUserAdmin();
     overlay.innerHTML = `
       <div style="font-size:62px; margin-bottom:14px;">🚫</div>
       <h2 style="font-size:22px; font-weight:bold; color:#f87171; margin-bottom:10px;">هذا المخطط محجوب ومخفي تماماً عن هذه الإدارة</h2>
       <p style="font-size:14px; color:#94a3b8; max-width:520px; line-height:1.7; margin-bottom:20px;">
         تم حجب هذا المخطط وإخفاء الرسم ومكونات الشبكة بالكامل عن <strong>هندسة كهرباء [${curAdmin}]</strong> بأمر الإدارة العامة. غير مسموح بالاطلاع على الرسم أو أي تفاصيل تخص هذا المشروع.
       </p>
-      <button type="button" class="btn btn-primary" onclick="openProjectsManager()" style="background:#2563eb; border:none; padding:10px 24px; border-radius:6px; color:#fff; font-weight:bold; cursor:pointer; font-size:13.5px; box-shadow:0 4px 14px rgba(37,99,235,0.4);">
-        📁 فتح مجلد مشاريع إدارتك المتاحة
-      </button>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center; align-items:center;">
+        <button type="button" class="btn btn-primary" onclick="openProjectsManager()" style="background:#2563eb; border:none; padding:10px 24px; border-radius:6px; color:#fff; font-weight:bold; cursor:pointer; font-size:13.5px; box-shadow:0 4px 14px rgba(37,99,235,0.4);">
+          📁 فتح مجلد مشاريع إدارتك المتاحة
+        </button>
+        ${isAdmin ? `
+          <button type="button" class="btn btn-success" onclick="unblockProjectForAdmin(currentProject ? currentProject.id : null, '${curAdmin}')" style="background:#16a34a; border:none; padding:10px 24px; border-radius:6px; color:#fff; font-weight:bold; cursor:pointer; font-size:13.5px; box-shadow:0 4px 14px rgba(22,163,74,0.4);">
+            🔓 بصفتك مديراً عاماً: فك الحجب وإتاحة المخطط للإدارة الحالية فوراً
+          </button>
+        ` : ''}
+      </div>
     `;
     overlay.style.display = "flex";
   }
@@ -6510,6 +6534,23 @@ async function saveProjectToStorage(project) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(catalog)
     }).catch(() => {});
+
+    // مزامنة الفهرس العام للمدير العام لحظياً
+    fetch(fbBase + "/all_projects_meta/" + encodeURIComponent(pId) + ".json", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(meta)
+    }).catch(() => {});
+
+    const allCat = getCatalogForAdmin("__all__") || [];
+    const aIdx = allCat.findIndex(c => c.id === meta.id);
+    if (aIdx >= 0) allCat[aIdx] = meta; else allCat.unshift(meta);
+    saveCatalogForAdmin(allCat, "__all__");
+    fetch(fbBase + "/admins/__all__/catalog.json", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(allCat)
+    }).catch(() => {});
   } catch(_) {}
 
   // 4. إرسال إلى خادم Python المحلي إن كان متصلاً
@@ -6736,6 +6777,33 @@ async function openProjectsManager(requestedAdmin = null) {
   // 1. ضمان تسجيل وتثبيت كافة المشاريع الفعلية في التخزين
   ensureAllActualProjectsCollected();
 
+  // مزامنة سحابية مسبقة لجمع أي مشاريع جديدة أضافها مستخدمون من أي أجهزة فورياً
+  try {
+    const cloudCtrl = new AbortController();
+    const cloudTimeout = setTimeout(() => cloudCtrl.abort(), 1600);
+    const metaRes = await fetch("https://elmghrabyelectric-default-rtdb.firebaseio.com/sld_studio/all_projects_meta.json", { signal: cloudCtrl.signal });
+    clearTimeout(cloudTimeout);
+    if (metaRes.ok) {
+      const metaData = await metaRes.json();
+      if (metaData && typeof metaData === "object") {
+        Object.values(metaData).forEach(m => {
+          if (m && m.id && !isProjectDeleted(m.id, m.name) && !isDemoOrDummyProject(m)) {
+            const mAdm = String(m.administration || "بني مزار شرق").trim();
+            const cat = getCatalogForAdmin(mAdm) || [];
+            const idx = cat.findIndex(c => c.id === m.id || (m.name && c.name === m.name));
+            if (idx >= 0) cat[idx] = m; else cat.unshift(m);
+            saveCatalogForAdmin(cat, mAdm);
+
+            const allCat = getCatalogForAdmin("__all__") || [];
+            const aIdx = allCat.findIndex(c => c.id === m.id || (m.name && c.name === m.name));
+            if (aIdx >= 0) allCat[aIdx] = m; else allCat.unshift(m);
+            saveCatalogForAdmin(allCat, "__all__");
+          }
+        });
+      }
+    }
+  } catch(_) {}
+
   const isAdmin = (typeof isCurrentUserAdmin === "function") ? isCurrentUserAdmin() : false;
   const loggedUser = (typeof _getLoggedInUser === "function") ? _getLoggedInUser() : null;
   const userAdmin = (loggedUser && loggedUser.administration) ? loggedUser.administration : getCurrentAdminName();
@@ -6949,7 +7017,14 @@ async function openProjectsManager(requestedAdmin = null) {
   if (activeViewingAdmin === "__all__") {
     displayProjects = allProjects;
   } else {
-    displayProjects = allProjects.filter(p => isProjectVisibleToAdmin(p, activeViewingAdmin));
+    if (isAdmin) {
+      displayProjects = allProjects.filter(p => {
+        const pAdm = String(p.administration || "").trim();
+        return isProjectVisibleToAdmin(p, activeViewingAdmin) || pAdm === activeViewingAdmin;
+      });
+    } else {
+      displayProjects = allProjects.filter(p => isProjectVisibleToAdmin(p, activeViewingAdmin));
+    }
   }
 
   displayProjects.sort((a, b) => (b.saved_at || 0) - (a.saved_at || 0));
@@ -7248,9 +7323,11 @@ function renderProjectsTable(projects, isServerOnline, activeViewingAdmin = null
     </div>
   `;
 
-  // تصفية المشاريع: إذا تم تحديد إدارة معينة، تُعرض المشاريع المصرح بعرضها لهذه الإدارة فقط ومستثنى منها المحجوبة
+  // تصفية المشاريع: إذا تم تحديد إدارة معينة، تُعرض المشاريع المصرح بعرضها لهذه الإدارة (وللمدير تُعرض كافة المشاريع لتمكينه من فك الحجب)
   if (activeViewingAdmin !== "__all__") {
-    projects = projects.filter(p => isProjectVisibleToAdmin(p, activeViewingAdmin));
+    if (!isAdmin) {
+      projects = projects.filter(p => isProjectVisibleToAdmin(p, activeViewingAdmin));
+    }
   }
 
   if (!projects || projects.length === 0) {
@@ -7313,9 +7390,15 @@ function renderProjectsTable(projects, isServerOnline, activeViewingAdmin = null
       }
     }
 
-    const statusBadgeHtml = isRowLocked 
-      ? `<span style="display:inline-block; font-size:10px; background:rgba(239,68,68,0.25); color:#fca5a5; border:1px solid #ef4444; padding:2px 7px; border-radius:10px; font-weight:bold;" title="${lockStatusText}">${lockStatusText}</span>`
-      : `<span style="display:inline-block; font-size:10px; background:rgba(34,197,94,0.2); color:#86efac; border:1px solid #22c55e; padding:2px 7px; border-radius:10px; font-weight:bold;">🟢 متاح للعمل</span>`;
+    let statusBadgeHtml = "";
+    const isHiddenFromThisAdmin = (activeViewingAdmin !== "__all__" && !isProjectVisibleToAdmin(p, activeViewingAdmin));
+    if (isHiddenFromThisAdmin) {
+      statusBadgeHtml = `<span style="display:inline-block; font-size:10px; background:rgba(239,68,68,0.25); color:#fca5a5; border:1px solid #ef4444; padding:2px 7px; border-radius:10px; font-weight:bold;">🚫 محجوب عن الإدارة</span>`;
+    } else if (isRowLocked) {
+      statusBadgeHtml = `<span style="display:inline-block; font-size:10px; background:rgba(234,179,8,0.25); color:#fde047; border:1px solid #eab308; padding:2px 7px; border-radius:10px; font-weight:bold;" title="${lockStatusText}">${lockStatusText}</span>`;
+    } else {
+      statusBadgeHtml = `<span style="display:inline-block; font-size:10px; background:rgba(34,197,94,0.2); color:#86efac; border:1px solid #22c55e; padding:2px 7px; border-radius:10px; font-weight:bold;">🟢 متاح للعمل</span>`;
+    }
 
     const isSharedFromOther = (p.administration && activeViewingAdmin !== "__all__" && p.administration !== activeViewingAdmin);
     const sharedSourceBadge = isSharedFromOther
@@ -7361,9 +7444,18 @@ function renderProjectsTable(projects, isServerOnline, activeViewingAdmin = null
                 <span>👥 إدارات العرض</span>
               </button>
             ` : ''}
-            ${(canShareProject && activeViewingAdmin !== "__all__") ? `
-              <button class="btn btn-outline btn-sm" style="padding:3px 7px; font-size:11px; border-color:#f87171; color:#f87171;" onclick="hideProjectFromAdmin(decodeURIComponent('${encId}'), '${activeViewingAdmin}')" title="حجب هذا المخطط عن هندسة كهرباء ${activeViewingAdmin}">
-                <span>🚫 حجب</span>
+            ${(canShareProject && activeViewingAdmin !== "__all__") ? (
+              isProjectVisibleToAdmin(p, activeViewingAdmin)
+                ? `<button class="btn btn-outline btn-sm" style="padding:3px 7px; font-size:11px; border-color:#f87171; color:#f87171;" onclick="hideProjectFromAdmin(decodeURIComponent('${encId}'), '${activeViewingAdmin}')" title="حجب هذا المخطط عن هندسة كهرباء ${activeViewingAdmin}">
+                    <span>🚫 حجب</span>
+                   </button>`
+                : `<button class="btn btn-sm" style="padding:3px 7px; font-size:11px; background:#15803d; border-color:#22c55e; color:#fff;" onclick="unblockProjectForAdmin(decodeURIComponent('${encId}'), '${activeViewingAdmin}')" title="إعادة فتح الحجب وإتاحة هذا المخطط لهندسة كهرباء ${activeViewingAdmin}">
+                    <span>🔓 إعادة فتح الحجب</span>
+                   </button>`
+            ) : ''}
+            ${(canShareProject && activeViewingAdmin === "__all__") ? `
+              <button class="btn btn-outline btn-sm" style="padding:3px 7px; font-size:11px; border-color:#22c55e; color:#4ade80;" onclick="openUnblockAdminModal(decodeURIComponent('${encId}'))" title="إعادة فتح حجب هذا المشروع لإدارة معينة">
+                <span>🔓 فتح الحجب لإدارة</span>
               </button>
             ` : ''}
             <button class="btn btn-outline btn-sm" style="padding:3px 8px; font-size:11px; border-color:#ecc94b; color:#ecc94b;" onclick="exportProjectAsSLD(decodeURIComponent('${encId}'))" title="تنزيل كملف .sld">
@@ -7662,11 +7754,19 @@ async function handleSLDFileInput(e) {
       }
       if (!parsed.id) parsed.id = "feeder_" + Date.now();
       if (!parsed.name) parsed.name = file.name.replace(/\.[^/.]+$/, "");
+      const curAdmin = getCurrentAdminName();
+      if (!parsed.administration || parsed.administration === "__all__") {
+        parsed.administration = (curAdmin && curAdmin !== "__all__") ? curAdmin : "بني مزار شرق";
+      }
+      if (!Array.isArray(parsed.visible_admins) || parsed.visible_admins.length === 0) {
+        parsed.visible_admins = [parsed.administration];
+      }
       await saveProjectToStorage(parsed);
       currentProject = parsed;
       window.currentProject = parsed;
       if (window.clearSelection) clearSelection();
       updateFeederInputs();
+      if (typeof updateProjectLockUI === "function") updateProjectLockUI();
       renderNetwork();
       fitToScreen();
       closeProjectsManager();
@@ -7681,18 +7781,25 @@ async function handleSLDFileInput(e) {
 
 function createNewProjectDirectly() {
   saveHistoryState();
+  const curAdmin = getCurrentAdminName();
+  const adm = (curAdmin && curAdmin !== "__all__") ? curAdmin : "بني مزار شرق";
   currentProject = {
     id: "feeder_" + Date.now(),
     name: "مخطط جديد",
+    administration: adm,
     substation: "",
     voltage_kv: 11,
     feeder_max_load_kva: 5000,
     nodes: [],
-    sections: []
+    sections: [],
+    visible_admins: [adm],
+    locked_admins: [],
+    is_locked: false
   };
   window.currentProject = currentProject;
   if (window.clearSelection) clearSelection();
   updateFeederInputs();
+  if (typeof updateProjectLockUI === "function") updateProjectLockUI();
   renderNetwork();
   resetZoom();
   closeProjectsManager();
@@ -10823,6 +10930,292 @@ async function hideProjectFromAdmin(pId, adminName) {
   showToast(`🚫 تم حجب المخطط [${proj.name || proj.id}] عن هندسة كهرباء ${targetAdmin} واختفاؤه فوراً!`, "info");
 }
 window.hideProjectFromAdmin = hideProjectFromAdmin;
+
+// ==================== إعادة فتح حجب المشروع لإدارة معينة ====================
+async function unblockProjectForAdmin(pId, adminName = null) {
+  if (typeof isCurrentUserAdmin === "function" && !isCurrentUserAdmin() && window.hasPermission && !window.hasPermission('share_project')) {
+    showToast("⛔ صلاحية فك الحجب وإتاحة المشاريع للمدير العام فقط", "error");
+    return;
+  }
+  let proj = (currentProject && (currentProject.id === pId || currentProject.name === pId))
+    ? currentProject
+    : await loadProjectDataById(pId);
+  if (!proj) {
+    showToast("❌ تعذر العثور على بيانات المشروع", "error");
+    return;
+  }
+
+  const targetAdmin = adminName || window.modalViewingAdmin || getCurrentAdminName();
+  if (!targetAdmin || targetAdmin === "__all__") {
+    openUnblockAdminModal(pId);
+    return;
+  }
+
+  // 1. إعادة إتاحة المشروع في قائمة إدارات العرض المصرح لها (visible_admins)
+  const allAdmins = (typeof getAllSystemAdmins === "function") ? getAllSystemAdmins() : [targetAdmin];
+  let visible = Array.isArray(proj.visible_admins) ? [...proj.visible_admins] : [proj.administration || targetAdmin];
+  if (!visible.includes(targetAdmin) && !visible.includes("__all__")) {
+    visible.push(targetAdmin);
+  }
+  proj.visible_admins = visible;
+
+  // 2. فك أي قفل أو تجميد خاص بهذه الإدارة (locked_admins)
+  if (Array.isArray(proj.locked_admins)) {
+    if (proj.locked_admins.includes("__all__")) {
+      proj.locked_admins = allAdmins.filter(a => a !== targetAdmin);
+    } else {
+      proj.locked_admins = proj.locked_admins.filter(a => a !== targetAdmin);
+    }
+    if (proj.locked_admins.length === 0) {
+      proj.is_locked = false;
+    }
+  } else {
+    proj.locked_admins = [];
+    proj.is_locked = false;
+  }
+
+  const nowTs = Date.now();
+  const nowStr = new Date(nowTs).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' });
+  proj.updated_at = nowStr;
+
+  // 3. الحفظ المحلي المحدث للمشروع
+  try {
+    localStorage.setItem("sld_proj_" + proj.id, JSON.stringify(proj));
+    if (currentProject && (currentProject.id === proj.id || currentProject.name === proj.name)) {
+      currentProject.visible_admins = visible;
+      currentProject.locked_admins = proj.locked_admins;
+      currentProject.is_locked = proj.is_locked;
+      currentProject.updated_at = nowStr;
+      localStorage.setItem("sld_saved_feeder", JSON.stringify(currentProject));
+      if (typeof updateProjectLockUI === "function") updateProjectLockUI();
+      if (typeof renderNetwork === "function") renderNetwork();
+    }
+  } catch(_) {}
+
+  // 4. إعادة إدراج المشروع في كتالوج الإدارة المستهدفة
+  const meta = {
+    id: proj.id,
+    name: proj.name || "مخطط شبكة",
+    substation: proj.substation || "",
+    voltage_kv: proj.voltage_kv || 11,
+    nodes_count: (proj.nodes || []).length,
+    sections_count: (proj.sections || []).length,
+    updated_at: nowStr,
+    saved_at: proj.saved_at || nowTs,
+    administration: proj.administration || targetAdmin,
+    sector: proj.sector || "المنيا شمال",
+    is_locked: !!proj.is_locked,
+    locked_admins: proj.locked_admins || [],
+    visible_admins: proj.visible_admins
+  };
+
+  let targetCat = getCatalogForAdmin(targetAdmin) || [];
+  const existIdx = targetCat.findIndex(c => c.id === proj.id || (proj.name && c.name === proj.name));
+  if (existIdx >= 0) {
+    targetCat[existIdx] = meta;
+  } else {
+    targetCat.unshift(meta);
+  }
+  saveCatalogForAdmin(targetCat, targetAdmin);
+
+  // تحديث كتالوج الإدارة العامة أيضاً
+  const allCat = getCatalogForAdmin("__all__") || [];
+  const allIdx = allCat.findIndex(c => c.id === proj.id || (proj.name && c.name === proj.name));
+  if (allIdx >= 0) allCat[allIdx] = meta; else allCat.unshift(meta);
+  saveCatalogForAdmin(allCat, "__all__");
+
+  // 5. المزامنة السحابية الفورية في Firebase
+  try {
+    const fbBase = "https://elmghrabyelectric-default-rtdb.firebaseio.com/sld_studio";
+    fetch(`${fbBase}/projects/${encodeURIComponent(proj.id)}.json`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(proj)
+    }).catch(() => {});
+
+    const aKey = targetAdmin.trim().replace(/\s+/g, '_');
+    fetch(`${fbBase}/admins/${encodeURIComponent(aKey)}/catalog.json`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(targetCat)
+    }).catch(() => {});
+
+    fetch(`${fbBase}/all_projects_meta/${encodeURIComponent(proj.id)}.json`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(meta)
+    }).catch(() => {});
+  } catch(_) {}
+
+  // 6. بث سحابي ولحظي
+  if (typeof window.broadcastProjectSharingUpdated === "function") {
+    try { window.broadcastProjectSharingUpdated(proj, visible); } catch(_) {}
+  }
+  if (typeof window.broadcastProjectSaved === "function") {
+    try { window.broadcastProjectSaved(proj, targetCat); } catch(_) {}
+  }
+
+  // 7. تحديث جدول المشاريع وإغلاق النافذة المنبثقة إن كانت مفتوحة
+  closeUnblockAdminModal();
+  const prModal = document.getElementById("projects-manager-modal");
+  if (prModal && !prModal.classList.contains("hidden")) {
+    openProjectsManager(window.modalViewingAdmin || targetAdmin);
+  }
+
+  showToast(`✅ تم إعادة فتح الحجب عن المخطط [${proj.name || proj.id}] لهندسة كهرباء ${targetAdmin} بنجاح وأصبح متاحاً للعمل!`, "success");
+}
+window.unblockProjectForAdmin = unblockProjectForAdmin;
+
+// فتح نافذة اختيار الإدارة لإعادة فتح الحجب عنها
+async function openUnblockAdminModal(pId) {
+  if (typeof isCurrentUserAdmin === "function" && !isCurrentUserAdmin() && window.hasPermission && !window.hasPermission('share_project')) {
+    showToast("⛔ صلاحية فك الحجب للمدير العام فقط", "error");
+    return;
+  }
+  let proj = (currentProject && (currentProject.id === pId || currentProject.name === pId))
+    ? currentProject
+    : await loadProjectDataById(pId);
+  if (!proj) {
+    showToast("❌ تعذر العثور على بيانات المشروع", "error");
+    return;
+  }
+
+  let modal = document.getElementById("project-unblock-modal");
+  if (!modal) {
+    createUnblockAdminModalElement();
+    modal = document.getElementById("project-unblock-modal");
+  }
+
+  const idInput = document.getElementById("unblock-modal-project-id");
+  const nameLabel = document.getElementById("unblock-modal-project-name");
+  if (idInput) idInput.value = proj.id;
+  if (nameLabel) nameLabel.textContent = proj.name || proj.id;
+
+  const allAdmins = (typeof getAllSystemAdmins === "function") ? getAllSystemAdmins() : [
+    "بني مزار شرق", "بني مزار غرب", "مغاغة", "العدوة", "مطاي", "سمالوط شرق", "سمالوط غرب"
+  ];
+
+  const visible = Array.isArray(proj.visible_admins) ? proj.visible_admins.map(v => String(v).trim()) : [proj.administration || ""];
+  const locked = Array.isArray(proj.locked_admins) ? proj.locked_admins.map(a => String(a).trim()) : (proj.is_locked ? ["__all__"] : []);
+
+  // قائمة الإدارات المحجوب عنها حالياً
+  const blockedAdmins = allAdmins.filter(adm => {
+    const isHidden = (!visible.includes("__all__") && !visible.includes(adm));
+    const isLocked = (locked.includes("__all__") || locked.includes(adm));
+    return isHidden || isLocked;
+  });
+
+  const listContainer = document.getElementById("unblock-blocked-admins-list");
+  if (listContainer) {
+    if (blockedAdmins.length === 0) {
+      listContainer.innerHTML = `<div style="text-align:center; padding:15px; color:#4ade80; font-size:12.5px; background:rgba(34,197,94,0.1); border-radius:8px; border:1px solid rgba(34,197,94,0.3);">🟢 هذا المشروع متاح وغير محجوب عن أي إدارة حالياً!</div>`;
+    } else {
+      let bHtml = `<div style="font-size:12px; color:#fca5a5; font-weight:bold; margin-bottom:8px;">الإدارات المحجوب عنها هذا المخطط حالياً (${blockedAdmins.length}):</div>`;
+      bHtml += `<div style="display:flex; flex-direction:column; gap:6px; max-height:220px; overflow-y:auto;">`;
+      blockedAdmins.forEach(adm => {
+        const isHidden = (!visible.includes("__all__") && !visible.includes(adm));
+        const isLocked = (locked.includes("__all__") || locked.includes(adm));
+        let reason = isHidden && isLocked ? "مخفي ومجمد" : (isHidden ? "مخفي تماماً" : "مجمد عن التعديل");
+        bHtml += `
+          <div style="display:flex; justify-content:space-between; align-items:center; background:#0f172a; padding:8px 12px; border-radius:6px; border:1px solid #334155;">
+            <div>
+              <strong style="color:#f8fafc; font-size:12.5px;">هندسة ${adm}</strong>
+              <span style="font-size:10.5px; color:#f87171; margin-right:6px;">(${reason})</span>
+            </div>
+            <button class="btn btn-sm" style="background:#16a34a; border-color:#22c55e; color:#fff; font-size:11.5px; padding:4px 12px; font-weight:bold; cursor:pointer;" onclick="unblockProjectForAdmin(document.getElementById('unblock-modal-project-id').value, '${adm}')">
+              🔓 فك الحجب فوراً
+            </button>
+          </div>
+        `;
+      });
+      bHtml += `</div>`;
+      listContainer.innerHTML = bHtml;
+    }
+  }
+
+  // ملء القائمة المنسدلة لجميع الإدارات
+  const selectEl = document.getElementById("unblock-select-admin");
+  if (selectEl) {
+    selectEl.innerHTML = allAdmins.map(adm => `<option value="${adm}">هندسة كهرباء ${adm}</option>`).join("");
+  }
+
+  modal.classList.remove("hidden");
+  modal.style.display = "flex";
+  modal.style.setProperty("display", "flex", "important");
+}
+window.openUnblockAdminModal = openUnblockAdminModal;
+
+function closeUnblockAdminModal() {
+  const modal = document.getElementById("project-unblock-modal");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.style.display = "none";
+    modal.style.removeProperty("display");
+  }
+}
+window.closeUnblockAdminModal = closeUnblockAdminModal;
+
+async function unblockProjectForAllAdmins(pId) {
+  if (typeof isCurrentUserAdmin === "function" && !isCurrentUserAdmin() && window.hasPermission && !window.hasPermission('share_project')) {
+    showToast("⛔ صلاحية فك الحجب للمدير العام فقط", "error");
+    return;
+  }
+  const allAdmins = (typeof getAllSystemAdmins === "function") ? getAllSystemAdmins() : [];
+  for (const adm of allAdmins) {
+    await unblockProjectForAdmin(pId, adm);
+  }
+  showToast("🌐 تم فك الحجب والقفل عن المخطط لكافة الإدارات بنجاح!", "success");
+}
+window.unblockProjectForAllAdmins = unblockProjectForAllAdmins;
+
+function createUnblockAdminModalElement() {
+  if (document.getElementById("project-unblock-modal")) return;
+  const div = document.createElement("div");
+  div.id = "project-unblock-modal";
+  div.className = "modal-overlay hidden";
+  div.style.cssText = "display:none; z-index:99999;";
+  div.innerHTML = `
+    <div class="modal-dialog" style="background:#1e293b; border:1px solid #475569; border-radius:12px; width:95%; max-width:540px; box-shadow:0 12px 35px rgba(0,0,0,0.85); overflow:hidden;">
+      <div class="modal-header" style="background:#0f172a; border-bottom:1px solid #334155; padding:12px 18px; display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="margin:0; font-size:15px; color:#f8fafc; display:flex; align-items:center; gap:8px;">
+          <span>🔓</span> إعادة فتح حجب المشروع لإدارة معينة
+        </h3>
+        <button type="button" class="modal-close" onclick="closeUnblockAdminModal()" style="background:transparent; border:none; color:#94a3b8; font-size:18px; cursor:pointer;" title="إغلاق">✕</button>
+      </div>
+      <div class="modal-body" style="padding:16px 20px;">
+        <input type="hidden" id="unblock-modal-project-id">
+        <div style="margin-bottom:14px; background:#0f172a; padding:10px 14px; border-radius:8px; border:1px solid #334155;">
+          <span style="font-size:11.5px; color:#94a3b8;">المخطط المستهدف:</span>
+          <strong id="unblock-modal-project-name" style="color:#38bdf8; font-size:13.5px; display:block; margin-top:3px;"></strong>
+        </div>
+
+        <div style="background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.3); border-radius:8px; padding:10px 14px; font-size:12px; color:#86efac; margin-bottom:14px; line-height:1.6;">
+          💡 <strong>إعادة فتح الحجب:</strong> يتيح هذا الإجراء للمدير العام إتاحة وعرض المخطط لإدارة معينة كانت محجوبة عنها، وفك أي تجميد عليها لتتمكن من استعراض وتعديل الشبكة بحرية.
+        </div>
+
+        <div id="unblock-blocked-admins-list" style="margin-bottom:16px;"></div>
+
+        <div style="margin-top:12px; padding-top:12px; border-top:1px solid #334155;">
+          <label style="font-size:12px; color:#e2e8f0; font-weight:bold; display:block; margin-bottom:6px;">أو اختر إدارة معينة لإتاحة المخطط لها:</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <select id="unblock-select-admin" style="flex:1; background:#0f172a; color:#fff; border:1px solid #475569; border-radius:6px; padding:7px 10px; font-size:12.5px; cursor:pointer;"></select>
+            <button type="button" class="btn btn-primary" onclick="unblockProjectForAdmin(document.getElementById('unblock-modal-project-id').value, document.getElementById('unblock-select-admin').value)" style="background:#16a34a; border-color:#22c55e; color:#fff; font-weight:bold; padding:7px 16px; font-size:12.5px; white-space:nowrap; cursor:pointer;">
+              🔓 فتح الحجب
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="background:#0f172a; border-top:1px solid #334155; padding:12px 18px; display:flex; justify-content:space-between; align-items:center;">
+        <button type="button" class="btn btn-outline btn-sm" onclick="unblockProjectForAllAdmins(document.getElementById('unblock-modal-project-id').value)" style="border-color:#38bdf8; color:#38bdf8; font-size:11.5px; padding:5px 12px; cursor:pointer;" title="إتاحة المخطط لجميع الإدارات وفك كافة القيود">
+          🌐 إتاحة لكافة الإدارات
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeUnblockAdminModal()">إغلاق</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(div);
+}
+window.createUnblockAdminModalElement = createUnblockAdminModalElement;
 
 // توافق خلفي مع دالة toggleProjectLock القديمة
 async function toggleProjectLock(pId, shouldLock) {

@@ -509,10 +509,15 @@
     if (payload.senderId === deviceId) return;
 
     var currentAdminKey = getAdminKey();
+    var isReceiverAdmin = (typeof window.isCurrentUserAdmin === "function" && window.isCurrentUserAdmin()) || currentAdminKey === "__all__";
     if (payload.adminKey && payload.adminKey !== currentAdminKey) {
-      // الحدث وارد من إدارة هندسية أخرى، لا نطبقه على المخططات الحالية للإدارة
-      if (payload.type === 'DRAWING_UPDATE' || payload.type === 'DRAWING_CHUNK' || payload.type === 'PROJECT_SAVED' || payload.type === 'PROJECT_DELETED' || payload.type === 'CATALOG_SYNC') {
-        return;
+      // إذا كان المستقبل هو المدير العام، لا نحجب عنه إشعار حفظ أو حذف أو مزامنة مشاريع الإدارات الأخرى
+      if (isReceiverAdmin && (payload.type === 'PROJECT_SAVED' || payload.type === 'PROJECT_DELETED' || payload.type === 'CATALOG_SYNC')) {
+        // نواصل المعالجة للمدير العام لتسجيل وتحديث المشروع الجديد في كتالوجاته
+      } else {
+        if (payload.type === 'DRAWING_UPDATE' || payload.type === 'DRAWING_CHUNK' || payload.type === 'PROJECT_SAVED' || payload.type === 'PROJECT_DELETED' || payload.type === 'CATALOG_SYNC') {
+          return;
+        }
       }
     }
 
@@ -661,8 +666,52 @@
       }, 500);
 
     } else if (type === 'PROJECT_SAVED') {
-      if (data.project && window.applySyncedProject) {
-        if (msgTime) lastDrawingUpdateTimestamp = msgTime;
+      if (data.project) {
+        var incomingP = data.project;
+        // إذا كان المستلم مديراً عاماً والمشروع يخص إدارة أخرى غير المعروضة حالياً على شاشته
+        if (payload.adminKey && payload.adminKey !== currentAdminKey && isReceiverAdmin) {
+          try {
+            if (incomingP.id) {
+              localStorage.setItem("sld_proj_" + incomingP.id, JSON.stringify(incomingP));
+              if (typeof window.getCatalogForAdmin === "function" && typeof window.saveCatalogForAdmin === "function") {
+                var pAdm = incomingP.administration || payload.adminName || "بني مزار شرق";
+                var admCat = window.getCatalogForAdmin(pAdm) || [];
+                var exIdx = admCat.findIndex(function(c) { return c.id === incomingP.id || (incomingP.name && c.name === incomingP.name); });
+                var pMeta = {
+                  id: incomingP.id,
+                  name: incomingP.name || "مخطط شبكة",
+                  substation: incomingP.substation || "",
+                  voltage_kv: incomingP.voltage_kv || 11,
+                  nodes_count: (incomingP.nodes || []).length,
+                  sections_count: (incomingP.sections || []).length,
+                  updated_at: incomingP.updated_at || new Date().toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' }),
+                  saved_at: incomingP.saved_at || Date.now(),
+                  administration: pAdm,
+                  sector: incomingP.sector || "المنيا شمال",
+                  visible_admins: incomingP.visible_admins || [pAdm]
+                };
+                if (exIdx >= 0) admCat[exIdx] = pMeta; else admCat.unshift(pMeta);
+                window.saveCatalogForAdmin(admCat, pAdm);
+
+                var allCat = window.getCatalogForAdmin("__all__") || [];
+                var aIdx = allCat.findIndex(function(c) { return c.id === incomingP.id || (incomingP.name && c.name === incomingP.name); });
+                if (aIdx >= 0) allCat[aIdx] = pMeta; else allCat.unshift(pMeta);
+                window.saveCatalogForAdmin(allCat, "__all__");
+              }
+            }
+          } catch(e) {}
+          showSyncToast('📢 قام مهندس بحفظ مشروع جديد [' + (incomingP.name || '') + '] في هندسة ' + (incomingP.administration || ''), 'info', false);
+          var pmModal = document.getElementById("projects-manager-modal");
+          if (pmModal && !pmModal.classList.contains("hidden")) {
+            if (typeof window.openProjectsManager === "function") {
+              window.openProjectsManager(window.modalViewingAdmin || "__all__");
+            }
+          }
+          return;
+        }
+
+        if (window.applySyncedProject) {
+          if (msgTime) lastDrawingUpdateTimestamp = msgTime;
 
         var isAdminUpdate = (payload.isAdmin === true || payload.priority === 'high');
         var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
@@ -697,6 +746,7 @@
           }
         }, 500);
       }
+    }
 
     } else if (type === 'PROJECT_DELETED') {
       var delId = data.projectId;
