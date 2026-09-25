@@ -63,9 +63,9 @@ const DEFAULT_APP_SETTINGS = {
     ]
   },
   role_labels: {
-    "admin":    "مدير النظام",
+    "admin":    "مدير النظام (كامل الصلاحيات)",
     "engineer": "مهندس",
-    "operator": "مشغّل",
+    "operator": "مهندس تشغيل (متابعة فرعين)",
     "tech":     "فني",
     "viewer":   "مشاهد"
   },
@@ -78,39 +78,51 @@ const DEFAULT_APP_SETTINGS = {
     { id: "general",   label: "⭐ صلاحيات عامة وإدارية" }
   ],
   permissions: [
-    { key: "all",                 label: "⭐ كامل الصلاحيات لجميع الأزرار والوظائف", category: "general" },
-    { key: "manage_users",        label: "👥 إدارة المستخدمين وصلاحياتهم", category: "general" },
-    { key: "btn_projects",        label: "📁 زر فتح واستعراض وإدارة المشاريع", category: "system" },
-    { key: "delete_project",      label: "🗑️ صلاحية حذف المشاريع نهائياً من قائمة المشاريع", category: "system" },
-    { key: "lock_project",        label: "🔒 صلاحية إيقاف وتجميد المشاريع لمنع العبث", category: "system" },
-    { key: "share_project",       label: "👥 صلاحية تحديد ومشاركة إدارات عرض المشاريع", category: "system" },
-    { key: "btn_save",            label: "💾 زر حفظ المخطط الحالي", category: "system" },
-    { key: "btn_print",           label: "🖨️ زر طباعة المخطط والخرطوشة", category: "system" },
-    { key: "btn_excel",           label: "📊 زر تصدير تقرير إكسيل هندسي", category: "system" },
-    { key: "btn_pptx_export",     label: "📥 زر تحميل وتصدير ملف باور بوينت (.pptx)", category: "system" },
-    { key: "btn_pptx_import",     label: "📥 زر استيراد شبكة من باور بوينت (.pptx)", category: "system" },
-    { key: "btn_settings",        label: "⚙️ زر فتح لوحة الإعدادات الشاملة", category: "system" },
-    { key: "btn_share_live",      label: "📡 زر البث المباشر ومشاركة الشاشة لحظياً", category: "sync" },
-    { key: "btn_reconcile_sync",  label: "🔄 زر فحص ومطابقة الرسم واستكماله سحابياً", category: "sync" },
-    { key: "btn_copy_drawing_code",label: "📋 زر نسخ كود الرسم لنقله لجهاز آخر", category: "sync" },
-    { key: "btn_paste_drawing_code",label: "📥 زر لصق واستيراد كود الرسم المنقول", category: "sync" },
-    { key: "btn_cable",           label: "╍ زر رسم كابل أرضي (- - -)", category: "lines" },
-    { key: "btn_overhead",        label: "➖ زر رسم خط هوائي (───)", category: "lines" },
-    { key: "btn_line_between",    label: "⚡ زر أخذ خط / تفريعة من بين نقطتين", category: "lines" },
-    { key: "btn_quick_line",      label: "➕ زر رسم خط/كابل سريع من الشريط الجانبي", category: "lines" },
-    { key: "btn_substation",      label: "🏭 زر إضافة محطة محولات / لوحة توزيع", category: "equipment" },
-    { key: "btn_switch",          label: "⚡ زر إضافة وضبط السكاكين الهوائية", category: "equipment" },
-    { key: "btn_lbs",             label: "🔘 زر إضافة مفتاح فصل على الحمل LBS", category: "equipment" },
-    { key: "btn_trans",           label: "⚙️ زر إضافة محول معلق", category: "equipment" },
-    { key: "btn_cascade_trans",   label: "🔄 زر تفريع محول من محول آخر", category: "equipment" },
-    { key: "btn_kiosk",           label: "🔺 زر إضافة كشك محولات", category: "equipment" },
-    { key: "btn_kiosk_from_kiosk", label: "🔺➔🔺 زر إضافة كشك متغذياً من كشك آخر", category: "equipment" },
-    { key: "btn_rmu",             label: "🔄 زر إضافة وحدة ربط حلقي RMU", category: "equipment" },
-    { key: "btn_avr",             label: "🔋 زر إضافة منظم جهد AVR", category: "equipment" },
-    { key: "btn_simulation",      label: "⚡ زر وضع محاكاة السكاكين والفصل/التوصيل", category: "control" },
-    { key: "btn_calculations",    label: "📊 زر جدول الحسابات وهبوط الجهد", category: "control" },
-    { key: "btn_undo",            label: "↩️ زر تراجع عن آخر خطوة (Undo)", category: "control" },
-    { key: "btn_delete",          label: "🗑️ زر حذف العنصر المحدد أو مسح المخطط", category: "control" }
+    { key: "all",                   label: "⭐ كامل الصلاحيات لجميع الأزرار والوظائف", category: "general" },
+    { key: "manage_users",          label: "👥 إدارة المستخدمين وصلاحياتهم", category: "general" },
+    { key: "btn_projects",          label: "📁 زر فتح واستعراض وإدارة المشاريع", category: "system" },
+    { key: "btn_save",              label: "💾 زر حفظ المخطط الحالي فوراً", category: "system" },
+    { key: "btn_save_to_admin",     label: "📂 زر حفظ وتعيين المخطط لإدارة محددة", category: "system" },
+    { key: "btn_transfer_project",   label: "🔄 زر تحويل ونقل المشروع لفرع أو قطاع آخر", category: "system" },
+    { key: "delete_project",        label: "🗑️ صلاحية حذف المشاريع نهائياً من قائمة المشاريع", category: "system" },
+    { key: "lock_project",          label: "🔒 صلاحية إيقاف وتجميد المشاريع لمنع العبث", category: "system" },
+    { key: "share_project",         label: "👥 صلاحية تحديد ومشاركة إدارات عرض المشاريع", category: "system" },
+    { key: "btn_backup",            label: "💾 زر النسخ الاحتياطي والاستيراد الشامل", category: "system" },
+    { key: "btn_print",             label: "🖨️ زر طباعة المخطط والخرطوشة", category: "system" },
+    { key: "btn_excel",             label: "📊 زر تصدير تقرير إكسيل هندسي", category: "system" },
+    { key: "btn_pptx_export",       label: "📥 زر تحميل وتصدير ملف باور بوينت (.pptx)", category: "system" },
+    { key: "btn_pptx_import",       label: "📥 زر استيراد شبكة من باور بوينت (.pptx)", category: "system" },
+    { key: "btn_settings",          label: "⚙️ زر فتح لوحة الإعدادات الشاملة", category: "system" },
+    { key: "btn_share_live",        label: "📡 زر البث المباشر ومشاركة الشاشة لحظياً", category: "sync" },
+    { key: "btn_reconcile_sync",    label: "🔄 زر فحص ومطابقة الرسم واستكماله سحابياً", category: "sync" },
+    { key: "btn_copy_drawing_code",  label: "📋 زر نسخ كود الرسم لنقله لجهاز آخر", category: "sync" },
+    { key: "btn_paste_drawing_code", label: "📥 زر لصق واستيراد كود الرسم المنقول", category: "sync" },
+    { key: "btn_cable",             label: "╍ زر رسم كابل أرضي (- - -)", category: "lines" },
+    { key: "btn_overhead",          label: "➖ زر رسم خط هوائي (───)", category: "lines" },
+    { key: "btn_line_between",      label: "⚡ زر أخذ تفريعة / مناول بين نقطتين", category: "lines" },
+    { key: "btn_quick_line",        label: "➕ زر رسم خط/كابل سريع من الشريط الجانبي", category: "lines" },
+    { key: "btn_elbow",             label: "📐 زر رسم مسار منكسر 90° / نصف دائرة", category: "lines" },
+    { key: "btn_substation",        label: "🏭 زر إضافة محطة محولات / لوحة توزيع", category: "equipment" },
+    { key: "btn_switch",            label: "⚡ زر إضافة وضبط السكاكين الهوائية (رأسية وأفقية)", category: "equipment" },
+    { key: "btn_lbs",               label: "🔘 زر إضافة مفتاح فصل على الحمل LBS", category: "equipment" },
+    { key: "btn_trans",             label: "⚙️ زر إضافة محول معلق", category: "equipment" },
+    { key: "btn_cascade_trans",     label: "🔄 زر تفريع محول من محول آخر", category: "equipment" },
+    { key: "btn_kiosk",             label: "🔺 زر إضافة كشك محولات", category: "equipment" },
+    { key: "btn_kiosk_from_kiosk",   label: "🔺➔🔺 زر إضافة كشك متغذياً من كشك آخر", category: "equipment" },
+    { key: "btn_rmu",               label: "🔄 زر إضافة وحدة ربط حلقي RMU", category: "equipment" },
+    { key: "btn_avr",               label: "🔋 زر إضافة منظم جهد AVR", category: "equipment" },
+    { key: "btn_annotation",        label: "📝 زر إضافة تنويه أو ملاحظة هندسية حرة", category: "equipment" },
+    { key: "btn_simulation",        label: "⚡ زر وضع محاكاة السكاكين والفصل/التوصيل", category: "control" },
+    { key: "btn_toggle_all_switches", label: "⚡ زر فتح وغلق جميع السكاكين دفعة واحدة", category: "control" },
+    { key: "btn_calculations",      label: "📊 زر جدول الحسابات وهبوط الجهد", category: "control" },
+    { key: "btn_undo",              label: "↩️ زر تراجع عن آخر خطوة (Undo)", category: "control" },
+    { key: "btn_timeline",          label: "⏱️ زر سجل التراجع والاسترجاع الزمني للمدير", category: "control" },
+    { key: "btn_edit_element",      label: "✏️ زر تعديل خصائص العنصر المحدد", category: "control" },
+    { key: "btn_delete",            label: "🗑️ زر حذف العنصر المحدد أو مسح المخطط", category: "control" },
+    { key: "btn_drawing_dir",       label: "⬇️ زر التبديل بين اتجاه تدفق الرسم", category: "control" },
+    { key: "btn_flip_vertical",     label: "🔃 زر عكس اتجاه المخطط رأساً على عقب", category: "control" },
+    { key: "btn_toggle_bg",         label: "🎨 زر تغيير لون خلفية مساحة الرسم", category: "control" },
+    { key: "btn_dev_profile",       label: "👨‍💻 زر صفحة المطور والمصمم", category: "general" }
   ],
   users: [
     {
@@ -122,7 +134,7 @@ const DEFAULT_APP_SETTINGS = {
       is_active: true,
       password: "123450",
       password_plain: "123450",
-      permissions: ["all", "developer", "edit_network", "export", "sync", "settings", "manage_users", "btn_projects", "delete_project", "lock_project", "share_project", "btn_save", "btn_print", "btn_excel", "btn_pptx_export", "btn_pptx_import", "btn_share_live", "btn_reconcile_sync", "btn_copy_drawing_code", "btn_paste_drawing_code", "btn_cable", "btn_overhead", "btn_line_between", "btn_quick_line", "btn_substation", "btn_switch", "btn_lbs", "btn_trans", "btn_cascade_trans", "btn_kiosk", "btn_kiosk_from_kiosk", "btn_rmu", "btn_avr", "btn_simulation", "btn_calculations", "btn_undo", "btn_delete", "btn_settings"]
+      permissions: ["all", "developer", "edit_network", "export", "sync", "settings", "manage_users", "btn_projects", "delete_project", "lock_project", "share_project", "btn_save", "btn_save_to_admin", "btn_transfer_project", "btn_backup", "btn_print", "btn_excel", "btn_pptx_export", "btn_pptx_import", "btn_share_live", "btn_reconcile_sync", "btn_copy_drawing_code", "btn_paste_drawing_code", "btn_cable", "btn_overhead", "btn_line_between", "btn_quick_line", "btn_elbow", "btn_substation", "btn_switch", "btn_lbs", "btn_trans", "btn_cascade_trans", "btn_kiosk", "btn_kiosk_from_kiosk", "btn_rmu", "btn_avr", "btn_annotation", "btn_simulation", "btn_toggle_all_switches", "btn_calculations", "btn_undo", "btn_timeline", "btn_edit_element", "btn_delete", "btn_drawing_dir", "btn_flip_vertical", "btn_toggle_bg", "btn_dev_profile", "btn_settings"]
     },
     {
       id: "planning_eng",
@@ -133,18 +145,20 @@ const DEFAULT_APP_SETTINGS = {
       is_active: true,
       password: "eng123",
       password_plain: "eng123",
-      permissions: ["edit_network", "export", "calculations", "btn_lbs"]
+      permissions: ["edit_network", "export", "calculations", "btn_lbs", "btn_save", "btn_projects"]
     },
     {
       id: "operation_eng",
       name: "مهندس تشغيل ومناورات",
       role: "operator",
       sector: "المنيا شمال",
-      administration: "مغاغة",
+      administration: "بني مزار شرق",
+      secondary_administration: "بني مزار غرب",
+      allowed_administrations: ["بني مزار شرق", "بني مزار غرب"],
       is_active: true,
       password: "oper123",
       password_plain: "oper123",
-      permissions: ["simulate_switching", "export", "view", "btn_lbs"]
+      permissions: ["btn_projects", "btn_save", "simulate_switching", "btn_simulation", "btn_toggle_all_switches", "export", "btn_print", "btn_excel", "view", "btn_lbs", "btn_calculations"]
     },
     {
       id: "technician",
@@ -533,8 +547,9 @@ function toggleUserPwDisplay(userId, plainPw) {
   }
 }
 
-function populateUserFormAdminDropdown(sector, selectedAdmin) {
+function populateUserFormAdminDropdown(sector, selectedAdmin, selectedSecondAdmin) {
   const adminSelect = document.getElementById("user-form-admin");
+  const secondAdminSelect = document.getElementById("user-form-second-admin");
   if (!adminSelect) return;
   
   const sec = sector || (document.getElementById("user-form-sector") ? document.getElementById("user-form-sector").value : "المنيا شمال");
@@ -550,6 +565,18 @@ function populateUserFormAdminDropdown(sector, selectedAdmin) {
   } else if (admins.length > 0) {
     adminSelect.value = admins[0];
   }
+
+  // ملء قائمة الفرع الثاني
+  if (secondAdminSelect) {
+    secondAdminSelect.innerHTML = `<option value="">— لا يوجد (فرع واحد فقط) —</option>` + admins.map(adm => 
+      `<option value="${adm}" ${adm === selectedSecondAdmin ? "selected" : ""}>${adm}</option>`
+    ).join("");
+    if (selectedSecondAdmin && admins.includes(selectedSecondAdmin)) {
+      secondAdminSelect.value = selectedSecondAdmin;
+    } else {
+      secondAdminSelect.value = "";
+    }
+  }
 }
 
 function onUserFormSectorChange() {
@@ -557,6 +584,26 @@ function onUserFormSectorChange() {
   if (!sectorSelect) return;
   populateUserFormAdminDropdown(sectorSelect.value);
 }
+
+function onUserFormRoleChange() {
+  const roleSelect = document.getElementById("user-form-role");
+  const secondGroup = document.getElementById("user-form-second-admin-group");
+  if (!roleSelect || !secondGroup) return;
+  // إذا كان مهندس تشغيل يتم إبراز حقل الفرع الثاني
+  if (roleSelect.value === "operator") {
+    secondGroup.style.display = "";
+    secondGroup.style.background = "rgba(49, 130, 206, 0.12)";
+    secondGroup.style.border = "1px solid #3182ce";
+    secondGroup.style.borderRadius = "6px";
+    secondGroup.style.padding = "8px";
+  } else {
+    secondGroup.style.display = "";
+    secondGroup.style.background = "";
+    secondGroup.style.border = "";
+    secondGroup.style.padding = "";
+  }
+}
+window.onUserFormRoleChange = onUserFormRoleChange;
 
 function renderUsersTab() {
   if (!appSettings) {
@@ -592,14 +639,20 @@ function renderUsersTab() {
 
     const sector = u.sector || 'المنيا شمال';
     const admin = u.administration || 'بني مزار شرق';
+    const secondAdmin = u.secondary_administration || '';
     const isActive = u.is_active !== false;
+
+    let adminDisplay = `<span class="admin-badge" style="background:#2c7a7b;color:#fff;padding:3px 8px;border-radius:12px;font-size:11px;white-space:nowrap;">${admin}</span>`;
+    if (secondAdmin && secondAdmin !== admin) {
+      adminDisplay += `<br><span class="admin-badge" style="background:#2b6cb0;color:#90cdf4;padding:2px 7px;border-radius:12px;font-size:10.5px;white-space:nowrap;margin-top:4px;display:inline-block;" title="فرع إضافي لمهندس التشغيل">🔗 ${secondAdmin}</span>`;
+    }
 
     return `
       <tr style="${!isActive ? 'opacity: 0.8; background: rgba(229, 62, 62, 0.06);' : ''}">
         <td><code>${u.id}</code></td>
         <td><b>${u.name}</b></td>
         <td><span class="sector-badge" style="background:#2b6cb0;color:#fff;padding:3px 8px;border-radius:12px;font-size:11px;white-space:nowrap;">${sector}</span></td>
-        <td><span class="admin-badge" style="background:#2c7a7b;color:#fff;padding:3px 8px;border-radius:12px;font-size:11px;white-space:nowrap;">${admin}</span></td>
+        <td>${adminDisplay}</td>
         <td>
           <span class="pw-text" id="pw-user-${u.id}" data-shown="false" style="font-family:monospace;letter-spacing:2px;">••••••</span>
           <button type="button" class="btn btn-xs btn-outline" style="padding:1px 6px;margin-right:6px;font-size:11px;" onclick="toggleUserPwDisplay('${u.id}', '${u.password || u.password_plain || ''}')" title="إظهار / إخفاء كلمة المرور">👁️</button>
@@ -646,8 +699,9 @@ function openAddUserForm() {
   const sectorSelect = document.getElementById('user-form-sector');
   if (sectorSelect) {
     sectorSelect.value = 'المنيا شمال';
-    populateUserFormAdminDropdown('المنيا شمال', 'بني مزار شرق');
+    populateUserFormAdminDropdown('المنيا شمال', 'بني مزار شرق', '');
   }
+  onUserFormRoleChange();
   _renderPermissionsCheckboxes([]);
   document.getElementById('user-form-panel').classList.remove('hidden');
 }
@@ -662,16 +716,18 @@ function openEditUserForm(userId) {
   document.getElementById('user-form-title').textContent = `✏️ ضبط الأزرار والصلاحيات للمستخدم: ${u.name}`;
   document.getElementById('user-form-id-group').style.display = 'none';
   document.getElementById('user-form-name').value = u.name;
-  document.getElementById('user-form-role').value = u.role;
+  document.getElementById('user-form-role').value = u.role || 'engineer';
   document.getElementById('user-form-password').value = '';
   document.getElementById('user-form-password-group').style.display = 'none';
   const sectorSelect = document.getElementById('user-form-sector');
   const userSector = u.sector || 'المنيا شمال';
   const userAdmin = u.administration || 'بني مزار شرق';
+  const userSecondAdmin = u.secondary_administration || '';
   if (sectorSelect) {
     sectorSelect.value = userSector;
-    populateUserFormAdminDropdown(userSector, userAdmin);
+    populateUserFormAdminDropdown(userSector, userAdmin, userSecondAdmin);
   }
+  onUserFormRoleChange();
   _renderPermissionsCheckboxes(u.permissions || []);
   document.getElementById('user-form-panel').classList.remove('hidden');
 }
@@ -964,6 +1020,7 @@ async function submitUserForm() {
   const role = document.getElementById('user-form-role').value;
   const sector = document.getElementById('user-form-sector') ? document.getElementById('user-form-sector').value : 'المنيا شمال';
   const administration = document.getElementById('user-form-admin') ? document.getElementById('user-form-admin').value : 'بني مزار شرق';
+  const secondaryAdministration = document.getElementById('user-form-second-admin') ? document.getElementById('user-form-second-admin').value : '';
   const permissions = [...document.querySelectorAll('#user-form-perms input[type=checkbox]:checked')].map(c => c.value);
 
   if (!name) { showToast('⚠️ يرجى إدخال اسم المستخدم', 'warning'); return; }
@@ -973,6 +1030,11 @@ async function submitUserForm() {
   }
   if (!Array.isArray(appSettings.users)) {
     appSettings.users = [];
+  }
+
+  const allowedAdmins = [administration];
+  if (secondaryAdministration && secondaryAdministration !== administration) {
+    allowedAdmins.push(secondaryAdministration);
   }
 
   const isEdit = !!editingUserId;
@@ -986,6 +1048,8 @@ async function submitUserForm() {
       existing.role = role;
       existing.sector = sector;
       existing.administration = administration;
+      existing.secondary_administration = secondaryAdministration;
+      existing.allowed_administrations = allowedAdmins;
       existing.permissions = permissions;
     }
   } else {
@@ -1004,6 +1068,8 @@ async function submitUserForm() {
       role: role,
       sector: sector,
       administration: administration,
+      secondary_administration: secondaryAdministration,
+      allowed_administrations: allowedAdmins,
       is_active: true,
       password: password,
       password_plain: password,
