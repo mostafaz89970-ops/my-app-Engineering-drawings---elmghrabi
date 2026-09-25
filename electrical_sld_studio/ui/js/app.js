@@ -6641,7 +6641,10 @@ async function openProjectsManager(requestedAdmin = null) {
 
 // ─── عرض شاشة الفولدرات للمدير العام (كل إدارة كبطاقة فولدر) ────────────────
 function renderAdminFolders(systemAdmins, container) {
-  const isAdmin = (typeof isCurrentUserAdmin === "function") ? isCurrentUserAdmin() : false;
+  // استخدام خريطة القطاعات لتجميع الإدارات
+  const sectorsMap = (typeof getSystemSectorsMap === "function") ? getSystemSectorsMap() : {
+    "المنيا شمال": ["بني مزار شرق", "بني مزار غرب", "مغاغة", "العدوة", "مطاي", "سمالوط شرق", "سمالوط غرب"]
+  };
 
   // حساب عدد المشاريع لكل إدارة من الكتالوج المحلي
   const adminCounts = {};
@@ -6650,12 +6653,12 @@ function renderAdminFolders(systemAdmins, container) {
     adminCounts[adm] = cat.filter(p => p && !isProjectDeleted(p.id, p.name) && !isDemoOrDummyProject(p)).length;
   });
 
-  // ألوان مميزة لكل إدارة
-  const folderColors = [
-    "#3b82f6", "#8b5cf6", "#10b981", "#f59e0b",
-    "#ef4444", "#06b6d4", "#ec4899"
+  // ألوان القطاعات
+  const sectorColors = [
+    "#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#06b6d4", "#ec4899"
   ];
-  const folderIcons = ["🏛️", "🏗️", "⚡", "🔌", "🌐", "🏢", "🔋"];
+  // أيقونات الإدارات داخل كل قطاع
+  const adminIcons = ["🏛️", "🏗️", "⚡", "🔌", "🌐", "🏢", "🔋", "💡", "🔆"];
 
   let html = `
     <div style="margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
@@ -6664,50 +6667,84 @@ function renderAdminFolders(systemAdmins, container) {
       </div>
       <div style="display:flex; gap:6px; flex-wrap:wrap;">
         <button class="btn btn-outline btn-sm" onclick="window.modalViewingAdmin='__all__'; openProjectsManager('__all__')" style="border-color:#3b82f6; color:#60a5fa; font-size:11.5px; padding:5px 10px;">
-          🌍 عرض جميع المشاريع (كل الإدارات)
+          🌍 كل الإدارات
         </button>
         <button class="btn btn-outline btn-sm" onclick="triggerSLDFileImport()" style="border-color:#38b2ac; color:#4fd1c5; font-size:11.5px; padding:5px 10px;">
-          📥 استيراد ملف .sld
+          📥 استيراد .sld
         </button>
         <button class="btn btn-primary btn-sm" onclick="createNewProjectDirectly(); closeProjectsManager();" style="font-size:11.5px; padding:5px 10px;">
           ➕ مشروع جديد
         </button>
       </div>
     </div>
-    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:16px; padding:8px 0;">
   `;
 
-  systemAdmins.forEach((adm, idx) => {
-    const color = folderColors[idx % folderColors.length];
-    const icon = folderIcons[idx % folderIcons.length];
-    const count = adminCounts[adm] || 0;
-    const encodedAdm = encodeURIComponent(adm);
+  // عرض كل قطاع بعنوان ثم الإدارات التابعة له
+  let sectorIdx = 0;
+  Object.entries(sectorsMap).forEach(([sectorName, sectorAdmins]) => {
+    const sectorColor = sectorColors[sectorIdx % sectorColors.length];
+    sectorIdx++;
+
+    // فلترة الإدارات الموجودة فعلاً في systemAdmins (لعرض ما هو مُسجَّل فقط)
+    const validAdmins = sectorAdmins.filter(a => systemAdmins.includes(a));
+    if (validAdmins.length === 0) return;
 
     html += `
-      <div onclick="window.modalViewingAdmin=decodeURIComponent('${encodedAdm}'); openProjectsManager(decodeURIComponent('${encodedAdm}'))"
-           style="cursor:pointer; background:rgba(26,32,44,0.85); border:2px solid ${color}40; border-radius:14px; padding:20px 16px; text-align:center;
-                  transition:all 0.2s ease; position:relative; overflow:hidden;"
-           onmouseover="this.style.border='2px solid ${color}'; this.style.background='rgba(26,32,44,1)'; this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 20px ${color}40';"
-           onmouseout="this.style.border='2px solid ${color}40'; this.style.background='rgba(26,32,44,0.85)'; this.style.transform=''; this.style.boxShadow='';"
-           title="فتح مشاريع هندسة كهرباء ${adm}">
-        <div style="font-size:42px; margin-bottom:8px; filter:drop-shadow(0 2px 4px ${color}80);">${icon}</div>
-        <div style="position:absolute; top:0; left:0; right:0; height:4px; background:linear-gradient(90deg, ${color}, ${color}80);"></div>
-        <div style="font-size:13px; font-weight:bold; color:#e2e8f0; margin-bottom:6px; line-height:1.4;">هندسة كهرباء<br>${adm}</div>
-        <div style="display:inline-block; background:${color}25; border:1px solid ${color}60; color:${color}; font-size:11px; font-weight:bold; padding:3px 10px; border-radius:20px; margin-top:4px;">
-          ${count > 0 ? `📋 ${count} مشروع${count === 1 ? '' : (count < 11 ? '' : '')}` : '📭 لا توجد مشاريع'}
+      <div style="margin-bottom:20px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid ${sectorColor}40;">
+          <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${sectorColor};"></span>
+          <span style="font-size:12px; font-weight:bold; color:${sectorColor}; letter-spacing:0.5px;">قطاع ${sectorName}</span>
+          <span style="font-size:10px; color:#64748b;">(${validAdmins.length} إدارة)</span>
         </div>
-        <div style="margin-top:10px; font-size:10px; color:#64748b;">انقر للفتح</div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:12px;">
+    `;
+
+    validAdmins.forEach((adm, admIdx) => {
+      const icon = adminIcons[admIdx % adminIcons.length];
+      const count = adminCounts[adm] || 0;
+      const encodedAdm = encodeURIComponent(adm);
+
+      // توليد العنوان الرسمي: "هندسة كهرباء بني مزار" (بدون شرق/غرب في السطر الأول)
+      const baseAdmin = adm.replace(/\s+(شرق|غرب)$/, '').trim();
+      const hasDirection = /\s+(شرق|غرب)$/.test(adm.trim());
+      // تنويه "الشئون الفنية X" بين قوسين كما في الشاشة الرئيسية
+      const subtitle = `(الشئون الفنية ${adm})`;
+
+      html += `
+        <div onclick="window.modalViewingAdmin=decodeURIComponent('${encodedAdm}'); openProjectsManager(decodeURIComponent('${encodedAdm}'))"
+             style="cursor:pointer; background:rgba(26,32,44,0.85); border:2px solid ${sectorColor}35; border-radius:12px; padding:16px 12px; text-align:center;
+                    transition:all 0.2s ease; position:relative; overflow:hidden;"
+             onmouseover="this.style.border='2px solid ${sectorColor}'; this.style.background='rgba(26,32,44,1)'; this.style.transform='translateY(-3px)'; this.style.boxShadow='0 6px 18px ${sectorColor}35';"
+             onmouseout="this.style.border='2px solid ${sectorColor}35'; this.style.background='rgba(26,32,44,0.85)'; this.style.transform=''; this.style.boxShadow='';"
+             title="هندسة كهرباء ${baseAdmin} — الشئون الفنية ${adm}">
+          <!-- شريط لوني علوي -->
+          <div style="position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg, ${sectorColor}, ${sectorColor}70);"></div>
+          <!-- الأيقونة -->
+          <div style="font-size:34px; margin-bottom:6px;">${icon}</div>
+          <!-- العنوان الرسمي الأول: هندسة كهرباء X -->
+          <div style="font-size:12.5px; font-weight:bold; color:#e2e8f0; line-height:1.4; margin-bottom:4px;">
+            هندسة كهرباء ${baseAdmin}
+          </div>
+          <!-- التنويه بين قوسين: الشئون الفنية X شرق/غرب -->
+          ${hasDirection ? `<div style="font-size:10px; color:#94a3b8; margin-bottom:8px; line-height:1.3;">${subtitle}</div>` : `<div style="font-size:10px; color:transparent; margin-bottom:8px;">-</div>`}
+          <!-- عدد المشاريع -->
+          <div style="display:inline-block; background:${sectorColor}20; border:1px solid ${sectorColor}55; color:${sectorColor}; font-size:10.5px; font-weight:bold; padding:2px 10px; border-radius:16px;">
+            ${count > 0 ? `📋 ${count} مشروع` : '📭 لا توجد مشاريع'}
+          </div>
+        </div>
+      `;
+    });
+
+    html += `
+        </div>
       </div>
     `;
   });
 
-  html += `
-    </div>
-  `;
-
   container.innerHTML = html;
 }
 window.renderAdminFolders = renderAdminFolders;
+
 
 // رسم جدول المشاريع مع العزل التام بين الإدارات وإتاحة الصلاحيات الكاملة للمدير
 function renderProjectsTable(projects, isServerOnline, activeViewingAdmin = null) {
