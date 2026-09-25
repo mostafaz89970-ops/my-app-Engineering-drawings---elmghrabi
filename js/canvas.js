@@ -63,6 +63,12 @@ function getDownstreamNodes(startNodeId) {
 }
 
 function startNodeDrag(e, nodeId) {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    if (typeof showToast === "function") {
+      showToast("🔒 المخطط مجمد حالياً بأمر الإدارة — لا يُقبل أي تعديل أو تحريك لحين فك التجميد", "warning");
+    }
+    return;
+  }
   if (!currentProject || !currentProject.nodes) return;
   const node = currentProject.nodes.find(n => n.id === nodeId);
   if (!node) return;
@@ -400,6 +406,12 @@ let deflectStartStage = { x: 0, y: 0 };
 let initialDeflectOffset = 0;
 
 function startSectionDeflectDrag(e, secId) {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    if (typeof showToast === "function") {
+      showToast("🔒 المخطط مجمد حالياً بأمر الإدارة — لا يُقبل أي تعديل أو تحريك لحين فك التجميد", "warning");
+    }
+    return;
+  }
   if (!currentProject || !currentProject.sections) return;
   const sec = currentProject.sections.find(s => s.id === secId);
   if (!sec) return;
@@ -503,6 +515,12 @@ function finishSectionDeflectDrag(e) {
 
 // ─── دوال سحب وتحريك وتحديد كروت التنويهات والملاحظات الهندسية ───────────────
 function startAnnotationDrag(e, annoId) {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    if (typeof showToast === "function") {
+      showToast("🔒 هذا المخطط مجمد حالياً بأمر الإدارة — لا يُقبل أي تحريك للملاحظات لحين فك التجميد", "warning");
+    }
+    return;
+  }
   if (!currentProject || !currentProject.annotations) return;
   const anno = currentProject.annotations.find(a => a.id === annoId);
   if (!anno) return;
@@ -621,11 +639,34 @@ function initCanvas() {
     const nodeGroup = e.target.closest(".sld-node-group");
     const sectionGroup = e.target.closest(".sld-section-group");
 
-    // التحقق من حالة إيقاف وتجميد المشروع لمنع العبث بالرسم
-    if (deflectGroup || stretchGroup || (nodeGroup && !isSimulationActive) || (sectionGroup && !e.target.closest(".sld-length-pill"))) {
-      if (typeof window.isProjectLockedForUser === "function" && window.isProjectLockedForUser()) {
+    // التحقق الصارم من حالة تجميد وإيقاف المشروع لمنع أي تحريك أو عبث بالرسم
+    const isLocked = (typeof window.isProjectLockedForUser === "function" && window.isProjectLockedForUser()) ||
+                     (typeof isProjectLockedForUser === "function" && isProjectLockedForUser());
+
+    if (isLocked) {
+      if (deflectGroup || stretchGroup) {
+        e.preventDefault();
+        e.stopPropagation();
         if (typeof showToast === "function") {
-          showToast("🔒 هذا المخطط موقوف ومجمد من قبل الإدارة لمنع التعديل أو العبث به", "warning");
+          showToast("🔒 المخطط مجمد حالياً بأمر الإدارة — لا يُقبل أي تعديل أو تحريك لحين فك التجميد", "warning");
+        }
+        return;
+      }
+      if (nodeGroup) {
+        e.stopPropagation();
+        const nodeId = nodeGroup.id.replace("node-", "");
+        const targetNode = currentProject?.nodes?.find(n => n.id === nodeId);
+        if (targetNode) {
+          selectElement("node", nodeId, targetNode.name || targetNode.id);
+        }
+        return;
+      }
+      if (sectionGroup) {
+        e.stopPropagation();
+        const secId = sectionGroup.id.replace("sec-", "");
+        const sec = currentProject?.sections?.find(s => s.id === secId);
+        if (sec) {
+          selectElement("section", secId, `${sec.type} ${sec.size} (${sec.length}م) [${sec.from_node} ➔ ${sec.to_node}]`);
         }
         return;
       }
@@ -847,6 +888,12 @@ let lastSwitchToggleTime = 0;
 
 // دالة موحدة وفورية لتبديل حالة السكينة أو مفتاح LBS مع تحديث المحاكاة
 function toggleSwitch(nodeId) {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    if (typeof showToast === "function") {
+      showToast("🔒 هذا المخطط مجمد حالياً بأمر الإدارة — لا يُقبل أي تعديل أو تبديل لحين فك التجميد", "warning");
+    }
+    return;
+  }
   if (!currentProject) return;
   const node = currentProject.nodes.find(n => n.id === nodeId);
   if (!node || (node.type !== "switch" && node.type !== "lbs")) return;
@@ -871,6 +918,12 @@ function toggleSwitch(nodeId) {
 
 // ─── فتح جميع السكاكين الهوائية في المخطط (فصل الدوائر بالكامل 🔴) ───────────
 function openAllSwitches() {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    if (typeof showToast === "function") {
+      showToast("🔒 هذا المخطط مجمد حالياً بأمر الإدارة — لا يُقبل أي تعديل لحين فك التجميد", "warning");
+    }
+    return;
+  }
   if (!currentProject || !Array.isArray(currentProject.nodes)) {
     if (window.showToast) window.showToast("⚠️ لا يوجد مخطط محمل حالياً!", "warning");
     return;
@@ -901,6 +954,12 @@ function openAllSwitches() {
 
 // ─── غلق وتوصيل جميع السكاكين الهوائية في المخطط (توصيل التيار بالكامل 🟢) ───────
 function closeAllSwitches() {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    if (typeof showToast === "function") {
+      showToast("🔒 هذا المخطط مجمد حالياً بأمر الإدارة — لا يُقبل أي تعديل لحين فك التجميد", "warning");
+    }
+    return;
+  }
   if (!currentProject || !Array.isArray(currentProject.nodes)) {
     if (window.showToast) window.showToast("⚠️ لا يوجد مخطط محمل حالياً!", "warning");
     return;
@@ -931,6 +990,12 @@ function closeAllSwitches() {
 
 // ─── زر تبديلي ذكي لجميع السكاكين (فتح أو غلق الكل) ─────────────────────────
 function toggleAllSwitches() {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    if (typeof showToast === "function") {
+      showToast("🔒 هذا المخطط مجمد حالياً بأمر الإدارة — لا يُقبل أي تعديل لحين فك التجميد", "warning");
+    }
+    return;
+  }
   if (!currentProject || !Array.isArray(currentProject.nodes)) return;
   const switches = currentProject.nodes.filter(n => n && (n.type === "switch" || n.type === "lbs"));
   if (switches.length === 0) {
@@ -967,6 +1032,12 @@ function handleNodeClick(e, nodeId) {
 function handleNodeDblClick(e, nodeId) {
   if (e && typeof e.stopPropagation === "function") e.stopPropagation();
   if (e && typeof e.preventDefault === "function") e.preventDefault();
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    if (typeof showToast === "function") {
+      showToast("🔒 هذا المخطط مجمد حالياً بأمر الإدارة — لا يُقبل أي تعديل على العنصر لحين فك التجميد", "warning");
+    }
+    return;
+  }
   if (!currentProject) return;
 
   // في وضع المحاكاة: النقر المزدوج أيضاً يبدل السكينة ولا يفتح نافذة التعديل لضمان سلاسة المحاكاة
@@ -1008,6 +1079,12 @@ function handleSectionClick(e, secId) {
 function handleSectionDblClick(e, secId) {
   if (e && typeof e.stopPropagation === "function") e.stopPropagation();
   if (e && typeof e.preventDefault === "function") e.preventDefault();
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    if (typeof showToast === "function") {
+      showToast("🔒 هذا المخطط مجمد حالياً بأمر الإدارة — لا يُقبل أي تعديل على الخط لحين فك التجميد", "warning");
+    }
+    return;
+  }
   if (!currentProject) return;
 
   const sec = currentProject.sections.find(s => s.id === secId);
@@ -1250,6 +1327,9 @@ function renderNetwork() {
   }
   if (window.broadcastProjectUpdate) {
     window.broadcastProjectUpdate("render");
+  }
+  if (typeof window.updateProjectLockUI === "function") {
+    window.updateProjectLockUI();
   }
 }
 
