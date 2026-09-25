@@ -6001,10 +6001,53 @@ function getCatalogForAdmin(adminName = null) {
   const key = "sld_catalog_" + aKey;
   let raw = localStorage.getItem(key);
   try {
-    return raw ? JSON.parse(raw) : [];
-  } catch(e) {
-    return [];
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+  } catch(e) {}
+
+  // 1. فحص الكتالوج المرجعي لبني مزار شرق إذا كان المتصفح جديداً (مثل Google Chrome)
+  if (aName === "بني مزار شرق") {
+    try {
+      const legRaw = localStorage.getItem("sld_projects_catalog");
+      if (legRaw) {
+        const leg = JSON.parse(legRaw);
+        if (Array.isArray(leg) && leg.length > 0) return leg;
+      }
+    } catch(_) {}
   }
+
+  // 2. استرجاع المشاريع المدمجة المعتمدة الخاصة بهذه الإدارة فقط (مثل خط المعصرة لبني مزار شرق)
+  if (window.DEFAULT_BUNDLED_PROJECTS && Array.isArray(window.DEFAULT_BUNDLED_PROJECTS)) {
+    const bundled = window.DEFAULT_BUNDLED_PROJECTS.filter(p => 
+      p && (!window.isProjectDeleted || !window.isProjectDeleted(p.id, p.name)) &&
+      (!window.isDemoOrDummyProject || !window.isDemoOrDummyProject(p)) &&
+      (!p.administration || p.administration === aName || (Array.isArray(p.visible_admins) && p.visible_admins.includes(aName)))
+    );
+    if (bundled.length > 0) {
+      const initCat = bundled.map(p => ({
+        id: p.id,
+        name: p.name || "مخطط شبكة",
+        substation: p.substation || "",
+        voltage_kv: p.voltage_kv || 11,
+        nodes_count: (p.nodes || []).length,
+        sections_count: (p.sections || []).length,
+        updated_at: "مخطط معتمد",
+        saved_at: p.saved_at || 1789823077015,
+        administration: p.administration || aName,
+        sector: p.sector || "المنيا شمال",
+        visible_admins: (Array.isArray(p.visible_admins) && p.visible_admins.length > 0) ? p.visible_admins : [p.administration || aName]
+      }));
+      try {
+        localStorage.setItem(key, JSON.stringify(initCat));
+        if (aKey === "بني_مزار_شرق") {
+          localStorage.setItem("sld_projects_catalog", JSON.stringify(initCat));
+        }
+      } catch(_) {}
+      return initCat;
+    }
+  }
+
+  return [];
 }
 
 function saveCatalogForAdmin(catalog, adminName = null) {

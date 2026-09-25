@@ -1266,8 +1266,11 @@
       var effectiveCatalog = [];
       if (Array.isArray(remoteCat) && remoteCat.length > 0) {
         effectiveCatalog = remoteCat;
+        if (typeof window.saveCatalogForAdmin === 'function') {
+          window.saveCatalogForAdmin(effectiveCatalog, currentAdminName);
+        }
       } else if (typeof window.getCatalogForAdmin === 'function') {
-        effectiveCatalog = window.getCatalogForAdmin(currentAdminKey) || [];
+        effectiveCatalog = window.getCatalogForAdmin(currentAdminName) || [];
       }
       if (Array.isArray(effectiveCatalog)) {
         effectiveCatalog = effectiveCatalog.filter(function (p) {
@@ -1275,9 +1278,24 @@
         });
       }
 
-      // إذا كانت الإدارة غير مسجل لها أي مشاريع معتمدة: الشاشة يجب أن تظل بيضاء وفارغة تماماً دون أي رسم
-      if (!effectiveCatalog || effectiveCatalog.length === 0) {
-        console.log('🏛️ الإدارة [' + currentAdminKey + '] لا تملك مشاريع مسجلة: التأكد من تفريغ الشاشة تماماً...');
+      var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
+      if (!curLocal || !curLocal.nodes || curLocal.nodes.length === 0) {
+        if (typeof window.getSavedFeederForAdmin === 'function') {
+          curLocal = window.getSavedFeederForAdmin(currentAdminName);
+        }
+      }
+
+      // إذا كان المخطط المحلي مسجلاً في قائمة المحذوفات يتم تفريغه
+      if (curLocal && typeof window.isProjectDeleted === 'function' && window.isProjectDeleted(curLocal.id, curLocal.name)) {
+        curLocal = null;
+      }
+
+      var localNodesCount = (curLocal && Array.isArray(curLocal.nodes)) ? curLocal.nodes.length : 0;
+      var remoteNodesCount = (remoteMeta && remoteMeta.nodesCount) ? remoteMeta.nodesCount : 0;
+
+      // إذا كانت الإدارة غير مسجل لها أي مشاريع معتمدة ولا تملك أي رسم سحابي يخصها: الشاشة تظل بيضاء وفارغة تماماً
+      if ((!effectiveCatalog || effectiveCatalog.length === 0) && remoteNodesCount === 0) {
+        console.log('🏛️ الإدارة [' + currentAdminKey + '] لا تملك مشاريع مسجلة ولا رسم سحابي: التأكد من تفريغ الشاشة تماماً...');
         var curP = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
         if (curP && Array.isArray(curP.nodes) && curP.nodes.length > 0) {
           var blank = {
@@ -1298,21 +1316,6 @@
         updateBadgeUI('connected');
         return;
       }
-
-      var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
-      if (!curLocal || !curLocal.nodes || curLocal.nodes.length === 0) {
-        if (typeof window.getSavedFeederForAdmin === 'function') {
-          curLocal = window.getSavedFeederForAdmin();
-        }
-      }
-
-      // إذا كان المخطط المحلي مسجلاً في قائمة المحذوفات يتم تفريغه
-      if (curLocal && typeof window.isProjectDeleted === 'function' && window.isProjectDeleted(curLocal.id, curLocal.name)) {
-        curLocal = null;
-      }
-
-      var localNodesCount = (curLocal && Array.isArray(curLocal.nodes)) ? curLocal.nodes.length : 0;
-      var remoteNodesCount = (remoteMeta && remoteMeta.nodesCount) ? remoteMeta.nodesCount : 0;
 
       var localSavedTime = 0;
       try {
@@ -1336,7 +1339,7 @@
           await syncProjectDirectToFirebase(curLocal, 'local_authoritative_sync');
         }
       } 
-      // 2. إذا كان المخطط المحلي فارغاً ولكن السحابة تحتوي على رسم غير محذوف ينتمي للإدارة ومسجل بالكتالوج
+      // 2. إذا كان المخطط المحلي فارغاً في هذا المتصفح ولكن السحابة تحتوي على رسم معتمد ينتمي للإدارة
       else if ((!curLocal || localNodesCount === 0) && remoteNodesCount > 0) {
         console.log('☁️ استلام المخطط السحابي للإدارة الفارغة محلياً (' + remoteNodesCount + ' عقدة)...');
         var projRes = await fetch(adminUrl + '/project.json');
@@ -1348,17 +1351,35 @@
           }
           var isAllowed = remoteProj && (!remoteProj.administration || remoteProj.administration === currentAdminName ||
             (typeof window.isProjectVisibleToAdmin === 'function' && window.isProjectVisibleToAdmin(remoteProj, currentAdminName)));
-          var inCatalog = effectiveCatalog.some(function(cp) {
-            return cp && (cp.id === remoteProj.id || (remoteProj.name && cp.name === remoteProj.name));
-          });
 
-          if (!isDeleted && isAllowed && inCatalog && remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
+          if (!isDeleted && isAllowed && remoteProj && Array.isArray(remoteProj.nodes) && remoteProj.nodes.length > 0) {
             isApplyingRemote = true;
             if (window.setCurrentProject) window.setCurrentProject(remoteProj);
             else window.currentProject = remoteProj;
 
             if (typeof window.saveFeederForAdmin === 'function') {
               window.saveFeederForAdmin(remoteProj);
+            }
+
+            // تحديث الكتالوج المحلي في المتصفح الجديد فورياً
+            if (typeof window.getCatalogForAdmin === 'function' && typeof window.saveCatalogForAdmin === 'function') {
+              var localCat = window.getCatalogForAdmin(currentAdminName) || [];
+              if (!localCat.some(function(c) { return c.id === remoteProj.id || (remoteProj.name && c.name === remoteProj.name); })) {
+                localCat.unshift({
+                  id: remoteProj.id,
+                  name: remoteProj.name || 'مخطط شبكة',
+                  substation: remoteProj.substation || '',
+                  voltage_kv: remoteProj.voltage_kv || 11,
+                  nodes_count: remoteProj.nodes.length,
+                  sections_count: (remoteProj.sections || []).length,
+                  updated_at: 'مخطط معتمد',
+                  saved_at: remoteProj.saved_at || Date.now(),
+                  administration: remoteProj.administration || currentAdminName,
+                  sector: remoteProj.sector || 'المنيا شمال',
+                  visible_admins: remoteProj.visible_admins || [remoteProj.administration || currentAdminName]
+                });
+                window.saveCatalogForAdmin(localCat, currentAdminName);
+              }
             }
 
             if (window.updateFeederInputs) window.updateFeederInputs();
