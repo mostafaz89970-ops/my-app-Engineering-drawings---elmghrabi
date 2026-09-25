@@ -901,11 +901,13 @@
     } else if (type === 'PROJECT_LOCK_TOGGLED' || type === 'lock_toggle') {
       var lockProjId = data.id || data.projectId;
       var isLocked = !!(data.is_locked !== undefined ? data.is_locked : data.isLocked);
+      var lockedAdmins = data.locked_admins || (data.admin ? [data.admin] : (isLocked ? ["__all__"] : []));
 
       // 1. تحديث المشروع المفتوح حالياً إذا كان هو المستهدف
       var curLocal = (window.getCurrentProject ? window.getCurrentProject() : null) || window.currentProject;
       if (curLocal && (curLocal.id === lockProjId || curLocal.name === lockProjId)) {
         curLocal.is_locked = isLocked;
+        curLocal.locked_admins = lockedAdmins;
         if (typeof window.updateProjectLockUI === 'function') {
           window.updateProjectLockUI();
         }
@@ -920,6 +922,7 @@
         if (rawLocal) {
           var parsedLocal = JSON.parse(rawLocal);
           parsedLocal.is_locked = isLocked;
+          parsedLocal.locked_admins = lockedAdmins;
           localStorage.setItem('sld_proj_' + lockProjId, JSON.stringify(parsedLocal));
         }
       } catch (_) {}
@@ -931,6 +934,7 @@
           var pIdx = curCat.findIndex(function(p) { return p.id === lockProjId || p.name === lockProjId; });
           if (pIdx >= 0) {
             curCat[pIdx].is_locked = isLocked;
+            curCat[pIdx].locked_admins = lockedAdmins;
             window.saveCatalogForAdmin(curCat);
           }
         } catch (_) {}
@@ -943,7 +947,7 @@
       }
 
       if (isLocked) {
-        showSyncToast('🔒 قامت الإدارة بإيقاف وتجميد المشروع لمنع التعديل والعبث به', 'warning', true);
+        showSyncToast('🔒 قامت الإدارة بتجميد وقفل المشروع لمنع التعديل والعبث به', 'warning', true);
       } else {
         showSyncToast('🔓 قامت الإدارة بإلغاء إيقاف المشروع وتفعيله للعمل والتعديل بنجاح', 'success', true);
       }
@@ -1945,13 +1949,15 @@
     } catch (_) {}
   }
 
-  function broadcastProjectLockToggled(projectId, projectName, isLocked, adminName) {
+  function broadcastProjectLockToggled(projectId, projectName, isLocked, lockedAdmins) {
     var stateBool = !!isLocked;
+    var adminsArr = Array.isArray(lockedAdmins) ? lockedAdmins : (lockedAdmins ? [lockedAdmins] : (stateBool ? ["__all__"] : []));
     postCloudEvent('PROJECT_LOCK_TOGGLED', {
       id: projectId,
       name: projectName,
       is_locked: stateBool,
-      admin: adminName
+      locked_admins: adminsArr,
+      admin: adminsArr.join(', ')
     }, 'project_lock_toggle');
   }
 
