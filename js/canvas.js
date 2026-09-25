@@ -65,7 +65,7 @@ function getDownstreamNodes(startNodeId) {
 function startNodeDrag(e, nodeId) {
   if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
     if (typeof showToast === "function") {
-      showToast("🔒 المخطط مجمد حالياً بأمر الإدارة — لا يُقبل أي تعديل أو تحريك لحين فك التجميد", "warning");
+      showToast("🔒 هذا المخطط محجوب ومجمد عن إدارتك — غير مسموح بتحريك أي خط أو محول أو سكينة أو تعديل أي عنصر", "warning");
     }
     return;
   }
@@ -108,6 +108,12 @@ function startNodeDrag(e, nodeId) {
 }
 
 function handleNodeDrag(e) {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    isDraggingNode = false;
+    dragNodeId = null;
+    document.body.classList.remove("dragging-node");
+    return;
+  }
   if (!isDraggingNode || !dragNodeId || !currentProject) return;
 
   const dxClient = e.clientX - dragStartClient.x;
@@ -408,7 +414,7 @@ let initialDeflectOffset = 0;
 function startSectionDeflectDrag(e, secId) {
   if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
     if (typeof showToast === "function") {
-      showToast("🔒 المخطط مجمد حالياً بأمر الإدارة — لا يُقبل أي تعديل أو تحريك لحين فك التجميد", "warning");
+      showToast("🔒 هذا المخطط محجوب ومجمد عن إدارتك — غير مسموح بتحريك أو تعديل أي خط بالمشروع", "warning");
     }
     return;
   }
@@ -430,6 +436,12 @@ function startSectionDeflectDrag(e, secId) {
 }
 
 function handleSectionDeflectDrag(e) {
+  if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
+    isDraggingDeflect = false;
+    dragSecId = null;
+    document.body.classList.remove("dragging-deflect");
+    return;
+  }
   if (!isDraggingDeflect || !dragSecId || !currentProject) return;
 
   const dxClient = e.clientX - deflectStartClient.x;
@@ -648,7 +660,7 @@ function initCanvas() {
         e.preventDefault();
         e.stopPropagation();
         if (typeof showToast === "function") {
-          showToast("🔒 المخطط مجمد حالياً بأمر الإدارة — لا يُقبل أي تعديل أو تحريك لحين فك التجميد", "warning");
+          showToast("🔒 هذا المخطط محجوب ومجمد عن إدارتك — غير مسموح بتحريك أو تعديل أي خط", "warning");
         }
         return;
       }
@@ -659,6 +671,9 @@ function initCanvas() {
         if (targetNode) {
           selectElement("node", nodeId, targetNode.name || targetNode.id);
         }
+        if (typeof showToast === "function") {
+          showToast("🔒 هذا المخطط محجوب ومجمد عن إدارتك — يمنع تحريك أي خط أو محول أو سكينة أو تعديل أي عنصر", "warning");
+        }
         return;
       }
       if (sectionGroup) {
@@ -667,6 +682,9 @@ function initCanvas() {
         const sec = currentProject?.sections?.find(s => s.id === secId);
         if (sec) {
           selectElement("section", secId, `${sec.type} ${sec.size} (${sec.length}م) [${sec.from_node} ➔ ${sec.to_node}]`);
+        }
+        if (typeof showToast === "function") {
+          showToast("🔒 هذا المخطط محجوب ومجمد عن إدارتك — يمنع تحريك أو تعديل أي خط بالمشروع", "warning");
         }
         return;
       }
@@ -890,7 +908,7 @@ let lastSwitchToggleTime = 0;
 function toggleSwitch(nodeId) {
   if (typeof isProjectLockedForUser === "function" && isProjectLockedForUser()) {
     if (typeof showToast === "function") {
-      showToast("🔒 هذا المخطط مجمد حالياً بأمر الإدارة — لا يُقبل أي تعديل أو تبديل لحين فك التجميد", "warning");
+      showToast("🔒 هذا المخطط محجوب ومجمد عن إدارتك — غير مسموح بتبديل السكينة أو تغيير حالة التغذية", "warning");
     }
     return;
   }
@@ -1015,8 +1033,22 @@ function handleNodeClick(e, nodeId) {
   if (e && typeof e.stopPropagation === "function") e.stopPropagation();
   if (!currentProject) return;
 
+  const isLocked = (typeof window.isProjectLockedForUser === "function" && window.isProjectLockedForUser()) ||
+                   (typeof isProjectLockedForUser === "function" && isProjectLockedForUser());
+
   const node = currentProject.nodes.find(n => n.id === nodeId);
   if (!node) return;
+
+  if (isLocked) {
+    if (node.type === "switch" || node.type === "lbs") {
+      if (typeof showToast === "function") {
+        showToast("🔒 هذا المخطط محجوب ومجمد عن إدارتك — غير مسموح بتبديل السكينة أو تغيير حالة التغذية", "warning");
+      }
+      return;
+    }
+    selectElement("node", nodeId, node.name || node.id);
+    return;
+  }
 
   // في وضع المحاكاة: النقر يبدل حالة السكينة فوراً للفصل والتوصيل
   if (isSimulationActive && (node.type === "switch" || node.type === "lbs")) {
@@ -1234,6 +1266,17 @@ function renderNetwork() {
   const sectionsLayer = document.getElementById("sections-layer");
   const nodesLayer = document.getElementById("nodes-layer");
   if (!sectionsLayer || !nodesLayer) return;
+
+  // فحص حجب وإخفاء المشروع بالكامل عن الإدارة الحالية
+  if (typeof window.isProjectHiddenForUser === "function" && window.isProjectHiddenForUser(proj)) {
+    sectionsLayer.innerHTML = "";
+    nodesLayer.innerHTML = "";
+    const labelsLayer = document.getElementById("labels-layer");
+    if (labelsLayer) labelsLayer.innerHTML = "";
+    if (typeof window.showHiddenProjectOverlay === "function") window.showHiddenProjectOverlay();
+    return;
+  }
+  if (typeof window.hideHiddenProjectOverlay === "function") window.hideHiddenProjectOverlay();
 
   const nodes = proj.nodes || [];
   const sections = proj.sections || [];
