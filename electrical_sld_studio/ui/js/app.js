@@ -6500,6 +6500,11 @@ async function openProjectsManager(requestedAdmin = null) {
   const loggedUser = (typeof _getLoggedInUser === "function") ? _getLoggedInUser() : null;
   const userAdmin = (loggedUser && loggedUser.administration) ? loggedUser.administration : getCurrentAdminName();
 
+  const systemAdmins = (typeof getAllSystemAdmins === "function") ? getAllSystemAdmins() : [
+    "بني مزار شرق", "بني مزار غرب", "مغاغة", "العدوة", "مطاي", "سمالوط شرق", "سمالوط غرب"
+  ];
+
+  // إذا لم يُحدد requestedAdmin ولا window.modalViewingAdmin → إظهار عرض الفولدرات أولاً
   let activeViewingAdmin = null;
   if (requestedAdmin !== null && requestedAdmin !== undefined) {
     activeViewingAdmin = requestedAdmin;
@@ -6507,18 +6512,29 @@ async function openProjectsManager(requestedAdmin = null) {
   } else if (window.modalViewingAdmin !== undefined && window.modalViewingAdmin !== null) {
     activeViewingAdmin = window.modalViewingAdmin;
   } else {
-    activeViewingAdmin = isAdmin ? getCurrentAdminName() : userAdmin;
-    window.modalViewingAdmin = activeViewingAdmin;
+    // المدير العام → عرض شاشة الفولدرات
+    // المستخدم العادي → مباشرة لإدارته
+    if (!isAdmin) {
+      activeViewingAdmin = userAdmin;
+      window.modalViewingAdmin = userAdmin;
+    } else {
+      // المدير يرى شاشة الفولدرات أولاً
+      activeViewingAdmin = "__folders__";
+      window.modalViewingAdmin = "__folders__";
+    }
   }
   if (!isAdmin) {
     activeViewingAdmin = userAdmin;
     window.modalViewingAdmin = userAdmin;
   }
 
-  const systemAdmins = (typeof getAllSystemAdmins === "function") ? getAllSystemAdmins() : [
-    "بني مزار شرق", "بني مزار غرب", "مغاغة", "العدوة", "مطاي", "سمالوط شرق", "سمالوط غرب"
-  ];
+  // ─── عرض شاشة الفولدرات للمدير العام ─────────────────────────────────
+  if (activeViewingAdmin === "__folders__") {
+    renderAdminFolders(systemAdmins, container);
+    return;
+  }
 
+  // ─── جمع المشاريع ─────────────────────────────────────────────────────
   const masterMap = new Map();
 
   // أ) جمع المشاريع من مفاتيح sld_proj_*
@@ -6605,28 +6621,93 @@ async function openProjectsManager(requestedAdmin = null) {
   }
 
   let allProjects = Array.from(masterMap.values());
-  // تصفية أية مشاريع محذوفة أو تجريبية
   allProjects = allProjects.filter(p => p && !isProjectDeleted(p.id, p.name) && !isDemoOrDummyProject(p));
 
-  // تصفية العرض حسب الإدارة المختارة
   let displayProjects = [];
   if (activeViewingAdmin === "__all__") {
-    // 🌍 عرض شامل لجميع المخططات الفعلية
     displayProjects = allProjects;
   } else {
-    // 🏛️ عرض مخصص للإدارة: فقط ما ينتمي لها أو معروض فيها وغير محجوب عنها
     displayProjects = allProjects.filter(p => isProjectVisibleToAdmin(p, activeViewingAdmin));
   }
 
   displayProjects.sort((a, b) => (b.saved_at || 0) - (a.saved_at || 0));
 
-  // تحديث كتالوج الإدارة المعنية
   if (activeViewingAdmin !== "__all__") {
     saveCatalogForAdmin(displayProjects, activeViewingAdmin);
   }
 
   renderProjectsTable(displayProjects, false, activeViewingAdmin);
 }
+
+// ─── عرض شاشة الفولدرات للمدير العام (كل إدارة كبطاقة فولدر) ────────────────
+function renderAdminFolders(systemAdmins, container) {
+  const isAdmin = (typeof isCurrentUserAdmin === "function") ? isCurrentUserAdmin() : false;
+
+  // حساب عدد المشاريع لكل إدارة من الكتالوج المحلي
+  const adminCounts = {};
+  systemAdmins.forEach(adm => {
+    const cat = getCatalogForAdmin(adm) || [];
+    adminCounts[adm] = cat.filter(p => p && !isProjectDeleted(p.id, p.name) && !isDemoOrDummyProject(p)).length;
+  });
+
+  // ألوان مميزة لكل إدارة
+  const folderColors = [
+    "#3b82f6", "#8b5cf6", "#10b981", "#f59e0b",
+    "#ef4444", "#06b6d4", "#ec4899"
+  ];
+  const folderIcons = ["🏛️", "🏗️", "⚡", "🔌", "🌐", "🏢", "🔋"];
+
+  let html = `
+    <div style="margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:14px; font-weight:bold; color:#e2e8f0;">📂 مجلدات المشاريع — اختر إدارة لعرض مشاريعها:</span>
+      </div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" onclick="window.modalViewingAdmin='__all__'; openProjectsManager('__all__')" style="border-color:#3b82f6; color:#60a5fa; font-size:11.5px; padding:5px 10px;">
+          🌍 عرض جميع المشاريع (كل الإدارات)
+        </button>
+        <button class="btn btn-outline btn-sm" onclick="triggerSLDFileImport()" style="border-color:#38b2ac; color:#4fd1c5; font-size:11.5px; padding:5px 10px;">
+          📥 استيراد ملف .sld
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="createNewProjectDirectly(); closeProjectsManager();" style="font-size:11.5px; padding:5px 10px;">
+          ➕ مشروع جديد
+        </button>
+      </div>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:16px; padding:8px 0;">
+  `;
+
+  systemAdmins.forEach((adm, idx) => {
+    const color = folderColors[idx % folderColors.length];
+    const icon = folderIcons[idx % folderIcons.length];
+    const count = adminCounts[adm] || 0;
+    const encodedAdm = encodeURIComponent(adm);
+
+    html += `
+      <div onclick="window.modalViewingAdmin=decodeURIComponent('${encodedAdm}'); openProjectsManager(decodeURIComponent('${encodedAdm}'))"
+           style="cursor:pointer; background:rgba(26,32,44,0.85); border:2px solid ${color}40; border-radius:14px; padding:20px 16px; text-align:center;
+                  transition:all 0.2s ease; position:relative; overflow:hidden;"
+           onmouseover="this.style.border='2px solid ${color}'; this.style.background='rgba(26,32,44,1)'; this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 20px ${color}40';"
+           onmouseout="this.style.border='2px solid ${color}40'; this.style.background='rgba(26,32,44,0.85)'; this.style.transform=''; this.style.boxShadow='';"
+           title="فتح مشاريع هندسة كهرباء ${adm}">
+        <div style="font-size:42px; margin-bottom:8px; filter:drop-shadow(0 2px 4px ${color}80);">${icon}</div>
+        <div style="position:absolute; top:0; left:0; right:0; height:4px; background:linear-gradient(90deg, ${color}, ${color}80);"></div>
+        <div style="font-size:13px; font-weight:bold; color:#e2e8f0; margin-bottom:6px; line-height:1.4;">هندسة كهرباء<br>${adm}</div>
+        <div style="display:inline-block; background:${color}25; border:1px solid ${color}60; color:${color}; font-size:11px; font-weight:bold; padding:3px 10px; border-radius:20px; margin-top:4px;">
+          ${count > 0 ? `📋 ${count} مشروع${count === 1 ? '' : (count < 11 ? '' : '')}` : '📭 لا توجد مشاريع'}
+        </div>
+        <div style="margin-top:10px; font-size:10px; color:#64748b;">انقر للفتح</div>
+      </div>
+    `;
+  });
+
+  html += `
+    </div>
+  `;
+
+  container.innerHTML = html;
+}
+window.renderAdminFolders = renderAdminFolders;
 
 // رسم جدول المشاريع مع العزل التام بين الإدارات وإتاحة الصلاحيات الكاملة للمدير
 function renderProjectsTable(projects, isServerOnline, activeViewingAdmin = null) {
@@ -6668,7 +6749,14 @@ function renderProjectsTable(projects, isServerOnline, activeViewingAdmin = null
   let adminSwitcherHtml = "";
   if (isAdmin) {
     const adminOptions = allSystemAdmins.map(adm => `<option value="${adm}" ${adm === activeViewingAdmin ? "selected" : ""}>هندسة كهرباء ${adm}</option>`).join("");
+    // زر العودة للفولدرات (يظهر فقط عند عرض إدارة محددة وليس "كل الإدارات")
+    const backBtn = (activeViewingAdmin !== "__all__")
+      ? `<button class="btn btn-outline btn-sm" onclick="window.modalViewingAdmin='__folders__'; renderAdminFoldersNow()" style="border-color:#64748b; color:#94a3b8; font-size:11.5px; padding:4px 10px;" title="العودة لشاشة الفولدرات">
+          ← فولدرات الإدارات
+        </button>`
+      : '';
     adminSwitcherHtml = `
+      ${backBtn}
       <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(45, 55, 72, 0.7); padding:4px 10px; border-radius:8px; border:1px solid var(--border-color);">
         <span style="font-size:12px; color:#ecc94b; font-weight:bold;">🏛️ الإدارة:</span>
         <select id="projects-admin-switcher" style="background:#1a202c; color:#fff; border:1px solid #4a5568; border-radius:6px; padding:3px 8px; font-size:12px; font-weight:600; cursor:pointer;" onchange="changeProjectsModalAdminFilter(this.value)">
@@ -6686,6 +6774,7 @@ function renderProjectsTable(projects, isServerOnline, activeViewingAdmin = null
       </div>
     `;
   }
+
 
   let html = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
@@ -6855,9 +6944,25 @@ function renderProjectsTable(projects, isServerOnline, activeViewingAdmin = null
 
 function changeProjectsModalAdminFilter(adminName) {
   window.modalViewingAdmin = adminName;
-  openProjectsManager(adminName);
+  if (adminName === "__folders__") {
+    renderAdminFoldersNow();
+  } else {
+    openProjectsManager(adminName);
+  }
 }
 window.changeProjectsModalAdminFilter = changeProjectsModalAdminFilter;
+
+// عرض فولدرات الإدارات الآن مباشرة (دون إعادة فتح النافذة)
+function renderAdminFoldersNow() {
+  const container = document.getElementById("projects-list-container");
+  if (!container) return;
+  const systemAdmins = (typeof getAllSystemAdmins === "function") ? getAllSystemAdmins() : [
+    "بني مزار شرق", "بني مزار غرب", "مغاغة", "العدوة", "مطاي", "سمالوط شرق", "سمالوط غرب"
+  ];
+  renderAdminFolders(systemAdmins, container);
+}
+window.renderAdminFoldersNow = renderAdminFoldersNow;
+
 
 function switchAdminWorkspace(adminName) {
   if (!adminName) return;
@@ -6869,6 +6974,8 @@ window.switchAdminWorkspace = switchAdminWorkspace;
 function closeProjectsManager() {
   const modal = document.getElementById("projects-manager-modal");
   if (modal) modal.classList.add("hidden");
+  // إعادة ضبط الفولدر المختار لكي تظهر شاشة الفولدرات مرة أخرى عند الفتح التالي
+  window.modalViewingAdmin = null;
 }
 
 // فتح مشروع محدد من مدير المشاريع
